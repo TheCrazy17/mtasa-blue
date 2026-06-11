@@ -74,6 +74,7 @@ public:
     LUA_DECLARE_OOP(GetVehicleGravity);
     static bool IsVehicleBlown(CClientVehicle* vehicle);
     LUA_DECLARE(GetVehicleHeadLightColor);
+    LUA_DECLARE(GetVehicleNitroColor);
     LUA_DECLARE(GetVehicleCurrentGear);
     LUA_DECLARE(GetVehicleHandling);
     LUA_DECLARE(GetOriginalHandling);
@@ -131,6 +132,8 @@ public:
     LUA_DECLARE(SetTrainPosition);
     LUA_DECLARE(SetVehicleGravity);
     LUA_DECLARE(SetVehicleHeadLightColor);
+    LUA_DECLARE(SetVehicleNitroColor);
+    LUA_DECLARE(ResetVehicleNitroColor);
     LUA_DECLARE(SetVehicleTurretPosition);
     LUA_DECLARE(SetVehicleDoorOpenRatio);
     LUA_DECLARE(SetVehicleHandling);
