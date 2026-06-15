@@ -12,6 +12,7 @@ class CClientEntity;
 
 #pragma once
 
+#include <cstdint>
 #include "CElementArray.h"
 #include "CClientCommon.h"
 #include <core/CClientEntityBase.h>
@@ -247,6 +248,18 @@ public:
     virtual bool   IsAttachToable();
     virtual void   DoAttaching();
 
+    // Bone attachment (e.g. attaching an object to a ped's hand/head bone)
+    CClientEntity* GetBoneAttachedToEntity() const { return m_pBoneAttachedToEntity; }
+    bool           IsAttachedToBone() const { return m_pBoneAttachedToEntity != nullptr; }
+    std::uint32_t  GetAttachedBoneId() const { return m_uiAttachedBoneId; }
+    void           AttachToBone(CClientEntity* pEntity, std::uint32_t uiBoneId);
+    void           DetachFromBone();
+    void           GetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation) const;
+    void           SetBoneAttachedOffsets(const CVector& vecPosition, const CVector& vecRotation);
+    void           DoBoneAttaching();
+
+    static void ProcessAllBoneAttachments();
+
     bool AddEvent(CLuaMain* pLuaMain, const char* szName, const CLuaFunctionRef& iLuaFunction, bool bPropagated, EEventPriorityType eventPriority,
                   float fPriorityMod);
     bool CallEvent(const char* szName, const CLuaArguments& Arguments, bool bCallOnChildren, const char* minClientVersion = nullptr);
@@ -363,6 +376,12 @@ protected:
     std::vector<CClientEntity*> m_AttachedEntities;
     bool                        m_bDisallowAttaching;  // Protect against attaching in destructor
 
+    CClientEntity*              m_pBoneAttachedToEntity = nullptr;
+    std::uint32_t               m_uiAttachedBoneId = 0;
+    CVector                     m_vecBoneAttachedPosition;
+    CVector                     m_vecBoneAttachedRotation;
+    std::vector<CClientEntity*> m_BoneAttachedEntities;
+
     bool                              m_bBeingDeleted;
     bool                              m_bSystemEntity;
     CMapEventManager*                 m_pEventManager;
@@ -389,6 +408,8 @@ private:
     static void AddEntityFromRoot(unsigned int uiTypeHash, CClientEntity* pEntity, bool bDebugCheck = true);
     static void RemoveEntityFromRoot(unsigned int uiTypeHash, CClientEntity* pEntity);
     static void GetEntitiesFromRoot(unsigned int uiTypeHash, lua_State* luaVM, bool bStreamedIn);
+
+    static std::vector<CClientEntity*> ms_BoneAttachedEntities;
 
 #if CHECK_ENTITIES_FROM_ROOT
     static void _CheckEntitiesFromRoot(unsigned int uiTypeHash);

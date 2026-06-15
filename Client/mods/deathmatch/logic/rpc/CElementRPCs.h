@@ -28,6 +28,9 @@ public:
     DECLARE_ELEMENT_RPC(SetElementDimension);
     DECLARE_ELEMENT_RPC(AttachElements);
     DECLARE_ELEMENT_RPC(DetachElements);
+    DECLARE_ELEMENT_RPC(AttachElementToBone);
+    DECLARE_ELEMENT_RPC(DetachElementFromBone);
+    DECLARE_ELEMENT_RPC(SetElementBoneAttachedOffsets);
     DECLARE_ELEMENT_RPC(SetElementAlpha);
     DECLARE_ELEMENT_RPC(SetElementName);
     DECLARE_ELEMENT_RPC(SetElementHealth);

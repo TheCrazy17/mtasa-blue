@@ -53,6 +53,9 @@ public:
     LUA_DECLARE(GetElementDistanceFromCentreOfMassToBaseOfModel);
     LUA_DECLARE(IsElementLocal);
     LUA_DECLARE(GetElementAttachedOffsets);
+    LUA_DECLARE(IsElementAttachedToBone);
+    LUA_DECLARE(GetElementAttachedBone);
+    LUA_DECLARE(GetElementBoneAttachedOffsets);
     LUA_DECLARE(GetElementAlpha);
     static std::variant<bool, float> GetElementLighting(CClientEntity* entity);
     static bool                      IsElementOnScreen(CClientEntity* entity);
@@ -90,6 +93,9 @@ public:
     LUA_DECLARE(AttachElements);
     LUA_DECLARE(DetachElements);
     LUA_DECLARE(SetElementAttachedOffsets);
+    LUA_DECLARE(AttachElementToBone);
+    LUA_DECLARE(DetachElementFromBone);
+    LUA_DECLARE(SetElementBoneAttachedOffsets);
     LUA_DECLARE(SetElementCollisionsEnabled);
     LUA_DECLARE(SetElementAlpha);
     LUA_DECLARE(SetElementHealth);

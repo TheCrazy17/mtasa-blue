@@ -293,5 +293,9 @@ enum eElementRPCFunctions
 
     SET_ELEMENT_ON_FIRE,
 
+    ATTACH_ELEMENT_TO_BONE,
+    DETACH_ELEMENT_FROM_BONE,
+    SET_ELEMENT_BONE_ATTACHED_OFFSETS,
+
     NUM_RPC_FUNCS  // Add above this line
 };

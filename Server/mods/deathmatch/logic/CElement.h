@@ -18,6 +18,7 @@
 #include "CEvents.h"
 #include <list>
 #include <cstring>
+#include <cstdint>
 #include "Enums.h"
 #include "CElementGroup.h"
 #include "CStringName.h"
@@ -208,6 +209,16 @@ public:
     void                                 GetAttachedPosition(CVector& vecPosition);
     void                                 GetAttachedRotation(CVector& vecRotation);
 
+    // Bone attachment (e.g. attaching an element to a ped/player's bone)
+    CElement*                            GetBoneAttachedToElement() const { return m_pBoneAttachedTo; }
+    std::uint32_t                        GetAttachedBoneId() const { return m_uiAttachedBoneId; }
+    bool                                 IsAttachedToBone() const { return m_pBoneAttachedTo != nullptr; }
+    void                                 AttachToBone(CElement* pElement, std::uint32_t uiBoneId);
+    void                                 GetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
+    void                                 SetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
+    void                                 AddBoneAttachedElement(CElement* pElement);
+    void                                 RemoveBoneAttachedElement(CElement* pElement);
+
     CElementGroup* GetElementGroup() { return m_pElementGroup; }
     void           SetElementGroup(CElementGroup* elementGroup) { m_pElementGroup = elementGroup; }
 
@@ -280,6 +291,12 @@ protected:
     CVector              m_vecAttachedRotation;
     std::list<CElement*> m_AttachedElements;
     SString              m_strAttachToID;
+
+    CElement*            m_pBoneAttachedTo = nullptr;
+    std::uint32_t        m_uiAttachedBoneId = 0;
+    CVector              m_vecBoneAttachedPosition;
+    CVector              m_vecBoneAttachedRotation;
+    std::list<CElement*> m_BoneAttachedElements;
 
     CElementGroup* m_pElementGroup;
 
