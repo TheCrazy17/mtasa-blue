@@ -727,6 +727,24 @@ bool CStaticFunctionDefinitions::GetElementAttachedOffsets(CElement* pElement, C
     return true;
 }
 
+CElement* CStaticFunctionDefinitions::GetElementAttachedToBone(CElement* pElement, std::uint32_t& uiBoneId)
+{
+    assert(pElement);
+
+    CElement* pElementAttachedTo = pElement->GetBoneAttachedToElement();
+    if (!pElementAttachedTo)
+        return NULL;
+
+    uiBoneId = pElement->GetAttachedBoneId();
+    return pElementAttachedTo;
+}
+
+bool CStaticFunctionDefinitions::GetElementBoneAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation)
+{
+    pElement->GetBoneAttachedOffsets(vecPosition, vecRotation);
+    return true;
+}
+
 CElement* CStaticFunctionDefinitions::GetElementSyncer(CElement* pElement)
 {
     assert(pElement);
@@ -1974,6 +1992,72 @@ bool CStaticFunctionDefinitions::SetElementAttachedOffsets(CElement* pElement, C
         rotation.Write(*BitStream.pBitStream);
         m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, SET_ELEMENT_ATTACHED_OFFSETS, *BitStream.pBitStream));
     }
+    return true;
+}
+
+bool CStaticFunctionDefinitions::AttachElementToBone(CElement* pElement, CElement* pAttachedToElement, std::uint32_t uiBoneId, CVector& vecPosition,
+                                                       CVector& vecRotation)
+{
+    assert(pElement);
+    assert(pAttachedToElement);
+
+    if (pElement == pAttachedToElement || !pElement->IsAttachToable() || !pAttachedToElement->IsAttachable() ||
+        pElement->GetDimension() != pAttachedToElement->GetDimension())
+    {
+        return false;
+    }
+
+    pElement->SetBoneAttachedOffsets(vecPosition, vecRotation);
+    ConvertDegreesToRadians(vecRotation);
+    pElement->AttachToBone(pAttachedToElement, uiBoneId);
+
+    CBitStream BitStream;
+    BitStream.pBitStream->Write(pAttachedToElement->GetID());
+    BitStream.pBitStream->Write(static_cast<unsigned short>(uiBoneId));
+    BitStream.pBitStream->Write(vecPosition.fX);
+    BitStream.pBitStream->Write(vecPosition.fY);
+    BitStream.pBitStream->Write(vecPosition.fZ);
+    BitStream.pBitStream->Write(vecRotation.fX);
+    BitStream.pBitStream->Write(vecRotation.fY);
+    BitStream.pBitStream->Write(vecRotation.fZ);
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, ATTACH_ELEMENT_TO_BONE, *BitStream.pBitStream));
+
+    return true;
+}
+
+bool CStaticFunctionDefinitions::DetachElementFromBone(CElement* pElement)
+{
+    assert(pElement);
+
+    if (!pElement->IsAttachedToBone())
+        return false;
+
+    pElement->AttachToBone(NULL, 0);
+
+    CBitStream BitStream;
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, DETACH_ELEMENT_FROM_BONE, *BitStream.pBitStream));
+
+    return true;
+}
+
+bool CStaticFunctionDefinitions::SetElementBoneAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation)
+{
+    RUN_CHILDREN(SetElementBoneAttachedOffsets(*iter, vecPosition, vecRotation))
+
+    pElement->SetBoneAttachedOffsets(vecPosition, vecRotation);
+    ConvertDegreesToRadians(vecRotation);
+
+    SPositionSync position(true);
+    position.data.vecPosition = vecPosition;
+
+    SRotationRadiansSync rotation(true);
+    rotation.data.vecRotation = vecRotation;
+
+    CBitStream BitStream;
+    position.Write(*BitStream.pBitStream);
+    rotation.Write(*BitStream.pBitStream);
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, SET_ELEMENT_BONE_ATTACHED_OFFSETS, *BitStream.pBitStream));
+
     return true;
 }
 

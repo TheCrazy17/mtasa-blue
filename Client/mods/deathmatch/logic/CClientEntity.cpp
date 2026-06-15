@@ -14,6 +14,8 @@ using std::list;
 
 extern CClientGame* g_pClientGame;
 
+std::vector<CClientEntity*> CClientEntity::ms_BoneAttachedEntities;
+
 #pragma warning(disable : 4355)  // warning C4355: 'this' : used in base member initializer list
 
 CClientEntity::CClientEntity(ElementID ID) : ClassInit(this)
@@ -98,6 +100,14 @@ CClientEntity::~CClientEntity()
     }
     m_bDisallowAttaching = true;
     assert(!m_pAttachedToEntity && m_AttachedEntities.empty());
+
+    // Detach from/of any bone attachments
+    DetachFromBone();
+    while (m_BoneAttachedEntities.size())
+    {
+        CClientEntity* pBoneAttachedEntity = m_BoneAttachedEntities.back();
+        pBoneAttachedEntity->DetachFromBone();
+    }
 
     RemoveAllCollisions();
 
@@ -1193,6 +1203,77 @@ void CClientEntity::DoAttaching()
         if (!SetMatrix(returnMatrix))
             SetPosition(returnMatrix.vPos);
     }
+}
+
+void CClientEntity::AttachToBone(CClientEntity* pEntity, std::uint32_t uiBoneId)
+{
+    if (m_pBoneAttachedToEntity)
+        ListRemove(m_pBoneAttachedToEntity->m_BoneAttachedEntities, this);
+
+    m_pBoneAttachedToEntity = pEntity;
+    m_uiAttachedBoneId = uiBoneId;
+
+    if (pEntity)
+    {
+        pEntity->m_BoneAttachedEntities.push_back(this);
+
+        if (!ListContains(ms_BoneAttachedEntities, this))
+            ms_BoneAttachedEntities.push_back(this);
+    }
+    else
+    {
+        ListRemove(ms_BoneAttachedEntities, this);
+    }
+}
+
+void CClientEntity::DetachFromBone()
+{
+    AttachToBone(nullptr, 0);
+}
+
+void CClientEntity::GetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation) const
+{
+    vecPosition = m_vecBoneAttachedPosition;
+    vecRotation = m_vecBoneAttachedRotation;
+}
+
+void CClientEntity::SetBoneAttachedOffsets(const CVector& vecPosition, const CVector& vecRotation)
+{
+    m_vecBoneAttachedPosition = vecPosition;
+    m_vecBoneAttachedRotation = vecRotation;
+}
+
+void CClientEntity::DoBoneAttaching()
+{
+    if (!m_pBoneAttachedToEntity)
+        return;
+
+    CMatrix matrix;
+    bool    bGotBoneMatrix = false;
+
+    if (CEntity* pGameEntity = m_pBoneAttachedToEntity->GetGameEntity())
+    {
+        if (RwMatrix* pBoneMatrix = pGameEntity->GetBoneRwMatrix(static_cast<eBone>(m_uiAttachedBoneId)))
+        {
+            g_pGame->GetRenderWare()->RwMatrixToCMatrix(*pBoneMatrix, matrix);
+            bGotBoneMatrix = true;
+        }
+    }
+
+    if (!bGotBoneMatrix && !m_pBoneAttachedToEntity->GetMatrix(matrix))
+        m_pBoneAttachedToEntity->GetPosition(matrix.vPos);
+
+    CMatrix returnMatrix;
+    AttachedMatrix(matrix, returnMatrix, m_vecBoneAttachedPosition, m_vecBoneAttachedRotation);
+
+    if (!SetMatrix(returnMatrix))
+        SetPosition(returnMatrix.vPos);
+}
+
+void CClientEntity::ProcessAllBoneAttachments()
+{
+    for (CClientEntity* pEntity : ms_BoneAttachedEntities)
+        pEntity->DoBoneAttaching();
 }
 
 unsigned int CClientEntity::GetTypeID(const char* szTypeName)

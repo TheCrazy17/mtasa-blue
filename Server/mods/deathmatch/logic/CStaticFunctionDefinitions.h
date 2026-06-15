@@ -73,6 +73,8 @@ public:
     static bool           GetElementModel(CElement* pElement, unsigned short& usModel);
     static bool           IsElementInWater(CElement* pElement, bool& bInWater);
     static bool           GetElementAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation);
+    static CElement*      GetElementAttachedToBone(CElement* pElement, std::uint32_t& uiBoneId);
+    static bool           GetElementBoneAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation);
     static CElement*      GetElementSyncer(CElement* pElement);
     static bool           GetElementCollisionsEnabled(CElement* pElement);
     static bool           IsElementFrozen(CElement* pElement, bool& bFrozen);
@@ -105,6 +107,9 @@ public:
     static bool SetElementHealth(CElement* pElement, float fHealth);
     static bool SetElementModel(CElement* pElement, unsigned short usModel);
     static bool SetElementAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation);
+    static bool AttachElementToBone(CElement* pElement, CElement* pAttachedToElement, std::uint32_t uiBoneId, CVector& vecPosition, CVector& vecRotation);
+    static bool DetachElementFromBone(CElement* pElement);
+    static bool SetElementBoneAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation);
     static bool SetElementSyncer(CElement* pElement, CPlayer* pPlayer, bool bEnable = true, bool bPersist = false);
     static bool SetElementCollisionsEnabled(CElement* pElement, bool bEnable);
     static bool SetElementFrozen(CElement* pElement, bool bFrozen);

@@ -3958,6 +3958,9 @@ void CClientGame::PostWorldProcessHandler()
 
 void CClientGame::PostWorldProcessPedsAfterPreRenderHandler()
 {
+    // Update elements attached to ped/player bones now that bone matrices are up to date for this frame
+    CClientEntity::ProcessAllBoneAttachments();
+
     CLuaArguments Arguments;
     m_pRootEntity->CallEvent("onClientPedsProcessed", Arguments, false);
 }

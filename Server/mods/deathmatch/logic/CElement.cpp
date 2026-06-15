@@ -112,6 +112,12 @@ CElement::~CElement()
         (*iterAttached)->m_pAttachedTo = NULL;
     }
 
+    if (m_pBoneAttachedTo)
+        m_pBoneAttachedTo->RemoveBoneAttachedElement(this);
+
+    for (CElement* pBoneAttachedElement : m_BoneAttachedElements)
+        pBoneAttachedElement->m_pBoneAttachedTo = NULL;
+
     std::list<CPed*>::iterator iterUsers = m_OriginSourceUsers.begin();
     for (; iterUsers != m_OriginSourceUsers.end(); iterUsers++)
     {
@@ -1172,6 +1178,40 @@ void CElement::SetAttachedOffsets(CVector& vecPosition, CVector& vecRotation)
 {
     m_vecAttachedPosition = vecPosition;
     m_vecAttachedRotation = vecRotation;
+}
+
+void CElement::AttachToBone(CElement* pElement, std::uint32_t uiBoneId)
+{
+    if (m_pBoneAttachedTo)
+        m_pBoneAttachedTo->RemoveBoneAttachedElement(this);
+
+    m_pBoneAttachedTo = pElement;
+    m_uiAttachedBoneId = uiBoneId;
+
+    if (m_pBoneAttachedTo)
+        m_pBoneAttachedTo->AddBoneAttachedElement(this);
+}
+
+void CElement::AddBoneAttachedElement(CElement* pElement)
+{
+    m_BoneAttachedElements.push_back(pElement);
+}
+
+void CElement::RemoveBoneAttachedElement(CElement* pElement)
+{
+    m_BoneAttachedElements.remove(pElement);
+}
+
+void CElement::GetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation)
+{
+    vecPosition = m_vecBoneAttachedPosition;
+    vecRotation = m_vecBoneAttachedRotation;
+}
+
+void CElement::SetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation)
+{
+    m_vecBoneAttachedPosition = vecPosition;
+    m_vecBoneAttachedRotation = vecRotation;
 }
 
 bool CElement::IsElementAttached(CElement* pElement)

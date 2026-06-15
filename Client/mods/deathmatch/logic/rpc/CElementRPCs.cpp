@@ -27,6 +27,9 @@ void CElementRPCs::LoadFunctions()
     AddHandler(SET_ELEMENT_DIMENSION, SetElementDimension, "SetElementDimension");
     AddHandler(ATTACH_ELEMENTS, AttachElements, "AttachElements");
     AddHandler(DETACH_ELEMENTS, DetachElements, "DetachElements");
+    AddHandler(ATTACH_ELEMENT_TO_BONE, AttachElementToBone, "AttachElementToBone");
+    AddHandler(DETACH_ELEMENT_FROM_BONE, DetachElementFromBone, "DetachElementFromBone");
+    AddHandler(SET_ELEMENT_BONE_ATTACHED_OFFSETS, SetElementBoneAttachedOffsets, "SetElementBoneAttachedOffsets");
     AddHandler(SET_ELEMENT_ALPHA, SetElementAlpha, "SetElementAlpha");
     AddHandler(SET_ELEMENT_NAME, SetElementName, "SetElementName");
     AddHandler(SET_ELEMENT_HEALTH, SetElementHealth, "SetElementHealth");
@@ -397,6 +400,44 @@ void CElementRPCs::DetachElements(CClientEntity* pSource, NetBitStreamInterface&
     if (vecRotation.fX != 0.0f || vecRotation.fY != 0.0f || vecRotation.fZ != 0.0f)
     {
         pSource->SetRotationDegrees(vecRotation);
+    }
+}
+
+void CElementRPCs::AttachElementToBone(CClientEntity* pSource, NetBitStreamInterface& bitStream)
+{
+    ElementID      usAttachedToID;
+    unsigned short usBoneId;
+    CVector        vecPosition;
+    CVector        vecRotation;
+
+    if (!(bitStream.Read(usAttachedToID) && bitStream.Read(usBoneId) && bitStream.Read(vecPosition.fX) && bitStream.Read(vecPosition.fY) &&
+          bitStream.Read(vecPosition.fZ) && bitStream.Read(vecRotation.fX) && bitStream.Read(vecRotation.fY) && bitStream.Read(vecRotation.fZ)))
+    {
+        return;
+    }
+
+    CClientEntity* pAttachedToEntity = CElementIDs::GetElement(usAttachedToID);
+    if (!pAttachedToEntity)
+    {
+        return;
+    }
+
+    pSource->SetBoneAttachedOffsets(vecPosition, vecRotation);
+    pSource->AttachToBone(pAttachedToEntity, usBoneId);
+}
+
+void CElementRPCs::DetachElementFromBone(CClientEntity* pSource, NetBitStreamInterface& bitStream)
+{
+    pSource->DetachFromBone();
+}
+
+void CElementRPCs::SetElementBoneAttachedOffsets(CClientEntity* pSource, NetBitStreamInterface& bitStream)
+{
+    SPositionSync        position(true);
+    SRotationRadiansSync rotation(true);
+    if (position.Read(bitStream) && rotation.Read(bitStream))
+    {
+        pSource->SetBoneAttachedOffsets(position.data.vecPosition, rotation.data.vecRotation);
     }
 }
 
