@@ -689,6 +689,25 @@ bool CStaticFunctionDefinitions::GetElementAttachedOffsets(CClientEntity& Entity
     return true;
 }
 
+CClientEntity* CStaticFunctionDefinitions::GetElementAttachedToBone(CClientEntity& Entity, std::uint32_t& uiBoneId)
+{
+    CClientEntity* pEntityAttachedTo = Entity.GetBoneAttachedToEntity();
+    if (pEntityAttachedTo)
+    {
+        uiBoneId = Entity.GetAttachedBoneId();
+        return pEntityAttachedTo;
+    }
+
+    return NULL;
+}
+
+bool CStaticFunctionDefinitions::GetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation)
+{
+    Entity.GetBoneAttachedOffsets(vecPosition, vecRotation);
+    ConvertRadiansToDegrees(vecRotation);
+    return true;
+}
+
 bool CStaticFunctionDefinitions::GetElementAlpha(CClientEntity& Entity, unsigned char& ucAlpha)
 {
     switch (Entity.GetType())
@@ -1440,6 +1459,46 @@ bool CStaticFunctionDefinitions::SetElementAttachedOffsets(CClientEntity& Entity
 
     ConvertDegreesToRadians(vecRotation);
     Entity.SetAttachedOffsets(vecPosition, vecRotation);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::AttachElementToBone(CClientEntity& Entity, CClientEntity& AttachedToEntity, std::uint32_t uiBoneId, CVector& vecPosition,
+                                                       CVector& vecRotation)
+{
+    RUN_CHILDREN(AttachElementToBone(**iter, AttachedToEntity, uiBoneId, vecPosition, vecRotation))
+
+    // Can these elements be attached?
+    if (&Entity == &AttachedToEntity || !Entity.IsAttachToable() || !AttachedToEntity.IsAttachable() ||
+        Entity.GetDimension() != AttachedToEntity.GetDimension())
+    {
+        return false;
+    }
+
+    ConvertDegreesToRadians(vecRotation);
+
+    Entity.SetBoneAttachedOffsets(vecPosition, vecRotation);
+    Entity.AttachToBone(&AttachedToEntity, uiBoneId);
+
+    return true;
+}
+
+bool CStaticFunctionDefinitions::DetachElementFromBone(CClientEntity& Entity)
+{
+    RUN_CHILDREN(DetachElementFromBone(**iter))
+
+    if (!Entity.IsAttachedToBone())
+        return false;
+
+    Entity.DetachFromBone();
+    return true;
+}
+
+bool CStaticFunctionDefinitions::SetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation)
+{
+    RUN_CHILDREN(SetElementBoneAttachedOffsets(**iter, vecPosition, vecRotation))
+
+    ConvertDegreesToRadians(vecRotation);
+    Entity.SetBoneAttachedOffsets(vecPosition, vecRotation);
     return true;
 }
 

@@ -70,6 +70,8 @@ public:
     static CClientEntity* GetElementAttachedTo(CClientEntity& Entity);
     static bool           GetElementDistanceFromCentreOfMassToBaseOfModel(CClientEntity& Entity, float& fDistance);
     static bool           GetElementAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
+    static CClientEntity* GetElementAttachedToBone(CClientEntity& Entity, std::uint32_t& uiBoneId);
+    static bool           GetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
     static bool           GetElementAlpha(CClientEntity& Entity, unsigned char& ucAlpha);
     static bool           GetElementHealth(CClientEntity& Entity, float& fHealth);
     static bool           GetElementModel(CClientEntity& Entity, unsigned short& usModel);
@@ -99,6 +101,10 @@ public:
     static bool          AttachElements(CClientEntity& Entity, CClientEntity& AttachedToEntity, CVector& vecPosition, CVector& vecRotation);
     static bool          DetachElements(CClientEntity& Entity, CClientEntity* pAttachedToEntity = NULL);
     static bool          SetElementAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
+    static bool          AttachElementToBone(CClientEntity& Entity, CClientEntity& AttachedToEntity, std::uint32_t uiBoneId, CVector& vecPosition,
+                                              CVector& vecRotation);
+    static bool          DetachElementFromBone(CClientEntity& Entity);
+    static bool          SetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
     static bool          SetElementAlpha(CClientEntity& Entity, unsigned char ucAlpha);
     static bool          SetElementHealth(CClientEntity& Entity, float fHealth);
     static bool          SetElementModel(CClientEntity& Entity, unsigned short usModel);

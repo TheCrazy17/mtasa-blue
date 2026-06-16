@@ -71,6 +71,12 @@ void CLuaElementDefs::LoadFunctions()
         {"getElementAttachedTo", getElementAttachedTo},
         {"setElementAttachedOffsets", setElementAttachedOffsets},
         {"getElementAttachedOffsets", getElementAttachedOffsets},
+        {"attachElementToBone", attachElementToBone},
+        {"detachElementFromBone", detachElementFromBone},
+        {"setElementBoneAttachedOffsets", setElementBoneAttachedOffsets},
+        {"getElementBoneAttachedOffsets", getElementBoneAttachedOffsets},
+        {"isElementAttachedToBone", isElementAttachedToBone},
+        {"getElementAttachedBone", getElementAttachedBone},
 
         // Element data
         {"getElementData", GetElementData},
@@ -127,6 +133,8 @@ void CLuaElementDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "clearVisibility", "clearElementVisibleTo");
     lua_classfunction(luaVM, "attach", "attachElements");
     lua_classfunction(luaVM, "detach", "detachElements");
+    lua_classfunction(luaVM, "attachToBone", "attachElementToBone");
+    lua_classfunction(luaVM, "detachFromBone", "detachElementFromBone");
     lua_classfunction(luaVM, "removeData", "removeElementData");
     lua_classfunction(luaVM, "addDataSubscriber", "addElementDataSubscriber");
     lua_classfunction(luaVM, "removeDataSubscriber", "removeElementDataSubscriber");
@@ -152,15 +160,18 @@ void CLuaElementDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setDimension", "setElementDimension");
     lua_classfunction(luaVM, "setLowLOD", "setLowLODElement");
     lua_classfunction(luaVM, "setAttachedOffsets", "setElementAttachedOffsets");
+    lua_classfunction(luaVM, "setBoneAttachedOffsets", "setElementBoneAttachedOffsets");
     lua_classfunction(luaVM, "setCallPropagationEnabled", "setElementCallPropagationEnabled");
     lua_classfunction(luaVM, "setOnFire", "setElementOnFire");
 
     lua_classfunction(luaVM, "getAttachedOffsets", "getElementAttachedOffsets");
+    lua_classfunction(luaVM, "getBoneAttachedOffsets", "getElementBoneAttachedOffsets");
     lua_classfunction(luaVM, "getChild", "getElementChild");
     lua_classfunction(luaVM, "getChildren", "getElementChildren");
     lua_classfunction(luaVM, "getParent", "getElementParent");
     lua_classfunction(luaVM, "getAttachedElements", "getAttachedElements");
     lua_classfunction(luaVM, "getAttachedTo", "getElementAttachedTo");
+    lua_classfunction(luaVM, "getAttachedBone", "getElementAttachedBone");
     lua_classfunction(luaVM, "getVelocity", "getElementVelocity", OOP_getElementVelocity);
     lua_classfunction(luaVM, "getAngularVelocity", "getElementAngularVelocity", OOP_getElementTurnVelocity);
     lua_classfunction(luaVM, "getID", "getElementID");
@@ -192,6 +203,7 @@ void CLuaElementDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "isVisibleTo", "isElementVisibleTo");
     lua_classfunction(luaVM, "isLowLOD", "isElementLowLOD");
     lua_classfunction(luaVM, "isAttached", "isElementAttached");
+    lua_classfunction(luaVM, "isAttachedToBone", "isElementAttachedToBone");
     lua_classfunction(luaVM, "isOnFire", "isElementOnFire");
 
     lua_classvariable(luaVM, "id", "setElementID", "getElementID");
@@ -199,6 +211,7 @@ void CLuaElementDefs::AddClass(lua_State* luaVM)
     lua_classvariable(luaVM, "parent", "setElementParent", "getElementParent");
     lua_classvariable(luaVM, "zoneName", NULL, "getElementZoneName");
     lua_classvariable(luaVM, "attachedTo", "attachElements", "getElementAttachedTo");
+    lua_classvariable(luaVM, "attachedToBone", NULL, "isElementAttachedToBone");
     lua_classvariable(luaVM, "children", NULL, "getElementChildren");
     lua_classvariable(luaVM, "frozen", "setElementFrozen", "isElementFrozen");
     lua_classvariable(luaVM, "attachedElements", NULL, "getAttachedElements");
@@ -1240,6 +1253,81 @@ int CLuaElementDefs::getElementAttachedOffsets(lua_State* luaVM)
     return 1;
 }
 
+int CLuaElementDefs::isElementAttachedToBone(lua_State* luaVM)
+{
+    //  bool isElementAttachedToBone ( element theElement )
+    CElement* pElement;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pElement);
+
+    if (!argStream.HasErrors())
+    {
+        lua_pushboolean(luaVM, pElement->IsAttachedToBone());
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaElementDefs::getElementAttachedBone(lua_State* luaVM)
+{
+    //  element, int getElementAttachedBone ( element theElement )
+    CElement* pElement;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pElement);
+
+    if (!argStream.HasErrors())
+    {
+        std::uint32_t uiBoneId = 0;
+        CElement*     pElementAttachedTo = CStaticFunctionDefinitions::GetElementAttachedToBone(pElement, uiBoneId);
+        if (pElementAttachedTo)
+        {
+            lua_pushelement(luaVM, pElementAttachedTo);
+            lua_pushnumber(luaVM, uiBoneId);
+            return 2;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaElementDefs::getElementBoneAttachedOffsets(lua_State* luaVM)
+{
+    //  float, float, float, float, float, float getElementBoneAttachedOffsets ( element theElement )
+    CElement* pElement;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pElement);
+
+    if (!argStream.HasErrors())
+    {
+        CVector vecPosition, vecRotation;
+        if (CStaticFunctionDefinitions::GetElementBoneAttachedOffsets(pElement, vecPosition, vecRotation))
+        {
+            lua_pushnumber(luaVM, vecPosition.fX);
+            lua_pushnumber(luaVM, vecPosition.fY);
+            lua_pushnumber(luaVM, vecPosition.fZ);
+            lua_pushnumber(luaVM, vecRotation.fX);
+            lua_pushnumber(luaVM, vecRotation.fY);
+            lua_pushnumber(luaVM, vecRotation.fZ);
+            return 6;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
 int CLuaElementDefs::getElementColShape(lua_State* luaVM)
 {
     //  colshape getElementColShape ( element theElement )
@@ -2126,6 +2214,102 @@ int CLuaElementDefs::detachElements(lua_State* luaVM)
         LogWarningIfPlayerHasNotJoinedYet(luaVM, pElement);
 
         if (CStaticFunctionDefinitions::DetachElements(pElement, pAttachedToElement))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaElementDefs::attachElementToBone(lua_State* luaVM)
+{
+    //  bool attachElementToBone ( element theElement, element theBoneAttachToElement, int boneId, [ float xPosOffset, float yPosOffset, float zPosOffset,
+    //  float xRotOffset, float yRotOffset, float zRotOffset ] )
+    CElement*     pElement;
+    CElement*     pAttachedToElement;
+    std::uint32_t uiBoneId;
+    CVector       vecPosition;
+    CVector       vecRotation;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pElement);
+    argStream.ReadUserData(pAttachedToElement);
+    argStream.ReadNumber(uiBoneId);
+    argStream.ReadVector3D(vecPosition, vecPosition);
+    argStream.ReadVector3D(vecRotation, vecRotation);
+
+    if (!argStream.HasErrors())
+    {
+        // eBone range (Client/sdk/game/CPed.h): BONE_ROOT=0 .. BONE_LEFTBREAST=302
+        if (uiBoneId > 302)
+            argStream.SetCustomError("Invalid bone id");
+        else
+        {
+            LogWarningIfPlayerHasNotJoinedYet(luaVM, pElement);
+
+            if (CStaticFunctionDefinitions::AttachElementToBone(pElement, pAttachedToElement, uiBoneId, vecPosition, vecRotation))
+            {
+                lua_pushboolean(luaVM, true);
+                return 1;
+            }
+        }
+    }
+
+    if (argStream.HasErrors())
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaElementDefs::detachElementFromBone(lua_State* luaVM)
+{
+    //  bool detachElementFromBone ( element theElement )
+    CElement* pElement;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pElement);
+
+    if (!argStream.HasErrors())
+    {
+        LogWarningIfPlayerHasNotJoinedYet(luaVM, pElement);
+
+        if (CStaticFunctionDefinitions::DetachElementFromBone(pElement))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaElementDefs::setElementBoneAttachedOffsets(lua_State* luaVM)
+{
+    //  bool setElementBoneAttachedOffsets ( element theElement, [ float xPosOffset, float yPosOffset, float zPosOffset, float xRotOffset, float yRotOffset,
+    //  float zRotOffset ] )
+    CElement* pElement;
+    CVector   vecPosition;
+    CVector   vecRotation;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pElement);
+    argStream.ReadVector3D(vecPosition, vecPosition);
+    argStream.ReadVector3D(vecRotation, vecRotation);
+
+    if (!argStream.HasErrors())
+    {
+        LogWarningIfPlayerHasNotJoinedYet(luaVM, pElement);
+
+        if (CStaticFunctionDefinitions::SetElementBoneAttachedOffsets(pElement, vecPosition, vecRotation))
         {
             lua_pushboolean(luaVM, true);
             return 1;
