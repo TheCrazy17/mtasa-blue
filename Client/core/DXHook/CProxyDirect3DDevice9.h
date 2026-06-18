@@ -609,7 +609,17 @@ struct SGammaState
     D3DGAMMARAMP originalGammaRamp;
     UINT         lastSwapChain;
 
-    SGammaState() : bOriginalGammaStored(false), bLastWasBorderless(false), originalGammaRamp{}, lastSwapChain(0) {}
+    // Tracks the most-recently applied ramp so it can be restored after a device reset.
+    bool         bLastAppliedRampValid;
+    D3DGAMMARAMP lastAppliedRamp;
+    UINT         lastAppliedSwapChain;
+    DWORD        lastAppliedFlags;
+
+    SGammaState()
+        : bOriginalGammaStored(false), bLastWasBorderless(false), originalGammaRamp{}, lastSwapChain(0),
+          bLastAppliedRampValid(false), lastAppliedRamp{}, lastAppliedSwapChain(0), lastAppliedFlags(0)
+    {
+    }
 };
 
 extern SGammaState g_GammaState;

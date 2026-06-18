@@ -1018,6 +1018,24 @@ HRESULT CProxyDirect3DDevice9::Reset(D3DPRESENT_PARAMETERS* pPresentationParamet
         // Call our event handler.
         CDirect3DEvents9::OnRestore(m_pDevice);
 
+        // Re-apply the last gamma ramp that was set before the device was lost. Calling the real
+        // device directly, rather than going through our own SetGammaRamp, re-applies the exact
+        // ramp that was active instead of recomputing it from the brightness/contrast settings.
+        if (previousGammaState.bLastAppliedRampValid)
+        {
+            m_pDevice->SetGammaRamp(previousGammaState.lastAppliedSwapChain, previousGammaState.lastAppliedFlags,
+                                    &previousGammaState.lastAppliedRamp);
+        }
+
+        // g_GammaState was cleared before the reset and never went through our SetGammaRamp above,
+        // so restore it here; otherwise a second reset before the game reapplies gamma itself would
+        // find nothing to restore.
+        if (gammaStateCleared)
+        {
+            std::lock_guard<std::mutex> gammaLock(g_gammaStateMutex);
+            g_GammaState = previousGammaState;
+        }
+
         // Additional sync point for GPU driver
         if (BeginSceneWithoutProxy(m_pDevice, ESceneOwner::MTA))
         {
@@ -1114,6 +1132,15 @@ VOID CProxyDirect3DDevice9::SetGammaRamp(UINT iSwapChain, DWORD Flags, CONST D3D
     if (iSwapChain >= GetNumberOfSwapChains())
     {
         return;
+    }
+
+    // Record the ramp being applied so it can be restored after a device reset.
+    {
+        std::lock_guard<std::mutex> gammaLock(g_gammaStateMutex);
+        g_GammaState.lastAppliedRamp        = *pRamp;
+        g_GammaState.lastAppliedSwapChain   = iSwapChain;
+        g_GammaState.lastAppliedFlags       = Flags;
+        g_GammaState.bLastAppliedRampValid  = true;
     }
 
     // Get current display mode state - use a timeout to avoid race conditions during mode transitions
