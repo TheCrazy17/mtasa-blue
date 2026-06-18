@@ -34,13 +34,19 @@ namespace CEGUI
 {
     const utf8 FalagardScrollbar::WidgetTypeName[] = "Falagard/Scrollbar";
     FalagardScrollbarProperties::VerticalScrollbar FalagardScrollbar::d_verticalProperty;
+    FalagardScrollbarProperties::DynamicThumb      FalagardScrollbar::d_dynamicThumbProperty;
+    FalagardScrollbarProperties::ThumbSize         FalagardScrollbar::d_thumbSizeProperty;
 
 
     FalagardScrollbar::FalagardScrollbar(const String& type, const String& name) :
         Scrollbar(type, name),
-        d_vertical(false)
+        d_vertical(false),
+        d_dynamicThumb(false),
+        d_thumbSize(-1.0f)
     {
         addProperty(&d_verticalProperty);
+        addProperty(&d_dynamicThumbProperty);
+        addProperty(&d_thumbSizeProperty);
     }
 
     FalagardScrollbar::~FalagardScrollbar()
@@ -95,15 +101,54 @@ namespace CEGUI
 
         if (d_vertical)
         {
-            slideExtent = area.getHeight() - theThumb->getAbsoluteHeight();
+            float trackLength = area.getHeight();
+            float thumbHeight;
+
+            if (d_dynamicThumb && d_documentSize > 0.0f)
+                thumbHeight = (d_pageSize / d_documentSize) * trackLength;
+            else if (d_thumbSize >= 0.0f)
+                thumbHeight = d_thumbSize * trackLength;
+            else
+                thumbHeight = theThumb->getAbsoluteHeight();
+
+            if (d_dynamicThumb || d_thumbSize >= 0.0f)
+            {
+                // Enforce a sensible minimum so the thumb stays grabbable.
+                float minSize = std::min(16.0f, trackLength * 0.05f);
+                thumbHeight = std::max(thumbHeight, minSize);
+                thumbHeight = std::min(thumbHeight, trackLength);
+                theThumb->setHeight(absoluteToRelativeY_impl(this, thumbHeight));
+            }
+
+            slideExtent = trackLength - thumbHeight;
             theThumb->setVertRange(absoluteToRelativeY_impl(this, area.d_top), absoluteToRelativeY_impl(this, area.d_top + slideExtent));
-            theThumb->setPosition(Point(absoluteToRelativeX_impl(this, area.d_left), absoluteToRelativeY_impl(this, area.d_top + (d_position * (slideExtent / posExtent)))));
+            theThumb->setPosition(Point(absoluteToRelativeX_impl(this, area.d_left),
+                absoluteToRelativeY_impl(this, area.d_top + (posExtent > 0.0f ? d_position * (slideExtent / posExtent) : 0.0f))));
         }
         else
         {
-            slideExtent = area.getWidth() - theThumb->getAbsoluteWidth();
+            float trackLength = area.getWidth();
+            float thumbWidth;
+
+            if (d_dynamicThumb && d_documentSize > 0.0f)
+                thumbWidth = (d_pageSize / d_documentSize) * trackLength;
+            else if (d_thumbSize >= 0.0f)
+                thumbWidth = d_thumbSize * trackLength;
+            else
+                thumbWidth = theThumb->getAbsoluteWidth();
+
+            if (d_dynamicThumb || d_thumbSize >= 0.0f)
+            {
+                float minSize = std::min(16.0f, trackLength * 0.05f);
+                thumbWidth = std::max(thumbWidth, minSize);
+                thumbWidth = std::min(thumbWidth, trackLength);
+                theThumb->setWidth(absoluteToRelativeX_impl(this, thumbWidth));
+            }
+
+            slideExtent = trackLength - thumbWidth;
             theThumb->setHorzRange(absoluteToRelativeX_impl(this, area.d_left), absoluteToRelativeX_impl(this, area.d_left + slideExtent));
-            theThumb->setPosition(Point(absoluteToRelativeX_impl(this, area.d_left + (d_position * (slideExtent / posExtent))), absoluteToRelativeY_impl(this, area.d_top)));
+            theThumb->setPosition(Point(absoluteToRelativeX_impl(this, area.d_left + (posExtent > 0.0f ? d_position * (slideExtent / posExtent) : 0.0f)),
+                absoluteToRelativeY_impl(this, area.d_top)));
         }
     }
 
@@ -155,6 +200,28 @@ namespace CEGUI
     void FalagardScrollbar::setVertical(bool setting)
     {
         d_vertical = setting;
+    }
+
+    bool FalagardScrollbar::isThumbDynamic() const
+    {
+        return d_dynamicThumb;
+    }
+
+    void FalagardScrollbar::setThumbDynamic(bool setting)
+    {
+        d_dynamicThumb = setting;
+        updateThumb();
+    }
+
+    float FalagardScrollbar::getThumbSize() const
+    {
+        return d_thumbSize;
+    }
+
+    void FalagardScrollbar::setThumbSize(float size)
+    {
+        d_thumbSize = size;
+        updateThumb();
     }
 
     //////////////////////////////////////////////////////////////////////////

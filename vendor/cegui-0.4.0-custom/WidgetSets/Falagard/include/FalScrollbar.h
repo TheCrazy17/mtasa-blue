@@ -75,9 +75,17 @@ namespace CEGUI
         bool isVertical() const;
         void setVertical(bool setting);
 
+        bool  isThumbDynamic() const;
+        void  setThumbDynamic(bool setting);
+
+        float getThumbSize() const;
+        void  setThumbSize(float size);
+
     protected:
         // data members
-        bool    d_vertical;     //!< True if slider operates in vertical direction.
+        bool    d_vertical;         //!< True if slider operates in vertical direction.
+        bool    d_dynamicThumb;     //!< True if thumb size scales with pageSize/documentSize ratio.
+        float   d_thumbSize;        //!< Fixed thumb size as fraction of track (0-1); -1 = use skin default.
 
         // overridden from Scrollbar base class.
         void populateRenderCache();
@@ -91,6 +99,8 @@ namespace CEGUI
 
         // property objects
         static FalagardScrollbarProperties::VerticalScrollbar d_verticalProperty;
+        static FalagardScrollbarProperties::DynamicThumb      d_dynamicThumbProperty;
+        static FalagardScrollbarProperties::ThumbSize         d_thumbSizeProperty;
     };
 
     /*!

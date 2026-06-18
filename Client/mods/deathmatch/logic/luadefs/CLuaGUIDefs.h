@@ -53,6 +53,14 @@ public:
     LUA_DECLARE(GUIDeleteTab);
     LUA_DECLARE(GUIScrollBarSetScrollPosition);
     LUA_DECLARE(GUIScrollBarGetScrollPosition);
+    LUA_DECLARE(GUIScrollBarSetThumbDynamic);
+    LUA_DECLARE(GUIScrollBarGetThumbDynamic);
+    LUA_DECLARE(GUIScrollBarSetThumbSize);
+    LUA_DECLARE(GUIScrollBarGetThumbSize);
+    LUA_DECLARE(GUIScrollBarSetDocumentSize);
+    LUA_DECLARE(GUIScrollBarGetDocumentSize);
+    LUA_DECLARE(GUIScrollBarSetPageSize);
+    LUA_DECLARE(GUIScrollBarGetPageSize);
     LUA_DECLARE(GUIGridListSetSortingEnabled);
     LUA_DECLARE(GUIGridListIsSortingEnabled);
     LUA_DECLARE(GUIGridListAddColumn);

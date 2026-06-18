@@ -25,6 +25,18 @@ public:
     void  SetScrollPosition(float fPosition);
     float GetScrollPosition();
 
+    void  SetThumbDynamic(bool bDynamic);
+    bool  GetThumbDynamic();
+
+    void  SetScrollBarThumbSize(float fSize);
+    float GetScrollBarThumbSize();
+
+    void  SetScrollBarDocumentSize(float fSize);
+    float GetScrollBarDocumentSize();
+
+    void  SetScrollBarPageSize(float fSize);
+    float GetScrollBarPageSize();
+
     eCGUIType GetType() { return CGUI_SCROLLBAR; };
 
 #include "CGUIElement_Inc.h"

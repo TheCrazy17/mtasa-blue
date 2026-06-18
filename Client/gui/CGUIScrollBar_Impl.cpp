@@ -60,6 +60,48 @@ float CGUIScrollBar_Impl::GetScrollPosition()
     return reinterpret_cast<CEGUI::Scrollbar*>(m_pWindow)->getScrollPosition();
 }
 
+void CGUIScrollBar_Impl::SetThumbDynamic(bool bDynamic)
+{
+    m_pWindow->setProperty("DynamicThumb", bDynamic ? "True" : "False");
+}
+
+bool CGUIScrollBar_Impl::GetThumbDynamic()
+{
+    return m_pWindow->getProperty("DynamicThumb") == "True";
+}
+
+void CGUIScrollBar_Impl::SetScrollBarThumbSize(float fSize)
+{
+    char szBuf[32];
+    snprintf(szBuf, sizeof(szBuf), "%g", fSize);
+    m_pWindow->setProperty("ThumbSize", szBuf);
+}
+
+float CGUIScrollBar_Impl::GetScrollBarThumbSize()
+{
+    return static_cast<float>(atof(m_pWindow->getProperty("ThumbSize").c_str()));
+}
+
+void CGUIScrollBar_Impl::SetScrollBarDocumentSize(float fSize)
+{
+    reinterpret_cast<CEGUI::Scrollbar*>(m_pWindow)->setDocumentSize(fSize);
+}
+
+float CGUIScrollBar_Impl::GetScrollBarDocumentSize()
+{
+    return reinterpret_cast<CEGUI::Scrollbar*>(m_pWindow)->getDocumentSize();
+}
+
+void CGUIScrollBar_Impl::SetScrollBarPageSize(float fSize)
+{
+    reinterpret_cast<CEGUI::Scrollbar*>(m_pWindow)->setPageSize(fSize);
+}
+
+float CGUIScrollBar_Impl::GetScrollBarPageSize()
+{
+    return reinterpret_cast<CEGUI::Scrollbar*>(m_pWindow)->getPageSize();
+}
+
 void CGUIScrollBar_Impl::SetOnScrollHandler(const GUI_CALLBACK& Callback)
 {
     m_OnScroll = Callback;

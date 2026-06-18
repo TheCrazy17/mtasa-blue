@@ -60,6 +60,32 @@ namespace FalagardScrollbarProperties
         void	set(PropertyReceiver* receiver, const String& value);
     };
 
+    class DynamicThumb : public Property
+    {
+    public:
+        DynamicThumb() : Property(
+            "DynamicThumb",
+            "Property to get/set whether the scrollbar thumb size is proportional to the document/page size ratio.  Value is either \"True\" or \"False\".",
+            "False")
+        {}
+
+        String  get(const PropertyReceiver* receiver) const;
+        void    set(PropertyReceiver* receiver, const String& value);
+    };
+
+    class ThumbSize : public Property
+    {
+    public:
+        ThumbSize() : Property(
+            "ThumbSize",
+            "Property to get/set a fixed thumb size as a fraction (0.0-1.0) of the track area. -1 means use the skin default.",
+            "-1")
+        {}
+
+        String  get(const PropertyReceiver* receiver) const;
+        void    set(PropertyReceiver* receiver, const String& value);
+    };
+
 }
 
 } // End of  CEGUI namespace section

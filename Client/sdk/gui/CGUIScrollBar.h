@@ -23,4 +23,16 @@ public:
 
     virtual void  SetScrollPosition(float fPosition) = 0;
     virtual float GetScrollPosition() = 0;
+
+    virtual void  SetThumbDynamic(bool bDynamic) = 0;
+    virtual bool  GetThumbDynamic() = 0;
+
+    virtual void  SetScrollBarThumbSize(float fSize) = 0;
+    virtual float GetScrollBarThumbSize() = 0;
+
+    virtual void  SetScrollBarDocumentSize(float fSize) = 0;
+    virtual float GetScrollBarDocumentSize() = 0;
+
+    virtual void  SetScrollBarPageSize(float fSize) = 0;
+    virtual float GetScrollBarPageSize() = 0;
 };

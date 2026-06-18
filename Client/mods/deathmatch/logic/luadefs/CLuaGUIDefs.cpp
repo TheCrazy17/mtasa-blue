@@ -117,6 +117,14 @@ void CLuaGUIDefs::LoadFunctions()
 
         {"guiScrollBarSetScrollPosition", GUIScrollBarSetScrollPosition},
         {"guiScrollBarGetScrollPosition", GUIScrollBarGetScrollPosition},
+        {"guiScrollBarSetThumbDynamic", GUIScrollBarSetThumbDynamic},
+        {"guiScrollBarGetThumbDynamic", GUIScrollBarGetThumbDynamic},
+        {"guiScrollBarSetThumbSize", GUIScrollBarSetThumbSize},
+        {"guiScrollBarGetThumbSize", GUIScrollBarGetThumbSize},
+        {"guiScrollBarSetDocumentSize", GUIScrollBarSetDocumentSize},
+        {"guiScrollBarGetDocumentSize", GUIScrollBarGetDocumentSize},
+        {"guiScrollBarSetPageSize", GUIScrollBarSetPageSize},
+        {"guiScrollBarGetPageSize", GUIScrollBarGetPageSize},
 
         {"guiSetEnabled", GUISetEnabled},
         {"guiSetProperty", GUISetProperty},
@@ -474,10 +482,25 @@ void CLuaGUIDefs::AddGuiScrollBarClass(lua_State* luaVM)
     lua_classfunction(luaVM, "create", "guiCreateScrollBar");
 
     lua_classfunction(luaVM, "getScrollPosition", "guiScrollBarGetScrollPosition");
-
     lua_classfunction(luaVM, "setScrollPosition", "guiScrollBarSetScrollPosition");
 
+    lua_classfunction(luaVM, "getThumbDynamic", "guiScrollBarGetThumbDynamic");
+    lua_classfunction(luaVM, "setThumbDynamic", "guiScrollBarSetThumbDynamic");
+
+    lua_classfunction(luaVM, "getThumbSize", "guiScrollBarGetThumbSize");
+    lua_classfunction(luaVM, "setThumbSize", "guiScrollBarSetThumbSize");
+
+    lua_classfunction(luaVM, "getDocumentSize", "guiScrollBarGetDocumentSize");
+    lua_classfunction(luaVM, "setDocumentSize", "guiScrollBarSetDocumentSize");
+
+    lua_classfunction(luaVM, "getPageSize", "guiScrollBarGetPageSize");
+    lua_classfunction(luaVM, "setPageSize", "guiScrollBarSetPageSize");
+
     lua_classvariable(luaVM, "scrollPosition", "guiScrollBarSetScrollPosition", "guiScrollBarGetScrollPosition");
+    lua_classvariable(luaVM, "thumbDynamic", "guiScrollBarSetThumbDynamic", "guiScrollBarGetThumbDynamic");
+    lua_classvariable(luaVM, "thumbSize", "guiScrollBarSetThumbSize", "guiScrollBarGetThumbSize");
+    lua_classvariable(luaVM, "documentSize", "guiScrollBarSetDocumentSize", "guiScrollBarGetDocumentSize");
+    lua_classvariable(luaVM, "pageSize", "guiScrollBarSetPageSize", "guiScrollBarGetPageSize");
 
     lua_registerclass(luaVM, "GuiScrollBar", "GuiElement");
 }
@@ -1701,6 +1724,186 @@ int CLuaGUIDefs::GUIScrollBarGetScrollPosition(lua_State* luaVM)
         m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
 
     // error: bad arguments
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarSetThumbDynamic(lua_State* luaVM)
+{
+    //  bool guiScrollBarSetThumbDynamic ( gui-scrollBar theScrollBar, bool bDynamic )
+    CClientGUIElement* theScrollBar;
+    bool               bDynamic;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+    argStream.ReadBool(bDynamic);
+
+    if (!argStream.HasErrors())
+    {
+        static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->SetThumbDynamic(bDynamic);
+        lua_pushboolean(luaVM, true);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarGetThumbDynamic(lua_State* luaVM)
+{
+    //  bool guiScrollBarGetThumbDynamic ( gui-scrollBar theScrollBar )
+    CClientGUIElement* theScrollBar;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+
+    if (!argStream.HasErrors())
+    {
+        bool bDynamic = static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->GetThumbDynamic();
+        lua_pushboolean(luaVM, bDynamic);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarSetThumbSize(lua_State* luaVM)
+{
+    //  bool guiScrollBarSetThumbSize ( gui-scrollBar theScrollBar, float fSize )
+    //  fSize is a fraction 0.0-1.0 of the track length. Pass -1 to restore the skin default.
+    CClientGUIElement* theScrollBar;
+    float              fSize;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+    argStream.ReadNumber(fSize);
+
+    if (!argStream.HasErrors())
+    {
+        static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->SetScrollBarThumbSize(fSize);
+        lua_pushboolean(luaVM, true);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarGetThumbSize(lua_State* luaVM)
+{
+    //  float guiScrollBarGetThumbSize ( gui-scrollBar theScrollBar )
+    //  Returns the fixed thumb size fraction (0.0-1.0), or -1 if using the skin default.
+    CClientGUIElement* theScrollBar;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+
+    if (!argStream.HasErrors())
+    {
+        float fSize = static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->GetScrollBarThumbSize();
+        lua_pushnumber(luaVM, fSize);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarSetDocumentSize(lua_State* luaVM)
+{
+    //  bool guiScrollBarSetDocumentSize ( gui-scrollBar theScrollBar, float fSize )
+    //  Sets the total document/content size. Used together with pageSize for dynamic thumb sizing.
+    CClientGUIElement* theScrollBar;
+    float              fSize;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+    argStream.ReadNumber(fSize);
+
+    if (!argStream.HasErrors())
+    {
+        static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->SetScrollBarDocumentSize(fSize);
+        lua_pushboolean(luaVM, true);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarGetDocumentSize(lua_State* luaVM)
+{
+    //  float guiScrollBarGetDocumentSize ( gui-scrollBar theScrollBar )
+    CClientGUIElement* theScrollBar;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+
+    if (!argStream.HasErrors())
+    {
+        float fSize = static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->GetScrollBarDocumentSize();
+        lua_pushnumber(luaVM, fSize);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarSetPageSize(lua_State* luaVM)
+{
+    //  bool guiScrollBarSetPageSize ( gui-scrollBar theScrollBar, float fSize )
+    //  Sets the visible page size. Used together with documentSize for dynamic thumb sizing.
+    CClientGUIElement* theScrollBar;
+    float              fSize;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+    argStream.ReadNumber(fSize);
+
+    if (!argStream.HasErrors())
+    {
+        static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->SetScrollBarPageSize(fSize);
+        lua_pushboolean(luaVM, true);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaGUIDefs::GUIScrollBarGetPageSize(lua_State* luaVM)
+{
+    //  float guiScrollBarGetPageSize ( gui-scrollBar theScrollBar )
+    CClientGUIElement* theScrollBar;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData<CGUIScrollBar>(theScrollBar);
+
+    if (!argStream.HasErrors())
+    {
+        float fSize = static_cast<CGUIScrollBar*>(theScrollBar->GetCGUIElement())->GetScrollBarPageSize();
+        lua_pushnumber(luaVM, fSize);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
     lua_pushboolean(luaVM, false);
     return 1;
 }

@@ -40,5 +40,25 @@ namespace FalagardScrollbarProperties
     {
         static_cast<FalagardScrollbar*>(receiver)->setVertical(PropertyHelper::stringToBool(value));
     }
+
+    String DynamicThumb::get(const PropertyReceiver* receiver) const
+    {
+        return PropertyHelper::boolToString(static_cast<const FalagardScrollbar*>(receiver)->isThumbDynamic());
+    }
+
+    void DynamicThumb::set(PropertyReceiver* receiver, const String& value)
+    {
+        static_cast<FalagardScrollbar*>(receiver)->setThumbDynamic(PropertyHelper::stringToBool(value));
+    }
+
+    String ThumbSize::get(const PropertyReceiver* receiver) const
+    {
+        return PropertyHelper::floatToString(static_cast<const FalagardScrollbar*>(receiver)->getThumbSize());
+    }
+
+    void ThumbSize::set(PropertyReceiver* receiver, const String& value)
+    {
+        static_cast<FalagardScrollbar*>(receiver)->setThumbSize(PropertyHelper::stringToFloat(value));
+    }
 }
 } // End of  CEGUI namespace section
