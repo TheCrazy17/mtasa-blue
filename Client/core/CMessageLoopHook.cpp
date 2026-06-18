@@ -163,7 +163,7 @@ LRESULT CALLBACK CMessageLoopHook::ProcessMessage(HWND hwnd, UINT uMsg, WPARAM w
             }
         }
 
-        // When updating m_bFocused in CClientGame from CPacketHandler (to fix another bug — see the note there),
+        // When updating m_bFocused in CClientGame from CPacketHandler (to fix another bug ï¿½ see the note there),
         // the window might not actually have focus at that moment (even though Windows reports it as focused).
         // In this case, isMTAWindowFocused returns false even though the window has focus.
         // Therefore, we need to intercept the window return operation and manually set the focus in CClientGame.
@@ -197,6 +197,12 @@ LRESULT CALLBACK CMessageLoopHook::ProcessMessage(HWND hwnd, UINT uMsg, WPARAM w
     if (uMsg == WM_KILLFOCUS || (uMsg == WM_ACTIVATE && LOWORD(wParam) == WA_INACTIVE))
     {
         CSetCursorPosHook::GetSingleton().DisableSetCursorPos();
+        // Release any cursor clip/capture that GTA set. GTA never sees this focus-loss
+        // message (we swallow it below to prevent pausing), so it never calls ClipCursor(nullptr)
+        // itself. Without this, the cursor ends up trapped at the minimized-window position
+        // (typically the top-left corner of the screen) until the user clicks elsewhere.
+        ClipCursor(nullptr);
+        ReleaseCapture();
     }
     else if (uMsg == WM_SETFOCUS || (uMsg == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE))
     {

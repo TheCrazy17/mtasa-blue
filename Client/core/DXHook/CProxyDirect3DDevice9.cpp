@@ -1018,6 +1018,14 @@ HRESULT CProxyDirect3DDevice9::Reset(D3DPRESENT_PARAMETERS* pPresentationParamet
         // Call our event handler.
         CDirect3DEvents9::OnRestore(m_pDevice);
 
+        // Re-apply the last gamma ramp that was set before the device was lost.
+        // D3D9 resets gamma to linear after a device reset, so we need to restore it.
+        if (previousGammaState.bLastAppliedRampValid)
+        {
+            m_pDevice->SetGammaRamp(previousGammaState.lastAppliedSwapChain, previousGammaState.lastAppliedFlags,
+                                    &previousGammaState.lastAppliedRamp);
+        }
+
         // Additional sync point for GPU driver
         if (BeginSceneWithoutProxy(m_pDevice, ESceneOwner::MTA))
         {
@@ -1108,6 +1116,15 @@ VOID CProxyDirect3DDevice9::SetGammaRamp(UINT iSwapChain, DWORD Flags, CONST D3D
     if (iSwapChain >= GetNumberOfSwapChains())
     {
         return;
+    }
+
+    // Record the ramp being applied so it can be restored after a device reset.
+    {
+        std::lock_guard<std::mutex> gammaLock(g_gammaStateMutex);
+        g_GammaState.lastAppliedRamp        = *pRamp;
+        g_GammaState.lastAppliedSwapChain   = iSwapChain;
+        g_GammaState.lastAppliedFlags       = Flags;
+        g_GammaState.bLastAppliedRampValid  = true;
     }
 
     // Get current display mode state - use a timeout to avoid race conditions during mode transitions
