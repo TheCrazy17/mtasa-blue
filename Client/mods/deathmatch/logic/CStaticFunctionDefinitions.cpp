@@ -10176,6 +10176,26 @@ bool CStaticFunctionDefinitions::SetLightDirection(CClientPointLights* pLight, C
     return false;
 }
 
+bool CStaticFunctionDefinitions::GetLightRenderDistance(CClientPointLights* pLight, float& fRenderDistance)
+{
+    if (pLight)
+    {
+        fRenderDistance = pLight->GetRenderDistance();
+        return true;
+    }
+    return false;
+}
+
+bool CStaticFunctionDefinitions::SetLightRenderDistance(CClientPointLights* pLight, float fRenderDistance)
+{
+    if (pLight)
+    {
+        pLight->SetRenderDistance(fRenderDistance);
+        return true;
+    }
+    return false;
+}
+
 CClientSearchLight* CStaticFunctionDefinitions::CreateSearchLight(CResource& Resource, const CVector& vecStart, const CVector& vecEnd, float startRadius,
                                                                   float endRadius, bool renderSpot)
 {

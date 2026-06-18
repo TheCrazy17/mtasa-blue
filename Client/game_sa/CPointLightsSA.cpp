@@ -138,6 +138,24 @@ static void CSearchLight_RenderCorona(int ID, void* entity, unsigned char r, uns
                                                                fadeState, fadeSpeed, onlyFromBelow, reflectionDelay);
 }
 
+void CPointLightsSA::RegisterCorona(unsigned int uiId, const CVector& vecPosition, SharedUtil::SColor color, float fSize, float fFarClip)
+{
+    using CCoronas_RegisterCorona_t = void(__cdecl*)(int id, void* entity, unsigned char r, unsigned char g, unsigned char b, unsigned char a, CVector* pos,
+                                                       float size, float farClip, int type, char flareType, bool enableReflection, bool checkObstacles,
+                                                       int unknownUnused, float angle, bool longDistance, float nearClip, bool fadeState, float fadeSpeed,
+                                                       bool onlyFromBelow, bool reflectionDelay);
+
+    static constexpr int   CORONATYPE_SHINYSTAR = 0;
+    static constexpr float DEFAULT_NEAR_CLIP = 1.0f;
+    static constexpr float DEFAULT_FADE_SPEED = 0.2f;
+
+    auto CCoronas_RegisterCorona = (CCoronas_RegisterCorona_t)FUNC_CCoronas_RegisterCorona;
+    CVector vecPos = vecPosition;
+
+    CCoronas_RegisterCorona(static_cast<int>(uiId), nullptr, color.R, color.G, color.B, color.A, &vecPos, fSize, fFarClip, CORONATYPE_SHINYSTAR, 0, false,
+                            true, 0, 0.0f, fFarClip > 100.0f, DEFAULT_NEAR_CLIP, true, DEFAULT_FADE_SPEED, false, false);
+}
+
 void CPointLightsSA::StaticSetHooks()
 {
     HookInstallCall(0x6C628E, (DWORD)CSearchLight_PreRender3DVertexBuffer);

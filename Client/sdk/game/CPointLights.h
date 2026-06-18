@@ -31,4 +31,8 @@ public:
     virtual void PostRenderHeliLights() = 0;
     virtual void RenderHeliLight(const CVector& vecStart, const CVector& vecEnd, float startRadius, float endRadius, bool renderSpot,
                                  const SharedUtil::SColor& color) = 0;
+
+    // Registers a corona sprite (the visible glow rendered up to fFarClip units away), independent of the
+    // vertex-lighting registered by AddLight. uiId should be unique per light for the duration it's visible.
+    virtual void RegisterCorona(unsigned int uiId, const CVector& vecPosition, SharedUtil::SColor color, float fSize, float fFarClip) = 0;
 };

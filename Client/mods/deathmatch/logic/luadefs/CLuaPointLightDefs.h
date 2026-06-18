@@ -26,4 +26,6 @@ public:
     LUA_DECLARE(SetLightRadius);
     LUA_DECLARE(SetLightColor);
     LUA_DECLARE(SetLightDirection);
+    LUA_DECLARE(GetLightRenderDistance);
+    LUA_DECLARE(SetLightRenderDistance);
 };

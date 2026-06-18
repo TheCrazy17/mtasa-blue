@@ -343,6 +343,8 @@ public:
     static bool                SetLightRadius(CClientPointLights* pLight, float fRadius);
     static bool                SetLightColor(CClientPointLights* pLight, SColor color);
     static bool                SetLightDirection(CClientPointLights* pLight, CVector vecDirection);
+    static bool                GetLightRenderDistance(CClientPointLights* pLight, float& fRenderDistance);
+    static bool                SetLightRenderDistance(CClientPointLights* pLight, float fRenderDistance);
 
     // Search light funcs
     static CClientSearchLight* CreateSearchLight(CResource& Resource, const CVector& vecStart, const CVector& vecEnd, float startRadius, float endRadius,

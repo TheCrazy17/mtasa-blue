@@ -48,6 +48,11 @@ public:
     CClientEntity* GetAffected() { return m_pAffected; };
     void           SetAffected(CClientEntity* pAffected) { m_pAffected = pAffected; };
 
+    // Distance (in world units) the light's corona glow stays visible from. 0 disables the corona entirely,
+    // keeping the light as pure vertex-lighting (the original createLight behaviour).
+    float GetRenderDistance() { return m_fRenderDistance; };
+    void  SetRenderDistance(float fRenderDistance) { m_fRenderDistance = fRenderDistance; };
+
     void SetDimension(unsigned short usDimension);
     void RelateDimension(unsigned short usDimension);
 
@@ -63,6 +68,7 @@ protected:
     SColor         m_Color;
     bool           m_bCreatesShadow;
     CClientEntity* m_pAffected;
+    float          m_fRenderDistance;
 
     bool m_bStreamedIn;
 };

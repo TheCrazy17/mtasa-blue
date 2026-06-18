@@ -16,6 +16,7 @@ void CLuaPointLightDefs::LoadFunctions()
     constexpr static const std::pair<const char*, lua_CFunction> functions[]{
         {"createLight", CreateLight},     {"getLightType", GetLightType},   {"getLightRadius", GetLightRadius},       {"setLightRadius", SetLightRadius},
         {"getLightColor", GetLightColor}, {"setLightColor", SetLightColor}, {"getLightDirection", GetLightDirection}, {"setLightDirection", SetLightDirection},
+        {"getLightRenderDistance", GetLightRenderDistance}, {"setLightRenderDistance", SetLightRenderDistance},
     };
 
     // Add functions
@@ -38,9 +39,13 @@ void CLuaPointLightDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setColor", "setLightColor");
     lua_classfunction(luaVM, "setDirection", "setLightDirection");
 
+    lua_classfunction(luaVM, "getRenderDistance", "getLightRenderDistance");
+    lua_classfunction(luaVM, "setRenderDistance", "setLightRenderDistance");
+
     lua_classvariable(luaVM, "type", nullptr, "getLightType");
     lua_classvariable(luaVM, "radius", "setLightRadius", "getLightRadius");
     lua_classvariable(luaVM, "direction", "setLightDirection", "getLightDirection");
+    lua_classvariable(luaVM, "renderDistance", "setLightRenderDistance", "getLightRenderDistance");
 
     lua_registerclass(luaVM, "Light", "Element");
 }
@@ -261,6 +266,56 @@ int CLuaPointLightDefs::SetLightDirection(lua_State* luaVM)
     if (!argStream.HasErrors())
     {
         if (CStaticFunctionDefinitions::SetLightDirection(pLight, vecDirection))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, SString("Bad argument @ '%s' [%s]", lua_tostring(luaVM, lua_upvalueindex(1)), *argStream.GetErrorMessage()));
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaPointLightDefs::GetLightRenderDistance(lua_State* luaVM)
+{
+    //  float getLightRenderDistance ( light theLight )
+    CClientPointLights* pLight;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pLight);
+
+    if (!argStream.HasErrors())
+    {
+        float fRenderDistance;
+        if (CStaticFunctionDefinitions::GetLightRenderDistance(pLight, fRenderDistance))
+        {
+            lua_pushnumber(luaVM, static_cast<lua_Number>(fRenderDistance));
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, SString("Bad argument @ '%s' [%s]", lua_tostring(luaVM, lua_upvalueindex(1)), *argStream.GetErrorMessage()));
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaPointLightDefs::SetLightRenderDistance(lua_State* luaVM)
+{
+    //  bool setLightRenderDistance ( light theLight, float distance )
+    //  distance = 0 disables the corona glow, leaving only the vertex-lighting effect (default behaviour)
+    CClientPointLights* pLight;
+    float               fRenderDistance;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pLight);
+    argStream.ReadNumber(fRenderDistance);
+
+    if (!argStream.HasErrors())
+    {
+        if (CStaticFunctionDefinitions::SetLightRenderDistance(pLight, fRenderDistance))
         {
             lua_pushboolean(luaVM, true);
             return 1;

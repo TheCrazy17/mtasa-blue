@@ -22,6 +22,7 @@ CClientPointLights::CClientPointLights(class CClientManager* pManager, ElementID
     m_vecDirection = CVector();
     m_bCreatesShadow = false;
     m_pAffected = NULL;
+    m_fRenderDistance = 0.0f;
     m_bStreamedIn = true;
 
     SetTypeName("light");
@@ -53,6 +54,12 @@ void CClientPointLights::DoPulse()
     if (m_bStreamedIn)
     {
         g_pGame->GetPointLights()->AddLight(m_iMode, m_vecPosition, m_vecDirection, m_fRadius, m_Color, 0, m_bCreatesShadow, 0);
+
+        if (m_fRenderDistance > 0.0f)
+        {
+            // ID is derived from this entity's element ID so it stays unique and stable across frames
+            g_pGame->GetPointLights()->RegisterCorona(GetID().Value(), m_vecPosition, m_Color, m_fRadius, m_fRenderDistance);
+        }
     }
 }
 

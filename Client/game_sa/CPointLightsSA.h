@@ -17,6 +17,7 @@
 #define FUNC_CHeli_Pre_SearchLightCone  0x6C4650
 #define FUNC_CHeli_Post_SearchLightCone 0x6C46E0
 #define FUNC_CHeli_SearchLightCone      0x6C58E0
+#define FUNC_CCoronas_RegisterCorona    0x6FC580
 
 class CPointLightsSA : public CPointLights
 {
@@ -28,7 +29,8 @@ public:
     virtual void PostRenderHeliLights() override;
     virtual void RenderHeliLight(const CVector& vecStart, const CVector& vecEnd, float startRadius, float endRadius, bool renderSpot,
                                  const SharedUtil::SColor& color) override;
-    ;
+
+    virtual void RegisterCorona(unsigned int uiId, const CVector& vecPosition, SharedUtil::SColor color, float fSize, float fFarClip) override;
 
     static void StaticSetHooks();
 };
