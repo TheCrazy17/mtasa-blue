@@ -25,7 +25,13 @@
 
 // Used to make sure that any position values we receive are at least half sane
 #define SYNC_POSITION_LIMIT 100000.0f
-// Note: Using SFloatSync < 14, 10 > also limits the range from -8191 to 8192
+
+// Bits used to encode the compact (non-float) X/Y position sync below. Same total bit budget (and
+// therefore the same wire size) as the old <14, 10> split - just redistributed: more range, a bit
+// less sub-unit precision (1/256 of a unit vs 1/1024), which is well below what's perceptible on
+// synced, interpolated movement. Range -8191..8192 -> -32768..32767.
+#define SYNC_POSITION_INTEGER_BITS    16
+#define SYNC_POSITION_FRACTIONAL_BITS 8
 
 #pragma pack(push)
 #pragma pack(1)
@@ -227,7 +233,7 @@ struct SPositionSync : public ISyncStructure
         }
         else
         {
-            SFloatSync<14, 10> x, y;
+            SFloatSync<SYNC_POSITION_INTEGER_BITS, SYNC_POSITION_FRACTIONAL_BITS> x, y;
 
             if (bitStream.Read(&x) && bitStream.Read(&y) && bitStream.Read(data.vecPosition.fZ))
             {
@@ -252,7 +258,7 @@ struct SPositionSync : public ISyncStructure
         }
         else
         {
-            SFloatSync<14, 10> x, y;
+            SFloatSync<SYNC_POSITION_INTEGER_BITS, SYNC_POSITION_FRACTIONAL_BITS> x, y;
             x.data.fValue = data.vecPosition.fX;
             y.data.fValue = data.vecPosition.fY;
 
@@ -284,7 +290,7 @@ struct SPosition2DSync : public ISyncStructure
         }
         else
         {
-            SFloatSync<14, 10> x, y;
+            SFloatSync<SYNC_POSITION_INTEGER_BITS, SYNC_POSITION_FRACTIONAL_BITS> x, y;
 
             if (bitStream.Read(&x) && bitStream.Read(&y))
             {
@@ -308,7 +314,7 @@ struct SPosition2DSync : public ISyncStructure
         }
         else
         {
-            SFloatSync<14, 10> x, y;
+            SFloatSync<SYNC_POSITION_INTEGER_BITS, SYNC_POSITION_FRACTIONAL_BITS> x, y;
             x.data.fValue = data.vecPosition.fX;
             y.data.fValue = data.vecPosition.fY;
 
