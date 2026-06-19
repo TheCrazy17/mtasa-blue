@@ -44,12 +44,27 @@
 #define WORLD_BOUND_Original         3000.0f
 #define WORLD_SECTOR_SIZE            50.0f  // Unchanged by the expansion - only the grid dimensions grow
 
+// Original (vanilla) "big building" LOD ptr list grid, used by CRenderer::ScanBigBuildingList to
+// find large/distant structures. Cell size (200 units) unaffected by the expansion.
+#define ARRAY_StreamLodPtrLists_Original  0xB99EB8
+#define NUM_StreamLodSectorRows_Original  30
+#define NUM_StreamLodSectorCols_Original  30
+#define WORLD_LOD_SECTOR_SIZE             200.0f
+
+// Note: CWorld::ms_aRepeatSectors (vehicles/peds/objects, 16x16) is intentionally left untouched -
+// it's a small grid that GTA itself wraps/buckets independently of total world size (fastman92's
+// own tool keeps it fixed at 16x16 regardless of world map size), so it isn't affected by the
+// boundary expansion below.
+
 // Currently active world sector grid. Use these instead of the _Original macros above.
 // Populated by CWorldSA::ExpandWorldBoundary, called once during CGameSA::Initialise.
 extern DWORD g_ArrayStreamSectors;
 extern int   g_NumStreamSectorRows;
 extern int   g_NumStreamSectorCols;
 extern float g_fWorldBoundary;
+extern DWORD g_ArrayStreamLodPtrLists;
+extern int   g_NumStreamLodSectorRows;
+extern int   g_NumStreamLodSectorCols;
 
 class CWorldSA : public CWorld
 {
