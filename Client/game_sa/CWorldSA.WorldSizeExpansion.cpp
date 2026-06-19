@@ -3,8 +3,8 @@
  *  PROJECT:     Multi Theft Auto v1.0
  *  LICENSE:     See LICENSE in the top level directory
  *  FILE:        game_sa/CWorldSA.WorldSizeExpansion.cpp
- *  PURPOSE:     Relocates CWorld::ms_aSectors to a larger grid and raises the vanilla
- *               +-3000 unit world boundary used throughout the GTA:SA executable.
+ *  PURPOSE:     Relocates CWorld::ms_aSectors and ms_aLodPtrLists to larger grids and raises
+ *               the vanilla +-3000 unit world boundary used throughout the GTA:SA executable.
  *
  *  The list of patch addresses below is adapted from fastman92's "Limit Adjuster"
  *  (MIT licensed - https://github.com/fastman92/fastman92_limit_adjuster),
@@ -22,6 +22,13 @@ DWORD g_ArrayStreamSectors = ARRAY_StreamSectors_Original;
 int   g_NumStreamSectorRows = NUM_StreamSectorRows_Original;
 int   g_NumStreamSectorCols = NUM_StreamSectorCols_Original;
 float g_fWorldBoundary = WORLD_BOUND_Original;
+DWORD g_ArrayStreamLodPtrLists = ARRAY_StreamLodPtrLists_Original;
+int   g_NumStreamLodSectorRows = NUM_StreamLodSectorRows_Original;
+int   g_NumStreamLodSectorCols = NUM_StreamLodSectorCols_Original;
+
+// Targets of `fadd ds:[addr]` instructions for "half the number of LOD sectors per dimension" -
+// same redirect-to-variable technique as s_fWorldBoundMin/Max below.
+static float s_fNumLodSectorsPerDimensionHalf = static_cast<float>(NUM_StreamLodSectorRows_Original / 2);
 
 // Targets of `fsub/fcomp/fld ds:[addr]` instructions - the absolute address embedded in the
 // instruction is redirected to point at one of these variables, instead of the value being
@@ -127,4 +134,43 @@ void CWorldSA::ExpandWorldBoundary(float fNewBoundary)
     };
     for (DWORD addr : maxMinusOneImmPoints)
         MemPut<float>(addr, fMaxMinusOne);
+
+    // --- ms_aLodPtrLists ("big building" list used by CRenderer::ScanBigBuildingList) ---
+    // Cell size (200 units) is left unchanged, same reasoning as the main sector grid above.
+    const int   numLodSectorsPerAxis = static_cast<int>((fNewBoundary * 2.0f) / WORLD_LOD_SECTOR_SIZE);
+    const DWORD numTotalLodSectors = static_cast<DWORD>(numLodSectorsPerAxis) * static_cast<DWORD>(numLodSectorsPerAxis);
+
+    // Each slot is a single CPtrListSingleLink<CEntity*> head pointer.
+    auto*       pNewLodPtrLists = new DWORD[numTotalLodSectors]();
+    const DWORD dwNewLodArray = reinterpret_cast<DWORD>(pNewLodPtrLists);
+
+    g_ArrayStreamLodPtrLists = dwNewLodArray;
+    g_NumStreamLodSectorRows = numLodSectorsPerAxis;
+    g_NumStreamLodSectorCols = numLodSectorsPerAxis;
+    s_fNumLodSectorsPerDimensionHalf = static_cast<float>(numLodSectorsPerAxis / 2);
+
+    static constexpr DWORD lodPtrListPatchPoints[] = {
+        0x4072CD + 3, 0x40C61A + 3, 0x5348DA + 3, 0x534BF8 + 3, 0x554B54 + 3,
+        0x56405A + 1, 0x564F87 + 3, 0x84EA21 + 1, 0x8564CC + 1,
+    };
+    for (DWORD addr : lodPtrListPatchPoints)
+        MemPut<DWORD>(addr, dwNewLodArray);
+
+    // "End of ms_aLodPtrLists" comparison (originally pointed at ms_listMovingEntityPtrs)
+    MemPut<DWORD>(0x56409C + 2, dwNewLodArray + numTotalLodSectors * 4);
+
+    // Sector count used when iterating the whole LOD grid (originally 900 = 30*30)
+    MemPut<DWORD>(0x84EA1A + 1, numTotalLodSectors);
+    MemPut<DWORD>(0x8564C5 + 1, numTotalLodSectors);
+
+    // Half the number of LOD sectors per dimension (redirected ds:[addr] operand, originally 15.0)
+    static constexpr DWORD lodHalfCountOperandPoints[] = {
+        0x40C568 + 2, 0x40C584 + 2, 0x40C5A7 + 2, 0x40C5D2 + 2, 0x534876 + 2, 0x53488D + 2,
+        0x5348A6 + 2, 0x5348BD + 2, 0x534B93 + 2, 0x534BAA + 2, 0x534BC5 + 2, 0x534BDC + 2,
+        0x55556D + 2, 0x555584 + 2, 0x5555AA + 2, 0x5555C1 + 2, 0x5555D8 + 2, 0x5555EF + 2,
+        0x555609 + 2, 0x555623 + 2, 0x55563D + 2, 0x555657 + 2, 0x564EE7 + 2, 0x564F03 + 2,
+        0x564F1C + 2, 0x564F3A + 2,
+    };
+    for (DWORD addr : lodHalfCountOperandPoints)
+        MemPut<DWORD>(addr, reinterpret_cast<DWORD>(&s_fNumLodSectorsPerDimensionHalf));
 }
