@@ -14,6 +14,7 @@
 
 #include "CFileLoaderSA.h"
 #include <game/CWorld.h>
+#include "CWorldSA.h"
 #include "CGameSA.h"
 #include "CPtrNodeSingleListSA.h"
 #include "MemSA.h"
@@ -254,11 +255,12 @@ void CBuildingsPoolSA::PurgeStaleSectorEntries(void* oldPool, int poolSize)
     const auto poolStart = reinterpret_cast<std::uintptr_t>(oldPool);
     const auto poolEnd = poolStart + static_cast<std::uintptr_t>(poolSize) * sizeof(CBuildingSAInterface);
 
-    // ARRAY_StreamSectors is a flat array of CSector[120][120].
+    // g_ArrayStreamSectors is a flat array of CSector[g_NumStreamSectorRows][g_NumStreamSectorCols]
+    // (relocated and possibly resized by CWorldSA::ExpandWorldBoundary).
     // Each CSector is { CPtrListSingleLink m_buildings; CPtrListDoubleLink m_dummies } = 2 DWORDs.
     // We only scan m_buildings (even-indexed DWORDs).
-    auto*         sectorDwords = reinterpret_cast<DWORD*>(ARRAY_StreamSectors);
-    constexpr int kSectorCount = NUM_StreamSectorRows * NUM_StreamSectorCols;
+    auto*     sectorDwords = reinterpret_cast<DWORD*>(g_ArrayStreamSectors);
+    const int kSectorCount = g_NumStreamSectorRows * g_NumStreamSectorCols;
 
     for (int i = 0; i < kSectorCount; ++i)
     {
