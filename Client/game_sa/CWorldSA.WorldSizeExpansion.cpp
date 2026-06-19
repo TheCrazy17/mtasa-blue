@@ -63,6 +63,11 @@ void CWorldSA::ExpandWorldBoundary(float fNewBoundary)
     s_fWorldBoundMax = fNewBoundary;
 
     // --- Redirect every instruction referencing the old, fixed-size ms_aSectors array ---
+    // Note: fastman92's reference list also includes a handful of 0x156xxxx addresses (e.g.
+    // 0x1566855, 0x156A70B/13/1B/23). Those sit outside the address range MTA's own MemPut()
+    // treats as safe to patch via VirtualProtect (SharedUtil.MemAccess.hpp's IsSlowMem, roughly
+    // 0x401000-0x8A4000) and triggered an assertion at startup, so they're intentionally omitted
+    // here. They likely target a region MTA's game_sa wasn't already set up to patch elsewhere.
     static constexpr DWORD buildingListPatchPoints[] = {
         0x408258 + 1, 0x4086FF + 3, 0x408706 + 3, 0x40914E + 3, 0x4092E9 + 3, 0x40D68C + 3, 0x40D98C + 3, 0x40DB0E + 3,
         0x40DC29 + 3, 0x40DDCE + 3, 0x40DF5E + 3, 0x40E061 + 3, 0x41A85A + 3, 0x41A861 + 3, 0x534A09 + 3, 0x534D6B + 3,
@@ -72,7 +77,7 @@ void CWorldSA::ExpandWorldBoundary(float fNewBoundary)
         0x56AF74 + 3, 0x56B2C3 + 3, 0x56B3B1 + 3, 0x56B4B5 + 3, 0x56B594 + 3, 0x56BC53 + 3, 0x56BD46 + 3, 0x56BE56 + 3,
         0x56BF4F + 3, 0x56C341 + 3, 0x56C445 + 3, 0x56C569 + 3, 0x56C664 + 3, 0x56CA4A + 3, 0x56CB51 + 3, 0x56CC79 + 3,
         0x56CD84 + 3, 0x5DC7A7 + 3, 0x6063C7 + 3, 0x67FF5D + 3, 0x699CF5 + 3, 0x699CFE + 3, 0x6E31AA + 3, 0x70ACB2 + 3,
-        0x70B9BA + 3, 0x711B2F + 3, 0x84E9C1 + 1, 0x85652C + 1, 0x1566855 + 3,
+        0x70B9BA + 3, 0x711B2F + 3, 0x84E9C1 + 1, 0x85652C + 1,
     };
     for (DWORD addr : buildingListPatchPoints)
         MemPut<DWORD>(addr, dwNewArray);
@@ -117,13 +122,12 @@ void CWorldSA::ExpandWorldBoundary(float fNewBoundary)
 
     static constexpr DWORD minCoordImmPoints[] = {
         0x405EE2 + 4, 0x405EEA + 4, 0x41140F + 4, 0x411417 + 4, 0x53480D + 4, 0x53483F + 4, 0x534B60 + 4,
-        0x156A70B + 4, 0x156A713 + 4,
     };
     for (DWORD addr : minCoordImmPoints)
         MemPut<float>(addr, fMin);
 
     static constexpr DWORD maxCoordImmPoints[] = {
-        0x405EF2 + 4, 0x405EFA + 4, 0x41141F + 4, 0x411427 + 4, 0x156A71B + 4, 0x156A723 + 4,
+        0x405EF2 + 4, 0x405EFA + 4, 0x41141F + 4, 0x411427 + 4,
     };
     for (DWORD addr : maxCoordImmPoints)
         MemPut<float>(addr, fMax);
