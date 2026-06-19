@@ -16,6 +16,8 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <CVector.h>
+#include <CVector2D.h>
 #include "CWorldSA.h"
 
 DWORD g_ArrayStreamSectors = ARRAY_StreamSectors_Original;
