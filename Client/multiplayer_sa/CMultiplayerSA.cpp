@@ -5044,6 +5044,9 @@ static void __declspec(naked) HOOK_VehicleCamLookDir1()
 
 // ---------------------------------------------------
 
+static float s_lastValidPhi = 0.0f;
+static float s_lastValidTheta = 0.0f;
+
 bool _cdecl VehicleCamLookDir2(DWORD dwCam)
 {
     // Calculates the look direction vector for the vehicle camera. This vector
@@ -5051,6 +5054,10 @@ bool _cdecl VehicleCamLookDir2(DWORD dwCam)
     // to obtain the final camera position.
     float fPhi = *(float*)(dwCam + 0xBC);
     float fTheta = *(float*)(dwCam + 0xAC);
+
+    // Sanitize camera angles to prevent matrix corruption on extreme speed or particle/object collision bugs
+    if (fPhi != fPhi || fPhi < -100000.0f || fPhi > 100000.0f) fPhi = s_lastValidPhi; else s_lastValidPhi = fPhi;
+    if (fTheta != fTheta || fTheta < -100000.0f || fTheta > 100000.0f) fTheta = s_lastValidTheta; else s_lastValidTheta = fTheta;
 
     MemPutFast<CVector>(dwCam + 0x190, -gravcam_matGravity.vRight * cos(fPhi) * cos(fTheta) - gravcam_matGravity.vFront * sin(fPhi) * cos(fTheta) +
                                            gravcam_matGravity.vUp * sin(fTheta));
@@ -5083,6 +5090,11 @@ static void __declspec(naked) HOOK_VehicleCamLookDir2()
 void _cdecl VehicleCamHistory(DWORD dwCam, CVector* pvecTarget, float fTargetTheta, float fRadius, float fZoom)
 {
     float   fPhi = *(float*)(dwCam + 0xBC);
+
+    // Sanitize camera angles to prevent matrix corruption on extreme speed or particle/object collision bugs
+    if (fPhi != fPhi || fPhi < -100000.0f || fPhi > 100000.0f) fPhi = s_lastValidPhi; else s_lastValidPhi = fPhi;
+    if (fTargetTheta != fTargetTheta || fTargetTheta < -100000.0f || fTargetTheta > 100000.0f) fTargetTheta = s_lastValidTheta; else s_lastValidTheta = fTargetTheta;
+
     CVector vecDir = -gravcam_matGravity.vRight * cos(fPhi) * cos(fTargetTheta) - gravcam_matGravity.vFront * sin(fPhi) * cos(fTargetTheta) +
                      gravcam_matGravity.vUp * sin(fTargetTheta);
     ((CVector*)(dwCam + 0x1D8))[0] = *pvecTarget - vecDir * fRadius;
