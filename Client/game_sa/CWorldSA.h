@@ -29,9 +29,6 @@
 
 #define VAR_IgnoredEntity           0xB7CD68
 #define VAR_currArea                0xB72914
-#define ARRAY_StreamSectors         0xB7D0B8
-#define NUM_StreamSectorRows        120
-#define NUM_StreamSectorCols        120
 #define ARRAY_StreamRepeatSectors   0xB992B8
 #define NUM_StreamRepeatSectorRows  16
 #define NUM_StreamRepeatSectorCols  16
@@ -39,11 +36,34 @@
 #define VTBL_CBUILDING              0x8585C8
 #define VAR_CWorld_bIncludeCarTires 0xB7CD70
 
+// Original (vanilla) world sector grid. Kept for reference; the grid actually used at runtime
+// is relocated and resized by CWorldSA::ExpandWorldBoundary (see CWorldSA.WorldSizeExpansion.cpp).
+#define ARRAY_StreamSectors_Original  0xB7D0B8
+#define NUM_StreamSectorRows_Original 120
+#define NUM_StreamSectorCols_Original 120
+#define WORLD_BOUND_Original         3000.0f
+#define WORLD_SECTOR_SIZE            50.0f  // Unchanged by the expansion - only the grid dimensions grow
+
+// Currently active world sector grid. Use these instead of the _Original macros above.
+// Populated by CWorldSA::ExpandWorldBoundary, called once during CGameSA::Initialise.
+extern DWORD g_ArrayStreamSectors;
+extern int   g_NumStreamSectorRows;
+extern int   g_NumStreamSectorCols;
+extern float g_fWorldBoundary;
+
 class CWorldSA : public CWorld
 {
 public:
     CWorldSA();
     void  InstallHooks();
+
+    // Relocates CWorld::ms_aSectors to a larger, heap-allocated grid and raises the -3000..3000 world
+    // boundary checks throughout the SA executable to +-fNewBoundary. Must be called once, before any
+    // map data streams in (entities already registered in the vanilla grid are not migrated).
+    // Sector cell size (50 units) is left unchanged, so collision/render query cost per cell in the
+    // original map area is unaffected - only the grid is bigger, not coarser.
+    static void ExpandWorldBoundary(float fNewBoundary);
+
     void  Add(CEntity* entity, eDebugCaller CallerId);
     void  Add(CEntitySAInterface* entityInterface, eDebugCaller CallerId);
     void  Remove(CEntity* entity, eDebugCaller CallerId);

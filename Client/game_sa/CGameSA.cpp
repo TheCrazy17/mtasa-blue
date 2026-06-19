@@ -231,6 +231,9 @@ CGameSA::CGameSA()
         // Increase matrix array size
         MemPut<int>(0x054F3A1, MAX_OBJECTS * 3);  // Default is 900
 
+        // Relocate the world sector grid to allow building/streaming beyond the vanilla +-3000 boundary
+        CWorldSA::ExpandWorldBoundary(32000.0f);
+
         CEntitySAInterface::StaticSetHooks();
         CPhysicalSAInterface::StaticSetHooks();
         CObjectSA::StaticSetHooks();
