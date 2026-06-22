@@ -658,14 +658,20 @@ bool CGame::Start(int iArgumentCount, char* szArguments[])
         return false;
     }
 
-    // Check pcre has been built correctly
-    int iPcreConfigUtf8 = 0;
-    pcre_config(PCRE_CONFIG_UTF8, &iPcreConfigUtf8);
-    if (iPcreConfigUtf8 == 0)
+    // Check pcre2 has been built correctly with Unicode/UTF support
+    uint32_t uiPcre2Unicode = 0;
+    pcre2_config(PCRE2_CONFIG_UNICODE, &uiPcre2Unicode);
+    if (uiPcre2Unicode == 0)
     {
-        CLogger::ErrorPrintf("PCRE built without UTF8 support\n");
+        CLogger::ErrorPrintf("PCRE2 built without Unicode support\n");
         return false;
     }
+
+    // Set json-c double serialization to 16 significant digits instead of the
+    // default %.17g. At 17 digits, IEEE 754 rounding artifacts from the least
+    // significant bit become visible (e.g. 5.1 becomes "5.1000000000000001").
+    // This API survives json-c upgrades so the source files don't need patching.
+    json_c_set_serialization_double_format("%.16g", JSON_C_OPTION_GLOBAL);
 
     // Check json has precision mod - #8853 (toJSON passes wrong floats)
     json_object* pJsonObject = json_object_new_double(5.12345678901234);
@@ -4378,7 +4384,10 @@ void CGame::PlayerCompleteConnect(CPlayer* pPlayer)
     {
         // event cancelled, disconnect the player
         CLogger::LogPrintf("CONNECT: %s failed to connect. (onPlayerConnect event cancelled) (%s)\n", pPlayer->GetNick(), strIPAndSerial.c_str());
-        const char* szError = g_pGame->GetEvents()->GetLastError();
+        // Use WasLastError() rather than GetLastError(): CallEvent() above already restored
+        // m_strLastError to the outer (pre-call) value once it returned, so the reason set via
+        // cancelEvent() inside the onPlayerConnect handler is only available through this getter.
+        const char* szError = g_pGame->GetEvents()->WasLastError();
         if (szError && szError[0])
         {
             DisconnectPlayer(g_pGame, *pPlayer, szError);
