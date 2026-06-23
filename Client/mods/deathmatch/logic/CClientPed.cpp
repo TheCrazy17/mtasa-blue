@@ -4841,14 +4841,15 @@ bool CClientPed::GetShotData(CVector* pvecOrigin, CVector* pvecTarget, CVector* 
                 CVector vecTemp = vecCameraOrigin;
                 g_pGame->GetCamera()->Find3rdPersonCamTargetVector(fRange, &vecCameraOrigin, &vecTemp, &vecTarget);
 
+                g_pGame->GetWorld()->IgnoreEntity(pVehicle->GetGameVehicle());
                 bCollision = g_pGame->GetWorld()->ProcessLineOfSight(&mat.vPos, &vecTarget, &pCollision, NULL);
+                g_pGame->GetWorld()->IgnoreEntity(NULL);
+
                 if (pCollision)
                 {
                     if (bCollision)
                     {
-                        CVector vecBullet = pCollision->GetPosition() - vecOrigin;
-                        vecBullet.Normalize();
-                        vecTarget = vecOrigin + (vecBullet * fRange);
+                        vecTarget = pCollision->GetPosition();
                     }
                     pCollision->Destroy();
                 }
