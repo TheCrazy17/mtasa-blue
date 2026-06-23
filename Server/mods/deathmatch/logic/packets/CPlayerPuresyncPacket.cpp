@@ -286,6 +286,26 @@ bool CPlayerPuresyncPacket::Read(NetBitStreamInterface& BitStream)
             }
             else
             {
+                if (m_pSourceSocket && g_pNetServer->CanClientBitStream(m_pSourceSocket, eBitStreamVersion::MeleeAimSync))
+                {
+                    float fWeaponRange = pSourcePlayer->GetWeaponRangeFromSlot(ucSlot);
+
+                    SWeaponAimSync sync(fWeaponRange, (ControllerState.RightShoulder1 || ControllerState.ButtonCircle));
+                    if (!BitStream.Read(&sync))
+                        return false;
+
+                    if (bWeaponCorrect)
+                    {
+                        pSourcePlayer->SetAimDirection(sync.data.fArm);
+
+                        if (sync.isFull())
+                        {
+                            pSourcePlayer->SetSniperSourceVector(sync.data.vecOrigin);
+                            pSourcePlayer->SetTargettingVector(sync.data.vecTarget);
+                        }
+                    }
+                }
+
                 if (bWeaponCorrect)
                 {
                     pSourcePlayer->SetWeaponAmmoInClip(1);
@@ -451,6 +471,18 @@ bool CPlayerPuresyncPacket::Write(NetBitStreamInterface& BitStream) const
                 aim.data.fArm = pSourcePlayer->GetAimDirection();
 
                 // Write the aim data only if he's aiming or shooting
+                if (aim.isFull())
+                {
+                    aim.data.vecOrigin = pSourcePlayer->GetSniperSourceVector();
+                    pSourcePlayer->GetTargettingVector(aim.data.vecTarget);
+                }
+                BitStream.Write(&aim);
+            }
+            else if (BitStream.Can(eBitStreamVersion::MeleeAimSync))
+            {
+                SWeaponAimSync aim(0.0f, (ControllerState.RightShoulder1 || ControllerState.ButtonCircle));
+                aim.data.fArm = pSourcePlayer->GetAimDirection();
+
                 if (aim.isFull())
                 {
                     aim.data.vecOrigin = pSourcePlayer->GetSniperSourceVector();

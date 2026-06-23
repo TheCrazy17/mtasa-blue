@@ -968,6 +968,23 @@ void CNetAPI::ReadPlayerPuresync(CClientPlayer* pPlayer, NetBitStreamInterface& 
         else
         {
             pPlayer->SetCurrentWeaponSlot(static_cast<eWeaponSlot>(slot.data.uiSlot));
+
+            if (BitStream.Can(eBitStreamVersion::MeleeAimSync))
+            {
+                // Read out the aim directions for melee/unarmed weapons
+                SWeaponAimSync aim(0.0f, (ControllerState.RightShoulder1 || ControllerState.ButtonCircle));
+                BitStream.Read(&aim);
+
+                // Interpolate the aiming
+                pPlayer->SetAimInterpolated(TICK_RATE_AIM, rotation.data.fRotation, aim.data.fArm, false, eVehicleAimDirection::FORWARDS);
+
+                // Read the aim data only if he's shooting or aiming
+                if (aim.isFull())
+                {
+                    // Interpolate the source/target vectors
+                    pPlayer->SetTargetTarget(TICK_RATE_AIM, aim.data.vecOrigin, aim.data.vecTarget);
+                }
+            }
         }
     }
     else
@@ -1227,6 +1244,19 @@ void CNetAPI::WritePlayerPuresync(CClientPlayer* pPlayerModel, NetBitStreamInter
             aim.data.fArm = pShotsyncData->m_fArmDirectionY;
 
             // Write the vectors data only if he's aiming or shooting
+            if (ControllerState.RightShoulder1 || ControllerState.ButtonCircle)
+            {
+                pPlayerModel->GetShotData(&(aim.data.vecOrigin), &(aim.data.vecTarget));
+            }
+            BitStream.Write(&aim);
+        }
+        else if (g_pNet->CanServerBitStream(eBitStreamVersion::MeleeAimSync))
+        {
+            // Sync aim data for weapons that don't use ammo (melee/unarmed)
+            CShotSyncData* pShotsyncData = g_pMultiplayer->GetLocalShotSyncData();
+            SWeaponAimSync aim(0.0f, (ControllerState.RightShoulder1 || ControllerState.ButtonCircle));
+            aim.data.fArm = pShotsyncData->m_fArmDirectionY;
+
             if (ControllerState.RightShoulder1 || ControllerState.ButtonCircle)
             {
                 pPlayerModel->GetShotData(&(aim.data.vecOrigin), &(aim.data.vecTarget));

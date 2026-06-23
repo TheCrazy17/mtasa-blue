@@ -42,6 +42,8 @@ enum class eBitStreamVersion : unsigned short
 
     // This allows us to automatically increment the BitStreamVersion when things are added to this enum.
     // Make sure you only add things above this comment.
+    MeleeAimSync,
+
     Next,
     Latest = Next - 1,
 };
