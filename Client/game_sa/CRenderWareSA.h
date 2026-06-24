@@ -128,6 +128,7 @@ public:
 
     static void  StaticSetHooks();
     static void  StaticSetClothesReplacingHooks();
+    static void  StaticSetDarkVehiclesHooks();
     static void  RwTexDictionaryRemoveTexture(RwTexDictionary* pTXD, RwTexture* pTex);
     static bool  RwTexDictionaryContainsTexture(RwTexDictionary* pTXD, RwTexture* pTex);
     static short CTxdStore_GetTxdRefcount(unsigned short usTxdID);

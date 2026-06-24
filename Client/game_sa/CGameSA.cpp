@@ -238,6 +238,7 @@ CGameSA::CGameSA()
         CPlayerPedSA::StaticSetHooks();
         CRenderWareSA::StaticSetHooks();
         CRenderWareSA::StaticSetClothesReplacingHooks();
+        CRenderWareSA::StaticSetDarkVehiclesHooks();
         CTasksSA::StaticSetHooks();
         CPedSA::StaticSetHooks();
         CSettingsSA::StaticSetHooks();
