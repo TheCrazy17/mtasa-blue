@@ -25,6 +25,7 @@ public:
     eClientEntityType GetType() const { return CCLIENTCOL; }
 
     bool Load(bool isRaw, SString input);
+    bool LoadFromDictionary(bool isRaw, SString input, const SString& modelName);
 
     bool IsLoaded() { return m_pColModel != NULL; };
 

@@ -54,8 +54,11 @@ public:
     // Destroys a texture
     void DestroyTexture(RwTexture* pTex);
 
-    // Reads and parses a COL3 file with an optional collision key name
+    // Reads and parses a single COL entry (the first one in the buffer)
     CColModel* ReadCOL(const SString& buffer);
+
+    // Reads a named COL entry from a COL dictionary buffer (case-insensitive name match)
+    CColModel* ReadCOLFromDictionary(const SString& buffer, const SString& modelName);
 
     // Replaces a CColModel for a specific object identified by the object id (usModelID)
     void ReplaceCollisions(CColModel* pColModel, unsigned short usModelID);

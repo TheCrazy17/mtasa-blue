@@ -451,39 +451,71 @@ bool CRenderWareSA::ReplacePedModel(RpClump* pNew, unsigned short usModelID)
 }
 
 // Reads and parses a COL3 file
+// Loads the collision data from a single COL entry header into a new CColModelSA.
+// pModelData must point to the byte immediately after the ColModelFileHeader.
+static CColModelSA* LoadCOLEntry(const ColModelFileHeader& header, unsigned char* pModelData)
+{
+    CColModelSA* pColModel = new CColModelSA();
+
+    const char v = header.version[3];
+    if (v == 'L')
+        LoadCollisionModel(pModelData, pColModel->GetInterface(), NULL);
+    else if (v == '2')
+        LoadCollisionModelVer2(pModelData, header.size - 0x18, pColModel->GetInterface(), NULL);
+    else if (v == '3')
+        LoadCollisionModelVer3(pModelData, header.size - 0x18, pColModel->GetInterface(), NULL);
+    else
+    {
+        delete pColModel;
+        return nullptr;
+    }
+
+    return pColModel;
+}
+
 CColModel* CRenderWareSA::ReadCOL(const SString& buffer)
 {
     if (buffer.size() < sizeof(ColModelFileHeader) + 16)
-        return NULL;
+        return nullptr;
 
     const ColModelFileHeader& header = *(ColModelFileHeader*)buffer.data();
 
-    // Load the col model
-    if (header.version[0] == 'C' && header.version[1] == 'O' && header.version[2] == 'L')
+    if (header.version[0] != 'C' || header.version[1] != 'O' || header.version[2] != 'L')
+        return nullptr;
+
+    unsigned char* pModelData = (unsigned char*)buffer.data() + sizeof(ColModelFileHeader);
+    return LoadCOLEntry(header, pModelData);
+}
+
+CColModel* CRenderWareSA::ReadCOLFromDictionary(const SString& buffer, const SString& modelName)
+{
+    const size_t minEntrySize = sizeof(ColModelFileHeader) + 16;
+    size_t       offset = 0;
+
+    while (offset + minEntrySize <= buffer.size())
     {
-        unsigned char* pModelData = (unsigned char*)buffer.data() + sizeof(ColModelFileHeader);
+        const ColModelFileHeader& header = *(ColModelFileHeader*)(buffer.data() + offset);
 
-        // Create a new CColModel
-        CColModelSA* pColModel = new CColModelSA();
+        if (header.version[0] != 'C' || header.version[1] != 'O' || header.version[2] != 'L')
+            break;
 
-        if (header.version[3] == 'L')
+        // Total entry size: 8-byte fourcc+size block, plus header.size which covers name[24] + data.
+        const size_t totalSize = (size_t)header.size + 8;
+
+        if (offset + totalSize > buffer.size())
+            break;
+
+        // header.name is at most 22 chars (modelName field), null-terminated.
+        if (modelName.CompareI(SString(header.name, strnlen(header.name, 22))) == 0)
         {
-            LoadCollisionModel(pModelData, pColModel->GetInterface(), NULL);
-        }
-        else if (header.version[3] == '2')
-        {
-            LoadCollisionModelVer2(pModelData, header.size - 0x18, pColModel->GetInterface(), NULL);
-        }
-        else if (header.version[3] == '3')
-        {
-            LoadCollisionModelVer3(pModelData, header.size - 0x18, pColModel->GetInterface(), NULL);
+            unsigned char* pModelData = (unsigned char*)buffer.data() + offset + sizeof(ColModelFileHeader);
+            return LoadCOLEntry(header, pModelData);
         }
 
-        // Return the collision model
-        return pColModel;
+        offset += totalSize;
     }
 
-    return NULL;
+    return nullptr;
 }
 
 // Loads all atomics from a clump into a container struct and returns the number of atomics it loaded

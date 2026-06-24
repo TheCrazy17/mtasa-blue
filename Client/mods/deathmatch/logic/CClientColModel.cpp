@@ -78,6 +78,35 @@ bool CClientColModel::LoadFromBuffer(SString buffer)
     return m_pColModel != nullptr;
 }
 
+bool CClientColModel::LoadFromDictionary(bool isRaw, SString input, const SString& modelName)
+{
+    if (m_pColModel)
+        return false;
+
+    SString buffer;
+
+    if (isRaw)
+    {
+        if (!g_pCore->GetNetwork()->CheckFile("col", "", input.data(), input.size()))
+            return false;
+        buffer = std::move(input);
+    }
+    else
+    {
+        if (!FileLoad(std::nothrow, input, buffer))
+            return false;
+
+        g_pClientGame->GetResourceManager()->ValidateResourceFile(input, buffer.data(), buffer.size());
+
+        if (!g_pCore->GetNetwork()->CheckFile("col", input, buffer.data(), buffer.size()))
+            return false;
+    }
+
+    m_pColModel = g_pGame->GetRenderWare()->ReadCOLFromDictionary(buffer, modelName);
+
+    return m_pColModel != nullptr;
+}
+
 bool CClientColModel::Replace(unsigned short usModel)
 {
     // We have a model loaded?
@@ -158,7 +187,7 @@ void CClientColModel::InternalRestore(unsigned short usModel)
 bool CClientColModel::IsCOLData(const SString& strData)
 {
     // COL file format: version[4] + size[4] + name[24] = minimum 32 bytes
-    // Version is 4-char string: "COLL", "COL2", "COL3", or "COL4" (not null-terminated)
+    // Version is 4-char string: "COLL", "COL2", or "COL3" (not null-terminated)
     if (strData.length() < 32)
         return false;
 
@@ -168,5 +197,5 @@ bool CClientColModel::IsCOLData(const SString& strData)
 
     // Validate 4th character is valid version indicator
     const char versionChar = strData[3];
-    return versionChar == 'L' || versionChar == '2' || versionChar == '3' || versionChar == '4';
+    return versionChar == 'L' || versionChar == '2' || versionChar == '3';
 }

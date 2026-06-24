@@ -292,23 +292,21 @@ void CLuaEngineDefs::AddEngineDffClass(lua_State* luaVM)
 int CLuaEngineDefs::EngineLoadCOL(lua_State* luaVM)
 {
     SString          input;
+    SString          modelName;
     CScriptArgReader argStream(luaVM);
-    // Grab the COL filename or data
     argStream.ReadString(input);
+    argStream.ReadString(modelName, "");            // optional: name of entry inside a COL dictionary
 
     if (!argStream.HasErrors())
     {
-        // Grab the lua main and the resource belonging to this script
         CLuaMain* pLuaMain = m_pLuaManager->GetVirtualMachine(luaVM);
         if (pLuaMain)
         {
-            // Get the resource we belong to
             CResource* pResource = pLuaMain->GetResource();
             if (pResource)
             {
                 bool bIsRawData = CClientColModel::IsCOLData(input);
 
-                // Do not proceed if the file path length appears too long to be real
                 if (!bIsRawData && input.size() > 32767)
                 {
                     argStream.SetCustomError("Corrupt COL file data or file path too long", "Error loading COL");
@@ -319,30 +317,29 @@ int CLuaEngineDefs::EngineLoadCOL(lua_State* luaVM)
 
                 SString filePath;
 
-                // Is this a legal filepath?
                 if (bIsRawData || CResourceManager::ParseResourcePathInput(input, pResource, &filePath))
                 {
-                    // Grab the resource root entity
-                    CClientEntity* pRoot = pResource->GetResourceCOLModelRoot();
-
-                    // Create the col model
+                    CClientEntity*   pRoot = pResource->GetResourceCOLModelRoot();
                     CClientColModel* pCol = new CClientColModel(m_pManager, INVALID_ELEMENT_ID);
 
-                    // Attempt loading the file
-                    if (pCol->Load(bIsRawData, bIsRawData ? std::move(input) : std::move(filePath)))
-                    {
-                        // Success. Make it a child of the resource collision root
-                        pCol->SetParent(pRoot);
+                    bool bLoaded;
+                    if (!modelName.empty())
+                        bLoaded = pCol->LoadFromDictionary(bIsRawData, bIsRawData ? std::move(input) : std::move(filePath), modelName);
+                    else
+                        bLoaded = pCol->Load(bIsRawData, bIsRawData ? std::move(input) : std::move(filePath));
 
-                        // Return the created col model
+                    if (bLoaded)
+                    {
+                        pCol->SetParent(pRoot);
                         lua_pushelement(luaVM, pCol);
                         return 1;
                     }
                     else
                     {
-                        // Delete it again. We failed
                         delete pCol;
-                        argStream.SetCustomError(bIsRawData ? SStringX("raw data") : input, "Error loading COL");
+                        SString errContext = bIsRawData ? SStringX("raw data") : input;
+                        argStream.SetCustomError(modelName.empty() ? errContext : SString("%s (model '%s')", errContext.c_str(), modelName.c_str()),
+                                                 "Error loading COL");
                     }
                 }
                 else
@@ -354,9 +351,7 @@ int CLuaEngineDefs::EngineLoadCOL(lua_State* luaVM)
     }
 
     if (argStream.HasErrors())
-    {
         m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
-    }
 
     lua_pushboolean(luaVM, false);
     return 1;
