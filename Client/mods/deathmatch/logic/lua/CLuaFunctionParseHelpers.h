@@ -14,6 +14,7 @@
 #include <game/CRenderWare.h>
 #include <game/CHud.h>
 #include <game/CStreaming.h>
+#include <game/CCamera.h>
 #include <type_traits>
 
 #include "enums/VehicleComponent.h"
@@ -53,6 +54,7 @@ DECLARE_ENUM(EBlendModeType)
 DECLARE_ENUM(EEntityTypeMask);
 DECLARE_ENUM(eWeaponState);
 DECLARE_ENUM(eWeaponFlags);
+DECLARE_ENUM_CLASS(eWeaponAimType);
 DECLARE_ENUM_CLASS(VehicleComponent);
 DECLARE_ENUM_CLASS(ObjectProperty);
 DECLARE_ENUM_CLASS(ObjectGroupPhysicalProperties::Modifiable);

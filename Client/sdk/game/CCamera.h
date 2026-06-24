@@ -12,6 +12,7 @@
 #pragma once
 
 #include "CEntity.h"
+#include "CWeaponInfo.h"
 
 class CMatrix;
 class CCam;
@@ -114,6 +115,15 @@ enum
     FADE_IN
 };
 
+// Overrides which camera mode is used while a given weapon is aimed/fired.
+// DEFAULT keeps GTA's own per-weapon choice (e.g. the locked rocket launcher view).
+// RIFLE forces the same free-aim mode rifles like the M4 use.
+enum class eWeaponAimType
+{
+    DEFAULT,
+    RIFLE,
+};
+
 class CCamera
 {
 public:
@@ -157,4 +167,10 @@ public:
     virtual bool         GetTransitionMatrix(CMatrix& matrix) const = 0;
 
     virtual bool IsSphereVisible(CVector* center, float radius) const = 0;
+
+    // Per-weapon aim-mode override (e.g. make the rocket launcher aim like the M4).
+    virtual void           SetWeaponAimType(eWeaponType weaponType, eWeaponAimType aimType) = 0;
+    virtual eWeaponAimType GetWeaponAimType(eWeaponType weaponType) const = 0;
+    virtual void           ResetWeaponAimType(eWeaponType weaponType) = 0;
+    virtual void           ResetAllWeaponAimTypeOverrides() = 0;
 };

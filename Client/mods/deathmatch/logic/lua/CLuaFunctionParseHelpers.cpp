@@ -385,6 +385,11 @@ ADD_ENUM(WEAPONFLAGS_SHOOT_IF_OUT_OF_RANGE, "shoot_if_out_of_range")
 ADD_ENUM(WEAPONFLAGS_SHOOT_IF_TARGET_BOCKED, "shoot_if_blocked")
 IMPLEMENT_ENUM_END("weapon-flags")
 
+IMPLEMENT_ENUM_CLASS_BEGIN(eWeaponAimType)
+ADD_ENUM(eWeaponAimType::DEFAULT, "default")
+ADD_ENUM(eWeaponAimType::RIFLE, "rifle")
+IMPLEMENT_ENUM_END("weapon-aim-type")
+
 IMPLEMENT_ENUM_CLASS_BEGIN(VehicleComponent)
 ADD_ENUM(VehicleComponent::VEHICLE_COMPONENT_SPECIAL_1, "special_1")
 ADD_ENUM(VehicleComponent::VEHICLE_COMPONENT_SPECIAL_2, "special_2")

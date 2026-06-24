@@ -10,6 +10,7 @@
 
 #pragma once
 #include "CLuaDefs.h"
+#include <game/CCamera.h>
 #include <lua/CLuaMultiReturn.h>
 #include <optional>
 
@@ -46,6 +47,11 @@ public:
     // Cam do funcs
     static bool ShakeCamera(float radius, std::optional<float> x, std::optional<float> y, std::optional<float> z) noexcept;
     static bool ResetShakeCamera() noexcept;
+
+    // Weapon aim type overrides
+    static bool           SetWeaponAimType(int weaponType, eWeaponAimType aimType);
+    static eWeaponAimType GetWeaponAimType(int weaponType);
+    static bool           ResetWeaponAimType(int weaponType);
 
     // For OOP only
     LUA_DECLARE(OOP_GetCameraPosition);

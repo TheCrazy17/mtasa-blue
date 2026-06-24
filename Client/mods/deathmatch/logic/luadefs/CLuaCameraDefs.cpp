@@ -14,6 +14,8 @@
 #include <game/CPlayerInfo.h>
 #include <game/CSettings.h>
 #include <game/CCam.h>
+#include <game/CCamera.h>
+#include <game/CWeaponInfo.h>
 #include <lua/CLuaFunctionParser.h>
 
 #define MIN_CLIENT_REQ_SETCAMERATARGET_USE_ANY_ELEMENTS "1.5.8-9.20979"
@@ -45,6 +47,11 @@ void CLuaCameraDefs::LoadFunctions()
 
         {"shakeCamera", ArgumentParser<ShakeCamera>},
         {"resetShakeCamera", ArgumentParser<ResetShakeCamera>},
+
+        // Weapon aim type overrides
+        {"setWeaponAimType", ArgumentParserWarn<false, SetWeaponAimType>},
+        {"getWeaponAimType", ArgumentParserWarn<false, GetWeaponAimType>},
+        {"resetWeaponAimType", ArgumentParserWarn<false, ResetWeaponAimType>},
     };
 
     // Add functions
@@ -574,5 +581,31 @@ bool CLuaCameraDefs::ShakeCamera(float radius, std::optional<float> x, std::opti
 bool CLuaCameraDefs::ResetShakeCamera() noexcept
 {
     m_pManager->GetCamera()->ResetShakeCamera();
+    return true;
+}
+
+bool CLuaCameraDefs::SetWeaponAimType(int weaponType, eWeaponAimType aimType)
+{
+    if (weaponType <= WEAPONTYPE_UNARMED || weaponType >= WEAPONTYPE_LAST_WEAPONTYPE)
+        throw std::invalid_argument("Invalid weapon type");
+
+    g_pGame->GetCamera()->SetWeaponAimType(static_cast<eWeaponType>(weaponType), aimType);
+    return true;
+}
+
+eWeaponAimType CLuaCameraDefs::GetWeaponAimType(int weaponType)
+{
+    if (weaponType <= WEAPONTYPE_UNARMED || weaponType >= WEAPONTYPE_LAST_WEAPONTYPE)
+        throw std::invalid_argument("Invalid weapon type");
+
+    return g_pGame->GetCamera()->GetWeaponAimType(static_cast<eWeaponType>(weaponType));
+}
+
+bool CLuaCameraDefs::ResetWeaponAimType(int weaponType)
+{
+    if (weaponType <= WEAPONTYPE_UNARMED || weaponType >= WEAPONTYPE_LAST_WEAPONTYPE)
+        throw std::invalid_argument("Invalid weapon type");
+
+    g_pGame->GetCamera()->ResetWeaponAimType(static_cast<eWeaponType>(weaponType));
     return true;
 }

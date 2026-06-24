@@ -12,6 +12,7 @@
 #include "StdInc.h"
 #include "CCameraSA.h"
 #include "CGameSA.h"
+#include "CPedSA.h"
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -35,6 +36,38 @@ namespace
     inline bool IsFiniteVector(const CVector& vec) noexcept
     {
         return std::isfinite(vec.fX) && std::isfinite(vec.fY) && std::isfinite(vec.fZ);
+    }
+
+    // Per-weapon override for which CCamera weapon-aim mode gets used (see eWeaponAimType).
+    eWeaponAimType s_weaponAimType[WEAPONTYPE_LAST_WEAPONTYPE]{};
+
+    // 0x50BFB0 - void CCamera::SetNewPlayerWeaponMode(eCamMode mode, int16 minZoom, int16 maxZoom)
+    // Body is just four field writes onto m_PlayerWeaponMode (confirmed via gta-reversed), so the
+    // hook fully replaces it rather than chaining to the original.
+    constexpr DWORD FUNC_SetNewPlayerWeaponMode = 0x50BFB0;
+
+    static void __fastcall Hook_SetNewPlayerWeaponMode(CCameraSAInterface* camera, int /*edx*/, eCamMode mode, short minZoom, short maxZoom)
+    {
+        using FindPed_t = CPedSAInterface*(__cdecl*)(int);
+        static const auto s_findPed = reinterpret_cast<FindPed_t>(0x56E210);
+
+        if (CPedSAInterface* pPed = s_findPed(-1))
+        {
+            if (!pPed->pedFlags.bInVehicle && pPed->bCurrentWeaponSlot < WEAPONSLOT_MAX)
+            {
+                const eWeaponType wtype = pPed->Weapons[pPed->bCurrentWeaponSlot].m_eWeaponType;
+                if (wtype > WEAPONTYPE_UNARMED && wtype < WEAPONTYPE_LAST_WEAPONTYPE && s_weaponAimType[wtype] == eWeaponAimType::RIFLE &&
+                    (mode == MODE_ROCKETLAUNCHER || mode == MODE_ROCKETLAUNCHER_HS))
+                {
+                    mode = MODE_M16_1STPERSON;
+                }
+            }
+        }
+
+        camera->PlayerWeaponMode.Mode = static_cast<short>(mode);
+        camera->PlayerWeaponMode.MinZoom = minZoom;
+        camera->PlayerWeaponMode.MaxZoom = maxZoom;
+        camera->PlayerWeaponMode.Duration = 0.0f;
     }
 }
 
@@ -92,6 +125,7 @@ CCameraSA::CCameraSA(CCameraSAInterface* cameraInterface)
     s_cameraClipMask.store(static_cast<uint8_t>(CameraClipFlags::Objects) | static_cast<uint8_t>(CameraClipFlags::Vehicles), std::memory_order_relaxed);
 
     HookInstall(HOOKPOS_Camera_CollisionDetection, (DWORD)HOOK_Camera_CollisionDetection, 5);
+    HookInstall(FUNC_SetNewPlayerWeaponMode, (DWORD)Hook_SetNewPlayerWeaponMode, 5);
 }
 
 CCameraSA::~CCameraSA()
@@ -782,4 +816,29 @@ bool CCameraSA::IsSphereVisible(CVector* center, float radius) const
         return false;
 
     return ((bool(__thiscall*)(CCameraSAInterface*, CVector*, float))0x420D40)(cameraInterface, center, radius);
+}
+
+void CCameraSA::SetWeaponAimType(eWeaponType weaponType, eWeaponAimType aimType)
+{
+    if (weaponType > WEAPONTYPE_UNARMED && weaponType < WEAPONTYPE_LAST_WEAPONTYPE)
+        s_weaponAimType[weaponType] = aimType;
+}
+
+eWeaponAimType CCameraSA::GetWeaponAimType(eWeaponType weaponType) const
+{
+    if (weaponType > WEAPONTYPE_UNARMED && weaponType < WEAPONTYPE_LAST_WEAPONTYPE)
+        return s_weaponAimType[weaponType];
+    return eWeaponAimType::DEFAULT;
+}
+
+void CCameraSA::ResetWeaponAimType(eWeaponType weaponType)
+{
+    if (weaponType > WEAPONTYPE_UNARMED && weaponType < WEAPONTYPE_LAST_WEAPONTYPE)
+        s_weaponAimType[weaponType] = eWeaponAimType::DEFAULT;
+}
+
+void CCameraSA::ResetAllWeaponAimTypeOverrides()
+{
+    for (int i = 0; i < WEAPONTYPE_LAST_WEAPONTYPE; ++i)
+        s_weaponAimType[i] = eWeaponAimType::DEFAULT;
 }
