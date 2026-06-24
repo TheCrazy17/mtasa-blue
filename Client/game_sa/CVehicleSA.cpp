@@ -181,6 +181,103 @@ static void __declspec(naked) HOOK_CPlane_ProcessFlyingCarStuff()
     // clang-format on
 }
 
+// GTA SA 1.0 bug fix: blown-up vehicles should darken (PS2/1.01/2.00 behaviour), but the
+// PC 1.0 logic checks the wrong flag on the current directional light and almost never applies it.
+// Ported from SilentPatch (https://github.com/CookiePLMonster/SilentPatch), DarkVehiclesFix1-4.
+static bool      s_bDarkVehicleThing = false;
+static RpLight** s_ppDirectLight = nullptr;
+
+static void __declspec(naked) HOOK_DarkVehiclesFix1()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        shr     eax, 0xE
+        test    al, 1
+        jz      DarkVehiclesFix1_DontApply
+        mov     ecx, s_ppDirectLight
+        mov     ecx, [ecx]
+        mov     al, [ecx+2]
+        test    al, 1
+        jnz     DarkVehiclesFix1_DontApply
+        mov     s_bDarkVehicleThing, 1
+        jmp     DarkVehiclesFix1_Return
+
+    DarkVehiclesFix1_DontApply:
+        mov     s_bDarkVehicleThing, 0
+
+    DarkVehiclesFix1_Return:
+        mov     eax, 0x756D90
+        jmp     eax
+    }
+    // clang-format on
+}
+
+static void __declspec(naked) HOOK_DarkVehiclesFix2()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        jz      DarkVehiclesFix2_MakeItDark
+        mov     al, s_bDarkVehicleThing
+        test    al, al
+        jnz     DarkVehiclesFix2_MakeItDark
+        mov     eax, 0x5D9A7A
+        jmp     eax
+
+    DarkVehiclesFix2_MakeItDark:
+        mov     eax, 0x5D9B09
+        jmp     eax
+    }
+    // clang-format on
+}
+
+static void __declspec(naked) HOOK_DarkVehiclesFix3()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        jz      DarkVehiclesFix3_MakeItDark
+        mov     al, s_bDarkVehicleThing
+        test    al, al
+        jnz     DarkVehiclesFix3_MakeItDark
+        mov     eax, 0x5D9B4A
+        jmp     eax
+
+    DarkVehiclesFix3_MakeItDark:
+        mov     eax, 0x5D9CAC
+        jmp     eax
+    }
+    // clang-format on
+}
+
+static void __declspec(naked) HOOK_DarkVehiclesFix4()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        jz      DarkVehiclesFix4_MakeItDark
+        mov     al, s_bDarkVehicleThing
+        test    al, al
+        jnz     DarkVehiclesFix4_MakeItDark
+        mov     eax, 0x5D9CB8
+        jmp     eax
+
+    DarkVehiclesFix4_MakeItDark:
+        mov     eax, 0x5D9E0D
+        jmp     eax
+    }
+    // clang-format on
+}
+
 #define NUM_FirstStreamEngineSlot    7
 #define NUM_LastStreamEngineSlot     16
 #define NUM_AllSoundIndices          0xFFFFFFFF
@@ -2082,6 +2179,13 @@ void CVehicleSA::StaticSetHooks()
     // Setup hooks to handle setVehicleRotorState function
     HookInstall(FUNC_CHeli_ProcessFlyingCarStuff, (DWORD)HOOK_CHeli_ProcessFlyingCarStuff, 5);
     HookInstall(FUNC_CPlane_ProcessFlyingCarStuff, (DWORD)HOOK_CPlane_ProcessFlyingCarStuff, 5);
+
+    // Restore PS2-style darkening of blown-up vehicles (ported from SilentPatch)
+    s_ppDirectLight = *reinterpret_cast<RpLight***>(0x5BA573);
+    HookInstall(0x5D993F, (DWORD)HOOK_DarkVehiclesFix1, 5);
+    HookInstall(0x5D9A74, (DWORD)HOOK_DarkVehiclesFix2, 5);
+    HookInstall(0x5D9B44, (DWORD)HOOK_DarkVehiclesFix3, 5);
+    HookInstall(0x5D9CB2, (DWORD)HOOK_DarkVehiclesFix4, 5);
 }
 
 void CVehicleSA::SetVehiclesSunGlareEnabled(bool bEnabled)
