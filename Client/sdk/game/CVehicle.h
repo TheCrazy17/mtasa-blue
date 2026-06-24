@@ -84,10 +84,9 @@ struct SSirenInfo
 
 struct SVehicleFrame
 {
-    SVehicleFrame(RwFrame* pFrame = NULL, bool bReadOnly = true) : pFrame(pFrame), bReadOnly(bReadOnly) {}
+    SVehicleFrame(RwFrame* pFrame = NULL) : pFrame(pFrame) {}
 
     RwFrame*              pFrame;
-    bool                  bReadOnly;
     std::vector<RwFrame*> frameList;  // Frames from root to parent
 };
 

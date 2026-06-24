@@ -208,7 +208,7 @@ namespace
     {
         CVehicleSA* pVehicleSA = (CVehicleSA*)data;
         RwFrame*    pFrame = RpGetFrame(pAtomic);
-        pVehicleSA->AddComponent(pFrame, false);
+        pVehicleSA->AddComponent(pFrame);
         // g_pCore->GetConsole()->Print ( SString ( "Atomic:%08x  Frame:%08x %s", pAtomic, pFrame, pFrame ? pFrame->szName : "" ) );
         // OutputDebugLine ( SString ( "Atomic:%08x  Frame:%08x %s", pAtomic, pFrame, pFrame ? pFrame->szName : "" ) );
         return true;
@@ -240,7 +240,7 @@ namespace
             // don't re-add, check ret for validity, if it has an empty string at this point it isn't a variant or it's already added
             if (pVehicleSA->IsComponentPresent(ret->szName) == false && ret->szName != "")
             {
-                pVehicleSA->AddComponent(ret, true);
+                pVehicleSA->AddComponent(ret);
             }
             ret = ret->next;
         }
@@ -261,10 +261,16 @@ namespace
         return object;
     }
 
-    // Get all atomics for this frame (even if they are invisible)
+    // Get all atomics for this frame and all of its descendant frames (even if they are invisible)
     void GetAllAtomicObjects(RwFrame* frame, std::vector<RwObject*>& result)
     {
+        if (!frame)
+            return;
+
         RwFrameForAllObjects(frame, (void*)GetAllAtomicObjectCB, &result);
+
+        for (RwFrame* pChild = frame->child; pChild != NULL; pChild = pChild->next)
+            GetAllAtomicObjects(pChild, result);
     }
 
     int GetComponentIDFromName(const SString& name)
@@ -287,6 +293,8 @@ namespace
             return ePanels::REAR_BUMPER;
         else if (name == "windscreen_dummy")
             return ePanels::WINDSCREEN_PANEL;
+
+        return -1;
     }
 
     VehicleComponentType GetComponentTypeFromName(const SString& name)
@@ -2261,7 +2269,7 @@ bool CVehicleSA::GetComponentParentToRootMatrix(const SString& vehicleComponent,
     return false;
 }
 
-void CVehicleSA::AddComponent(RwFrame* pFrame, bool bReadOnly)
+void CVehicleSA::AddComponent(RwFrame* pFrame)
 {
     // if the frame is invalid we don't want to be here
     if (!pFrame)
@@ -2290,7 +2298,7 @@ void CVehicleSA::AddComponent(RwFrame* pFrame, bool bReadOnly)
     }
 
     // insert our new frame
-    SVehicleFrame frame = SVehicleFrame(pFrame, bReadOnly);
+    SVehicleFrame frame = SVehicleFrame(pFrame);
     m_ExtraFrames.insert(std::pair<SString, SVehicleFrame>(strName, frame));
 }
 
@@ -2332,10 +2340,10 @@ bool CVehicleSA::SetComponentVisible(const SString& vehicleComponent, bool bRequ
 {
     SVehicleFrame* pComponent = GetVehicleComponent(vehicleComponent);
     // Check validty
-    if (pComponent && pComponent->pFrame != NULL && pComponent->bReadOnly == false)
+    if (pComponent && pComponent->pFrame != NULL)
     {
         RwFrame* pFrame = pComponent->pFrame;
-        // Get all atomics for this component - Usually one, or two if there is a damaged version
+        // Get all atomics for this component and its children - Usually one, or two if there is a damaged version
         std::vector<RwObject*> atomicList;
         GetAllAtomicObjects(pFrame, atomicList);
 
@@ -2416,10 +2424,10 @@ bool CVehicleSA::GetComponentVisible(const SString& vehicleComponent, bool& bOut
 {
     SVehicleFrame* pComponent = GetVehicleComponent(vehicleComponent);
     // Check validty
-    if (pComponent && pComponent->pFrame != NULL && pComponent->bReadOnly == false)
+    if (pComponent && pComponent->pFrame != NULL)
     {
         RwFrame* pFrame = pComponent->pFrame;
-        // Get all atomics for this component - Usually one, or two if there is a damaged version
+        // Get all atomics for this component and its children - Usually one, or two if there is a damaged version
         std::vector<RwObject*> atomicList;
         GetAllAtomicObjects(pFrame, atomicList);
 

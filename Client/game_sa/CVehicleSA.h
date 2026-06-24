@@ -691,7 +691,7 @@ public:
     bool                              GetComponentMatrix(const SString& vehicleComponent, CMatrix& matOutOrientation);
     bool                              GetComponentParentToRootMatrix(const SString& vehicleComponent, CMatrix& matOutParentToRoot);
     bool                              SetComponentVisible(const SString& vehicleComponent, bool bVisible);
-    void                              AddComponent(RwFrame* pFrame, bool bReadOnly);
+    void                              AddComponent(RwFrame* pFrame);
     bool                              GetComponentVisible(const SString& vehicleComponent, bool& bVisible);
     std::map<SString, SVehicleFrame>& GetComponentMap() { return m_ExtraFrames; }
     bool                              SetPlateText(const SString& strText);
