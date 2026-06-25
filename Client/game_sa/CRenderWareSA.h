@@ -11,13 +11,18 @@
 
 #pragma once
 
+#include <set>
+#include <unordered_map>
+#include <vector>
 #include <game/CRenderWare.h>
+#include <game/RenderWare.h>
 #include "CModelInfoSA.h"
 #include "CRenderWareSA.ShaderSupport.h"
 
 class CMatchChannelManager;
 class CModelTexturesInfo;
 struct RpAtomic;
+struct RpGeometry;
 struct SShaderReplacementStats;
 struct STexInfo;
 struct STexTag;
@@ -118,6 +123,12 @@ public:
     void RwMatrixGetScale(const RwMatrix& rwMatrix, CVector& vecOutScale);
     void RwMatrixSetScale(RwMatrix& rwInOutMatrix, const CVector& vecScale);
 
+    RpGeometry*  MakeAtomicGeometryUnique(RpAtomic* pAtomic) override;
+    unsigned int GetGeometryVertexCount(RpGeometry* pGeometry) override;
+    bool         GetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, CVector& vecOutPosition) override;
+    bool         SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition) override;
+    unsigned int DentGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) override;
+
     // CRenderWareSA methods
     RwTexture*          RightSizeTexture(RwTexture* pTexture, uint uiSizeLimit, SString& strError);
     void                ResetStats();
@@ -160,6 +171,21 @@ public:
     int                                 m_iRenderingEntityType;
     CMatchChannelManager*               m_pMatchChannelManager;
     int                                 m_uiReplacementRequestCounter;
+
+    // Geometries that were already given a private per-instance clone by MakeAtomicGeometryUnique
+    std::set<RpGeometry*> m_UniqueGeometryClones;
+
+    // Per-vertex dent tracking for cloned geometries: how far each vertex currently sits from its
+    // pristine position (a "depth" that only ever grows), so repeated hits at the same spot deepen
+    // the centre up to a cap and spread the dent into the surrounding (still pristine) perimeter
+    // instead of stacking endlessly / clipping through the panel.
+    struct SDentVertexState
+    {
+        std::vector<RwV3d> originalPositions;
+        std::vector<float> depth;
+    };
+    std::unordered_map<RpGeometry*, SDentVertexState> m_DentStates;
+
     int                                 m_uiReplacementMatchCounter;
     int                                 m_uiNumReplacementRequests;
     int                                 m_uiNumReplacementMatches;

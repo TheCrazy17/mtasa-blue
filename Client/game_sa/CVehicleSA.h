@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <vector>
 #include <game/RenderWare.h>
 #include <game/CVehicle.h>
 #include "CPedSA.h"
@@ -713,6 +714,11 @@ public:
     bool IsOnFire() override { return GetVehicleInterface()->m_pFire != nullptr; }
     bool SetOnFire(bool onFire) override;
 
+    bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius) override;
+    unsigned int GetMeshVertexCount() override;
+    bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) override;
+    bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) override;
+
     static void StaticSetHooks();
     static void SetVehiclesSunGlareEnabled(bool bEnabled);
     static bool GetVehiclesSunGlareEnabled();
@@ -725,4 +731,9 @@ private:
     SVehicleFrame* GetVehicleComponent(const SString& vehicleComponent);
     void           FinalizeFramesList();
     void           DumpVehicleFrames();
+
+    // Flat list of every atomic (body, panels, doors, etc) in this vehicle's clump, built lazily.
+    // Each atomic's geometry is made unique to this vehicle instance the first time it's touched.
+    std::vector<RpAtomic*>& GetMeshAtomics();
+    std::vector<RpAtomic*>  m_MeshAtomics;
 };

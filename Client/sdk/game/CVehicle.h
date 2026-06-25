@@ -340,4 +340,12 @@ public:
 
     virtual const CVector* GetDummyPositions() const = 0;
     virtual void           ReinitAudio() = 0;
+
+    // Mesh deformation ("dent") and per-vertex sculpting. vecLocalPoint/positions are in the
+    // vehicle's local model space. The underlying mesh geometry is made unique to this vehicle
+    // instance on first use, so edits never affect other vehicles sharing the same model.
+    virtual bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius) = 0;
+    virtual unsigned int GetMeshVertexCount() = 0;
+    virtual bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) = 0;
+    virtual bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) = 0;
 };

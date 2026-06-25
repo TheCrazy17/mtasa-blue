@@ -2656,3 +2656,79 @@ void CVehicleSA::ReinitAudio()
     if (IsPassenger(pLocalPlayer) || GetDriver() == pLocalPlayer)
         audioInterface->SoundJoin();
 }
+
+namespace
+{
+    bool CollectAtomicCB(RpAtomic* pAtomic, void* pData)
+    {
+        ((std::vector<RpAtomic*>*)pData)->push_back(pAtomic);
+        return true;
+    }
+}            // namespace
+
+std::vector<RpAtomic*>& CVehicleSA::GetMeshAtomics()
+{
+    if (m_MeshAtomics.empty())
+    {
+        RpClump* pClump = (RpClump*)GetInterface()->m_pRwObject;
+        if (pClump)
+            RpClumpForAllAtomics(pClump, CollectAtomicCB, &m_MeshAtomics);
+    }
+    return m_MeshAtomics;
+}
+
+bool CVehicleSA::DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius)
+{
+    std::vector<RpAtomic*>& atomics = GetMeshAtomics();
+    if (atomics.empty())
+        return false;
+
+    unsigned int uiTotalAffected = 0;
+
+    for (RpAtomic* pAtomic : atomics)
+    {
+        RpGeometry* pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
+        if (pGeometry)
+            uiTotalAffected += pGame->GetRenderWareSA()->DentGeometryAtPoint(pGeometry, vecLocalPoint, fForce, fRadius);
+    }
+    return uiTotalAffected > 0;
+}
+
+unsigned int CVehicleSA::GetMeshVertexCount()
+{
+    std::vector<RpAtomic*>& atomics = GetMeshAtomics();
+
+    unsigned int uiTotal = 0;
+    for (RpAtomic* pAtomic : atomics)
+        uiTotal += pGame->GetRenderWareSA()->GetGeometryVertexCount(pAtomic->geometry);
+    return uiTotal;
+}
+
+bool CVehicleSA::GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition)
+{
+    std::vector<RpAtomic*>& atomics = GetMeshAtomics();
+
+    for (RpAtomic* pAtomic : atomics)
+    {
+        unsigned int uiCount = pGame->GetRenderWareSA()->GetGeometryVertexCount(pAtomic->geometry);
+        if (uiIndex < uiCount)
+            return pGame->GetRenderWareSA()->GetGeometryVertexPosition(pAtomic->geometry, uiIndex, vecOutPosition);
+        uiIndex -= uiCount;
+    }
+    return false;
+}
+
+bool CVehicleSA::SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition)
+{
+    std::vector<RpAtomic*>& atomics = GetMeshAtomics();
+
+    for (RpAtomic* pAtomic : atomics)
+    {
+        RpGeometry*  pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
+        unsigned int uiCount = pGame->GetRenderWareSA()->GetGeometryVertexCount(pGeometry);
+        if (uiIndex < uiCount)
+            return pGame->GetRenderWareSA()->SetGeometryVertexPosition(pGeometry, uiIndex, vecPosition);
+        uiIndex -= uiCount;
+    }
+    return false;
+}

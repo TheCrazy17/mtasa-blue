@@ -26,6 +26,8 @@ struct RwMatrix;
 struct RwTexDictionary;
 struct RwTexture;
 struct RpClump;
+struct RpAtomic;
+struct RpGeometry;
 
 typedef CShaderItem CSHADERDUMMY;
 
@@ -124,4 +126,15 @@ public:
     virtual void RwMatrixSetPosition(RwMatrix& rwInOutMatrix, const CVector& vecPosition) = 0;
     virtual void RwMatrixGetScale(const RwMatrix& rwMatrix, CVector& vecOutScale) = 0;
     virtual void RwMatrixSetScale(RwMatrix& rwInOutMatrix, const CVector& vecScale) = 0;
+
+    // Vehicle mesh deformation / vertex sculpting support
+    // Gives this atomic its own private RpGeometry (cloned from the shared model geometry) so that
+    // vertex edits only affect this instance, not every vehicle using the same model.
+    virtual RpGeometry*  MakeAtomicGeometryUnique(RpAtomic* pAtomic) = 0;
+    virtual unsigned int GetGeometryVertexCount(RpGeometry* pGeometry) = 0;
+    virtual bool         GetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, CVector& vecOutPosition) = 0;
+    virtual bool         SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition) = 0;
+    // Pushes vertices within fRadius of vecLocalPoint inward, falling off with distance. Returns the
+    // number of vertices that were actually moved (0 if the point/radius didn't reach any vertex).
+    virtual unsigned int DentGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) = 0;
 };

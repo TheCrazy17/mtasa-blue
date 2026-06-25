@@ -404,6 +404,21 @@ struct RpTriangle
     unsigned short verts[3];
     unsigned short materialId;
 };
+
+// RpGeometryLock lock mode flags (RenderWare Graphics SDK constants)
+enum
+{
+    RP_GEOMETRYLOCKPOLYGONS = 0x01,
+    RP_GEOMETRYLOCKVERTICES = 0x02,
+    RP_GEOMETRYLOCKNORMALS = 0x04,
+    RP_GEOMETRYLOCKPRELIGHT = 0x08,
+    RP_GEOMETRYLOCKTEXCOORDS = 0x10,
+    RP_GEOMETRYLOCKTEXCOORDS1 = 0x20,
+    RP_GEOMETRYLOCKTEXCOORDS2 = 0x40,
+    RP_GEOMETRYLOCKTEXCOORDSALL = 0x10 | 0x20 | 0x40 | 0x80,
+    RP_GEOMETRYLOCKALL = 0xFF,
+};
+
 struct RpMorphTarget
 {
     RpGeometry* parentGeom;

@@ -4671,6 +4671,34 @@ bool CClientVehicle::SetComponentPosition(const SString& vehicleComponent, CVect
     return false;
 }
 
+bool CClientVehicle::DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius)
+{
+    if (!m_pVehicle)
+        return false;
+    return m_pVehicle->DeformMesh(vecLocalPoint, fForce, fRadius);
+}
+
+unsigned int CClientVehicle::GetMeshVertexCount()
+{
+    if (!m_pVehicle)
+        return 0;
+    return m_pVehicle->GetMeshVertexCount();
+}
+
+bool CClientVehicle::GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition)
+{
+    if (!m_pVehicle)
+        return false;
+    return m_pVehicle->GetMeshVertexPosition(uiIndex, vecOutPosition);
+}
+
+bool CClientVehicle::SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition)
+{
+    if (!m_pVehicle)
+        return false;
+    return m_pVehicle->SetMeshVertexPosition(uiIndex, vecPosition);
+}
+
 bool CClientVehicle::GetComponentPosition(const SString& vehicleComponent, CVector& vecPosition, EComponentBaseType outputBase)
 {
     if (m_pVehicle)

@@ -12,6 +12,7 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <algorithm>
 #include <CMatrix.h>
 #include <core/CCoreInterface.h>
 #define RWFUNC_IMPLEMENT
@@ -1007,4 +1008,197 @@ void CRenderWareSA::RwMatrixSetScale(RwMatrix& rwInOutMatrix, const CVector& vec
     rwInOutMatrix.right = (RwV3d&)matTemp.vRight;
     rwInOutMatrix.up = (RwV3d&)matTemp.vFront;
     rwInOutMatrix.at = (RwV3d&)matTemp.vUp;
+}
+
+RpGeometry* CRenderWareSA::MakeAtomicGeometryUnique(RpAtomic* pAtomic)
+{
+    if (!pAtomic || !pAtomic->geometry)
+        return nullptr;
+
+    RpGeometry* pOriginal = pAtomic->geometry;
+
+    // Already a private clone we made earlier for this (or another) atomic - reuse it as-is
+    if (m_UniqueGeometryClones.find(pOriginal) != m_UniqueGeometryClones.end())
+        return pOriginal;
+
+    int numVerts = pOriginal->vertices_size;
+    int numTris = pOriginal->triangles_size;
+    if (numVerts <= 0 || numTris <= 0 || !pOriginal->morph_target)
+        return pOriginal;
+
+    RpGeometry* pClone = RpGeometryCreate(numVerts, numTris, pOriginal->flags);
+    if (!pClone)
+        return pOriginal;
+
+    RpGeometryLock(pClone, RP_GEOMETRYLOCKALL);
+
+    if (pClone->morph_target)
+    {
+        memcpy(pClone->morph_target->verts, pOriginal->morph_target->verts, sizeof(RwV3d) * numVerts);
+        if (pClone->morph_target->normals && pOriginal->morph_target->normals)
+            memcpy(pClone->morph_target->normals, pOriginal->morph_target->normals, sizeof(RwV3d) * numVerts);
+    }
+
+    if (pClone->colors && pOriginal->colors)
+        memcpy(pClone->colors, pOriginal->colors, sizeof(RwColor) * numVerts);
+
+    for (int i = 0; i < RW_MAX_TEXTURE_COORDS; i++)
+    {
+        if (pClone->texcoords[i] && pOriginal->texcoords[i])
+            memcpy(pClone->texcoords[i], pOriginal->texcoords[i], sizeof(RwTextureCoordinates) * numVerts);
+    }
+
+    for (int i = 0; i < numTris; i++)
+    {
+        const RpTriangle& srcTri = pOriginal->triangles[i];
+        RpGeometryTriangleSetVertexIndices(pClone, &pClone->triangles[i], srcTri.verts[0], srcTri.verts[1], srcTri.verts[2]);
+
+        if (srcTri.materialId < (unsigned short)pOriginal->materials.entries)
+            RpGeometryTriangleSetMaterial(pClone, &pClone->triangles[i], pOriginal->materials.materials[srcTri.materialId]);
+    }
+
+    RpGeometryUnlock(pClone);
+
+    // RpAtomicSetGeometry decrements pOriginal's refcount when we move this atomic off of it.
+    // pOriginal is the model's SHARED geometry (used by every other instance/atomic of this vehicle
+    // model, and by the streamed-in model archetype itself) - if this atomic happened to be holding
+    // the last reference, that decrement would destroy it for everyone else, and the freed memory
+    // could later be handed back to us by RpGeometryCreate for an unrelated clone, making the
+    // "already cloned?" pointer check above wrongly match it. Bump the refcount first so our own
+    // swap can never be the one that drops it to zero.
+    pOriginal->refs++;
+
+    RpAtomicSetGeometry(pAtomic, pClone, 0);
+    m_UniqueGeometryClones.insert(pClone);
+
+    // Snapshot the pristine vertex positions for this clone so DentGeometryAtPoint can measure how
+    // deep each vertex already sits, instead of pushing it further every single call.
+    SDentVertexState& state = m_DentStates[pClone];
+    state.originalPositions.assign(pClone->morph_target->verts, pClone->morph_target->verts + numVerts);
+    state.depth.assign(numVerts, 0.0f);
+
+    return pClone;
+}
+
+unsigned int CRenderWareSA::GetGeometryVertexCount(RpGeometry* pGeometry)
+{
+    if (!pGeometry || pGeometry->vertices_size < 0)
+        return 0;
+    return (unsigned int)pGeometry->vertices_size;
+}
+
+bool CRenderWareSA::GetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, CVector& vecOutPosition)
+{
+    if (!pGeometry || !pGeometry->morph_target || uiIndex >= GetGeometryVertexCount(pGeometry))
+        return false;
+
+    const RwV3d& vert = pGeometry->morph_target->verts[uiIndex];
+    vecOutPosition = CVector(vert.x, vert.y, vert.z);
+    return true;
+}
+
+bool CRenderWareSA::SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition)
+{
+    if (!pGeometry || !pGeometry->morph_target || uiIndex >= GetGeometryVertexCount(pGeometry))
+        return false;
+
+    // See the comment in DentGeometryAtPoint: without this lock/unlock pair, RenderWare keeps
+    // rendering the stale (pre-edit) vertex buffer for geometries that aren't freshly created.
+    RpGeometryLock(pGeometry, RP_GEOMETRYLOCKVERTICES);
+
+    RwV3d& vert = pGeometry->morph_target->verts[uiIndex];
+    vert.x = vecPosition.fX;
+    vert.y = vecPosition.fY;
+    vert.z = vecPosition.fZ;
+
+    RpGeometryUnlock(pGeometry);
+    return true;
+}
+
+unsigned int CRenderWareSA::DentGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius)
+{
+    if (!pGeometry || !pGeometry->morph_target || fRadius <= 0.0f)
+        return 0;
+
+    auto it = m_DentStates.find(pGeometry);
+    if (it == m_DentStates.end())
+        return 0;
+
+    SDentVertexState& state = it->second;
+    int                numVerts = pGeometry->vertices_size;
+    if ((int)state.depth.size() != numVerts || (int)state.originalPositions.size() != numVerts)
+        return 0;
+
+    // All affected vertices are pushed in the SAME direction (towards the vehicle's local origin),
+    // not along each vertex's own normal. Pushing along individual normals makes adjacent panel
+    // triangles fold towards different directions, which looks like a shattered/spiky mess instead
+    // of a smooth dent.
+    CVector vecPushDir = -vecLocalPoint;
+    float   fPushDirLength = vecPushDir.Length();
+    if (fPushDirLength < 0.0001f)
+        return 0;
+    vecPushDir /= fPushDirLength;
+
+    // Absolute cap on how deep any single vertex can ever sink, so the panel can't be punched
+    // through itself no matter how many times it gets hit.
+    const float fMaxDepth = fRadius * 0.75f;
+
+    // If the area at the centre of the impact is already close to fully sunk, widen the radius for
+    // this hit so the still-pristine perimeter around it starts to give way too - like real sheet
+    // metal crumpling outwards once the centre can't absorb any more.
+    const float fInnerRadius = fRadius * 0.3f;
+    float       fInnerDepthSum = 0.0f;
+    int         iInnerCount = 0;
+    for (int i = 0; i < numVerts; i++)
+    {
+        const RwV3d& orig = state.originalPositions[i];
+        CVector      vecToOrig(orig.x - vecLocalPoint.fX, orig.y - vecLocalPoint.fY, orig.z - vecLocalPoint.fZ);
+        if (vecToOrig.Length() < fInnerRadius)
+        {
+            fInnerDepthSum += state.depth[i];
+            iInnerCount++;
+        }
+    }
+    float fSaturation = (iInnerCount > 0) ? std::min(fInnerDepthSum / iInnerCount / fMaxDepth, 1.0f) : 0.0f;
+    float fEffectiveRadius = fRadius * (1.0f + fSaturation * 0.8f);
+
+    // Lock/unlock tells RenderWare the vertex buffer changed so it re-uploads/re-caches it for
+    // rendering. Without this, mutating an already-resident geometry's vertices directly (as opposed
+    // to a freshly-created clone, which gets locked/unlocked once while it's being built) has no
+    // visible effect - the CPU-side data is correct but the renderer keeps showing the stale buffer.
+    RpGeometryLock(pGeometry, RP_GEOMETRYLOCKVERTICES);
+
+    RwV3d*       pVerts = pGeometry->morph_target->verts;
+    unsigned int uiAffected = 0;
+
+    for (int i = 0; i < numVerts; i++)
+    {
+        const RwV3d& orig = state.originalPositions[i];
+        CVector      vecToOrig(orig.x - vecLocalPoint.fX, orig.y - vecLocalPoint.fY, orig.z - vecLocalPoint.fZ);
+        float        fDistance = vecToOrig.Length();
+        if (fDistance >= fEffectiveRadius)
+            continue;
+
+        // Smoothstep falloff gives a rounded dent profile instead of a sharp cone
+        float fT = 1.0f - (fDistance / fEffectiveRadius);
+        float fFalloff = fT * fT * (3.0f - 2.0f * fT);
+        float fDesiredDepth = std::min(fForce * fFalloff, fMaxDepth);
+
+        // Depth only ever grows (ratchet) - re-hitting an already-dented vertex from a slightly
+        // different angle won't pop it back out.
+        float fNewDepth = std::min(std::max(state.depth[i], fDesiredDepth), fMaxDepth);
+        if (fNewDepth <= state.depth[i])
+            continue;
+
+        state.depth[i] = fNewDepth;
+
+        pVerts[i].x = orig.x + vecPushDir.fX * fNewDepth;
+        pVerts[i].y = orig.y + vecPushDir.fY * fNewDepth;
+        pVerts[i].z = orig.z + vecPushDir.fZ * fNewDepth;
+        uiAffected++;
+    }
+
+    RpGeometryUnlock(pGeometry);
+
+    return uiAffected;
 }
