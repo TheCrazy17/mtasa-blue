@@ -2237,6 +2237,12 @@ void CClientVehicle::StreamedInPulse()
                     pDamageManager->SetLightStatus(static_cast<eLights>(i), m_ucLightStates[i]);
             }
 
+            // Re-apply colors 3/4 once the model's remap textures have settled (issue #4982).
+            // GTA's own colour-remap rebuild can fire once on its own schedule right around
+            // model creation; re-issuing SetColor() here (after Create() already restored it
+            // once) makes sure our values are what's left standing once that rebuild settles.
+            m_pVehicle->SetColor(m_Color.GetRGBColor(0), m_Color.GetRGBColor(1), m_Color.GetRGBColor(2), m_Color.GetRGBColor(3), 0);
+
             m_bJustStreamedIn = false;
         }
 
