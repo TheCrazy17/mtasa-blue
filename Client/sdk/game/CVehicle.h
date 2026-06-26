@@ -349,4 +349,10 @@ public:
     virtual unsigned int GetMeshVertexCount() = 0;
     virtual bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) = 0;
     virtual bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) = 0;
+
+    // Same as above, but scoped to a single named component (e.g. a custom "spoiler_dummy" frame
+    // exported from a 3D modelling tool), instead of every atomic in the vehicle's clump.
+    virtual unsigned int GetComponentMeshVertexCount(const SString& vehicleComponent) = 0;
+    virtual bool         GetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, CVector& vecOutPosition) = 0;
+    virtual bool         SetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, const CVector& vecPosition) = 0;
 };

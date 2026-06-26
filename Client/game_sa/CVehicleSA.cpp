@@ -2749,3 +2749,54 @@ bool CVehicleSA::SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecP
     }
     return false;
 }
+
+std::vector<RpAtomic*> CVehicleSA::GetComponentAtomics(const SString& vehicleComponent)
+{
+    std::vector<RpAtomic*> result;
+
+    SVehicleFrame* pComponent = GetVehicleComponent(vehicleComponent);
+    if (!pComponent || !pComponent->pFrame)
+        return result;
+
+    std::vector<RwObject*> atomicList;
+    GetAllAtomicObjects(pComponent->pFrame, atomicList);
+
+    result.reserve(atomicList.size());
+    for (RwObject* pObject : atomicList)
+        result.push_back((RpAtomic*)pObject);
+
+    return result;
+}
+
+unsigned int CVehicleSA::GetComponentMeshVertexCount(const SString& vehicleComponent)
+{
+    unsigned int uiTotal = 0;
+    for (RpAtomic* pAtomic : GetComponentAtomics(vehicleComponent))
+        uiTotal += pGame->GetRenderWareSA()->GetGeometryVertexCount(pAtomic->geometry);
+    return uiTotal;
+}
+
+bool CVehicleSA::GetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, CVector& vecOutPosition)
+{
+    for (RpAtomic* pAtomic : GetComponentAtomics(vehicleComponent))
+    {
+        unsigned int uiCount = pGame->GetRenderWareSA()->GetGeometryVertexCount(pAtomic->geometry);
+        if (uiIndex < uiCount)
+            return pGame->GetRenderWareSA()->GetGeometryVertexPosition(pAtomic->geometry, uiIndex, vecOutPosition);
+        uiIndex -= uiCount;
+    }
+    return false;
+}
+
+bool CVehicleSA::SetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, const CVector& vecPosition)
+{
+    for (RpAtomic* pAtomic : GetComponentAtomics(vehicleComponent))
+    {
+        RpGeometry*  pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
+        unsigned int uiCount = pGame->GetRenderWareSA()->GetGeometryVertexCount(pGeometry);
+        if (uiIndex < uiCount)
+            return pGame->GetRenderWareSA()->SetGeometryVertexPosition(pGeometry, uiIndex, vecPosition);
+        uiIndex -= uiCount;
+    }
+    return false;
+}

@@ -150,6 +150,9 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleMeshVertexCount", GetVehicleMeshVertexCount},
         {"getVehicleMeshVertex", GetVehicleMeshVertex},
         {"setVehicleMeshVertex", SetVehicleMeshVertex},
+        {"getVehicleComponentMeshVertexCount", GetVehicleComponentMeshVertexCount},
+        {"getVehicleComponentMeshVertex", GetVehicleComponentMeshVertex},
+        {"setVehicleComponentMeshVertex", SetVehicleComponentMeshVertex},
         {"setVehicleComponentPosition", SetVehicleComponentPosition},
         {"setVehicleComponentRotation", SetVehicleComponentRotation},
         {"setVehicleComponentScale", SetVehicleComponentScale},
@@ -3380,6 +3383,87 @@ int CLuaVehicleDefs::SetVehicleMeshVertex(lua_State* luaVM)
     if (!argStream.HasErrors())
     {
         if (pVehicle->SetMeshVertexPosition(uiIndex, vecPosition))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaVehicleDefs::GetVehicleComponentMeshVertexCount(lua_State* luaVM)
+{
+    // int getVehicleComponentMeshVertexCount ( vehicle theVehicle, string theComponent )
+    CClientVehicle* pVehicle = NULL;
+    SString          strComponent;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pVehicle);
+    argStream.ReadString(strComponent);
+
+    if (!argStream.HasErrors())
+    {
+        lua_pushnumber(luaVM, pVehicle->GetComponentMeshVertexCount(strComponent));
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaVehicleDefs::GetVehicleComponentMeshVertex(lua_State* luaVM)
+{
+    // float, float, float getVehicleComponentMeshVertex ( vehicle theVehicle, string theComponent, int index )
+    CClientVehicle* pVehicle = NULL;
+    SString          strComponent;
+    unsigned int     uiIndex;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pVehicle);
+    argStream.ReadString(strComponent);
+    argStream.ReadNumber(uiIndex);
+
+    if (!argStream.HasErrors())
+    {
+        CVector vecPosition;
+        if (pVehicle->GetComponentMeshVertexPosition(strComponent, uiIndex, vecPosition))
+        {
+            lua_pushnumber(luaVM, vecPosition.fX);
+            lua_pushnumber(luaVM, vecPosition.fY);
+            lua_pushnumber(luaVM, vecPosition.fZ);
+            return 3;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaVehicleDefs::SetVehicleComponentMeshVertex(lua_State* luaVM)
+{
+    // bool setVehicleComponentMeshVertex ( vehicle theVehicle, string theComponent, int index, float x, float y, float z )
+    CClientVehicle* pVehicle = NULL;
+    SString          strComponent;
+    unsigned int     uiIndex;
+    CVector          vecPosition;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pVehicle);
+    argStream.ReadString(strComponent);
+    argStream.ReadNumber(uiIndex);
+    argStream.ReadVector3D(vecPosition);
+
+    if (!argStream.HasErrors())
+    {
+        if (pVehicle->SetComponentMeshVertexPosition(strComponent, uiIndex, vecPosition))
         {
             lua_pushboolean(luaVM, true);
             return 1;

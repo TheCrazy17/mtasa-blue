@@ -720,6 +720,10 @@ public:
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) override;
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) override;
 
+    unsigned int GetComponentMeshVertexCount(const SString& vehicleComponent) override;
+    bool         GetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, CVector& vecOutPosition) override;
+    bool         SetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, const CVector& vecPosition) override;
+
     static void StaticSetHooks();
     static void SetVehiclesSunGlareEnabled(bool bEnabled);
     static bool GetVehiclesSunGlareEnabled();
@@ -737,4 +741,8 @@ private:
     // Each atomic's geometry is made unique to this vehicle instance the first time it's touched.
     std::vector<RpAtomic*>& GetMeshAtomics();
     std::vector<RpAtomic*>  m_MeshAtomics;
+
+    // Atomics attached to a single named component frame (e.g. a custom "spoiler_dummy"), instead
+    // of every atomic in the clump. Empty if the component doesn't exist on this model.
+    std::vector<RpAtomic*> GetComponentAtomics(const SString& vehicleComponent);
 };

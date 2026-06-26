@@ -188,6 +188,9 @@ public:
     LUA_DECLARE(GetVehicleMeshVertexCount);
     LUA_DECLARE(GetVehicleMeshVertex);
     LUA_DECLARE(SetVehicleMeshVertex);
+    LUA_DECLARE(GetVehicleComponentMeshVertexCount);
+    LUA_DECLARE(GetVehicleComponentMeshVertex);
+    LUA_DECLARE(SetVehicleComponentMeshVertex);
 
     // Components
     LUA_DECLARE(SetVehicleComponentPosition);

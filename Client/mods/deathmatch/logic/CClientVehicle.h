@@ -535,6 +535,10 @@ public:
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition);
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition);
 
+    unsigned int GetComponentMeshVertexCount(const SString& vehicleComponent);
+    bool         GetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, CVector& vecOutPosition);
+    bool         SetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, const CVector& vecPosition);
+
     bool DoesSupportUpgrade(const SString& strFrameName);
 
     bool AreHeliBladeCollisionsEnabled() { return m_bEnableHeliBladeCollisions; }
