@@ -127,7 +127,9 @@ public:
     unsigned int GetGeometryVertexCount(RpGeometry* pGeometry) override;
     bool         GetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, CVector& vecOutPosition) override;
     bool         SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition) override;
-    unsigned int DentGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) override;
+    unsigned int DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) override;
+    unsigned int StretchGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecDirection, float fLength,
+                                         float fRadius) override;
 
     // CRenderWareSA methods
     RwTexture*          RightSizeTexture(RwTexture* pTexture, uint uiSizeLimit, SString& strError);
@@ -175,16 +177,24 @@ public:
     // Geometries that were already given a private per-instance clone by MakeAtomicGeometryUnique
     std::set<RpGeometry*> m_UniqueGeometryClones;
 
-    // Per-vertex dent tracking for cloned geometries: how far each vertex currently sits from its
-    // pristine position (a "depth" that only ever grows), so repeated hits at the same spot deepen
-    // the centre up to a cap and spread the dent into the surrounding (still pristine) perimeter
-    // instead of stacking endlessly / clipping through the panel.
-    struct SDentVertexState
+    // Per-vertex dent/stretch tracking for cloned geometries, all measured from the pristine
+    // (original) position so repeated edits never drift or stack indefinitely:
+    //  - depth/dentOffset: how far a vertex currently sits from its pristine position, pushed
+    //    towards the vehicle's centre (dent). depth only ever grows, so repeated hits at the same
+    //    spot deepen the centre up to a cap and spread into the surrounding perimeter once
+    //    saturated, instead of clipping through the panel.
+    //  - stretchOffset: how far a vertex currently sits from its pristine position, pushed along a
+    //    caller-supplied direction (stretch, e.g. lengthening a spoiler). Falls off to zero at the
+    //    edge of the affected radius so the area blends into the rest of the body instead of tearing.
+    // Final vertex position = original + dentOffset + stretchOffset.
+    struct SDeformVertexState
     {
         std::vector<RwV3d> originalPositions;
         std::vector<float> depth;
+        std::vector<RwV3d> dentOffset;
+        std::vector<RwV3d> stretchOffset;
     };
-    std::unordered_map<RpGeometry*, SDentVertexState> m_DentStates;
+    std::unordered_map<RpGeometry*, SDeformVertexState> m_DeformStates;
 
     int                                 m_uiReplacementMatchCounter;
     int                                 m_uiNumReplacementRequests;

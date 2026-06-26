@@ -1071,11 +1071,13 @@ RpGeometry* CRenderWareSA::MakeAtomicGeometryUnique(RpAtomic* pAtomic)
     RpAtomicSetGeometry(pAtomic, pClone, 0);
     m_UniqueGeometryClones.insert(pClone);
 
-    // Snapshot the pristine vertex positions for this clone so DentGeometryAtPoint can measure how
-    // deep each vertex already sits, instead of pushing it further every single call.
-    SDentVertexState& state = m_DentStates[pClone];
+    // Snapshot the pristine vertex positions for this clone so DeformGeometryAtPoint/StretchGeometryAtPoint
+    // can measure how far each vertex already sits, instead of pushing it further every single call.
+    SDeformVertexState& state = m_DeformStates[pClone];
     state.originalPositions.assign(pClone->morph_target->verts, pClone->morph_target->verts + numVerts);
     state.depth.assign(numVerts, 0.0f);
+    state.dentOffset.assign(numVerts, RwV3d{0.0f, 0.0f, 0.0f});
+    state.stretchOffset.assign(numVerts, RwV3d{0.0f, 0.0f, 0.0f});
 
     return pClone;
 }
@@ -1102,7 +1104,7 @@ bool CRenderWareSA::SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned in
     if (!pGeometry || !pGeometry->morph_target || uiIndex >= GetGeometryVertexCount(pGeometry))
         return false;
 
-    // See the comment in DentGeometryAtPoint: without this lock/unlock pair, RenderWare keeps
+    // See the comment in DeformGeometryAtPoint: without this lock/unlock pair, RenderWare keeps
     // rendering the stale (pre-edit) vertex buffer for geometries that aren't freshly created.
     RpGeometryLock(pGeometry, RP_GEOMETRYLOCKVERTICES);
 
@@ -1115,16 +1117,16 @@ bool CRenderWareSA::SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned in
     return true;
 }
 
-unsigned int CRenderWareSA::DentGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius)
+unsigned int CRenderWareSA::DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius)
 {
     if (!pGeometry || !pGeometry->morph_target || fRadius <= 0.0f)
         return 0;
 
-    auto it = m_DentStates.find(pGeometry);
-    if (it == m_DentStates.end())
+    auto it = m_DeformStates.find(pGeometry);
+    if (it == m_DeformStates.end())
         return 0;
 
-    SDentVertexState& state = it->second;
+    SDeformVertexState& state = it->second;
     int                numVerts = pGeometry->vertices_size;
     if ((int)state.depth.size() != numVerts || (int)state.originalPositions.size() != numVerts)
         return 0;
@@ -1191,10 +1193,75 @@ unsigned int CRenderWareSA::DentGeometryAtPoint(RpGeometry* pGeometry, const CVe
             continue;
 
         state.depth[i] = fNewDepth;
+        state.dentOffset[i] = RwV3d{vecPushDir.fX * fNewDepth, vecPushDir.fY * fNewDepth, vecPushDir.fZ * fNewDepth};
 
-        pVerts[i].x = orig.x + vecPushDir.fX * fNewDepth;
-        pVerts[i].y = orig.y + vecPushDir.fY * fNewDepth;
-        pVerts[i].z = orig.z + vecPushDir.fZ * fNewDepth;
+        const RwV3d& stretch = state.stretchOffset[i];
+        pVerts[i].x = orig.x + state.dentOffset[i].x + stretch.x;
+        pVerts[i].y = orig.y + state.dentOffset[i].y + stretch.y;
+        pVerts[i].z = orig.z + state.dentOffset[i].z + stretch.z;
+        uiAffected++;
+    }
+
+    RpGeometryUnlock(pGeometry);
+
+    return uiAffected;
+}
+
+unsigned int CRenderWareSA::StretchGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecDirection, float fLength,
+                                                    float fRadius)
+{
+    if (!pGeometry || !pGeometry->morph_target || fRadius <= 0.0f || fLength <= 0.0f)
+        return 0;
+
+    auto it = m_DeformStates.find(pGeometry);
+    if (it == m_DeformStates.end())
+        return 0;
+
+    SDeformVertexState& state = it->second;
+    int                numVerts = pGeometry->vertices_size;
+    if ((int)state.stretchOffset.size() != numVerts || (int)state.originalPositions.size() != numVerts)
+        return 0;
+
+    CVector vecDir = vecDirection;
+    float   fDirLength = vecDir.Length();
+    if (fDirLength < 0.0001f)
+        return 0;
+    vecDir /= fDirLength;
+
+    RpGeometryLock(pGeometry, RP_GEOMETRYLOCKVERTICES);
+
+    RwV3d*       pVerts = pGeometry->morph_target->verts;
+    unsigned int uiAffected = 0;
+
+    for (int i = 0; i < numVerts; i++)
+    {
+        const RwV3d& orig = state.originalPositions[i];
+        CVector      vecToOrig(orig.x - vecLocalPoint.fX, orig.y - vecLocalPoint.fY, orig.z - vecLocalPoint.fZ);
+        float        fDistance = vecToOrig.Length();
+        if (fDistance >= fRadius)
+            continue;
+
+        // Smoothstep falloff reaches exactly zero at the edge of the radius (unlike the dent, there
+        // is no extra cap here - fLength IS the cap), so the boundary with the rest of the body
+        // never moves and the stretched area blends in instead of tearing away from it.
+        float fT = 1.0f - (fDistance / fRadius);
+        float fFalloff = fT * fT * (3.0f - 2.0f * fT);
+        float fDesiredLength = fLength * fFalloff;
+
+        // Ratchet on the magnitude already applied (regardless of its previous direction), same
+        // idea as the dent's depth: re-stretching the same area only grows it, never undoes it.
+        RwV3d&  offset = state.stretchOffset[i];
+        CVector vecCurrentOffset(offset.x, offset.y, offset.z);
+        float   fCurrentLength = vecCurrentOffset.Length();
+        if (fDesiredLength <= fCurrentLength)
+            continue;
+
+        offset = RwV3d{vecDir.fX * fDesiredLength, vecDir.fY * fDesiredLength, vecDir.fZ * fDesiredLength};
+
+        const RwV3d& dent = state.dentOffset[i];
+        pVerts[i].x = orig.x + dent.x + offset.x;
+        pVerts[i].y = orig.y + dent.y + offset.y;
+        pVerts[i].z = orig.z + dent.z + offset.z;
         uiAffected++;
     }
 

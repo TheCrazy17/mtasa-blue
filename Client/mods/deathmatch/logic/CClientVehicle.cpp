@@ -4678,6 +4678,13 @@ bool CClientVehicle::DeformMesh(const CVector& vecLocalPoint, float fForce, floa
     return m_pVehicle->DeformMesh(vecLocalPoint, fForce, fRadius);
 }
 
+bool CClientVehicle::StretchMesh(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius)
+{
+    if (!m_pVehicle)
+        return false;
+    return m_pVehicle->StretchMesh(vecLocalPoint, vecDirection, fLength, fRadius);
+}
+
 unsigned int CClientVehicle::GetMeshVertexCount()
 {
     if (!m_pVehicle)

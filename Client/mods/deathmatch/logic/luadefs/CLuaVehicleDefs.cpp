@@ -146,6 +146,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"setVehicleHandling", SetVehicleHandling},
         {"setVehicleSirens", SetVehicleSirens},
         {"deformVehicle", DeformVehicle},
+        {"stretchVehicleMesh", StretchVehicleMesh},
         {"getVehicleMeshVertexCount", GetVehicleMeshVertexCount},
         {"getVehicleMeshVertex", GetVehicleMeshVertex},
         {"setVehicleMeshVertex", SetVehicleMeshVertex},
@@ -3273,6 +3274,37 @@ int CLuaVehicleDefs::DeformVehicle(lua_State* luaVM)
     if (!argStream.HasErrors())
     {
         if (pVehicle->DeformMesh(vecLocalPoint, fForce, fRadius))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaVehicleDefs::StretchVehicleMesh(lua_State* luaVM)
+{
+    // bool stretchVehicleMesh ( vehicle theVehicle, float x, float y, float z, float dirX, float dirY, float dirZ, float length, float radius )
+    CClientVehicle* pVehicle = NULL;
+    CVector         vecLocalPoint;
+    CVector         vecDirection;
+    float           fLength;
+    float           fRadius;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pVehicle);
+    argStream.ReadVector3D(vecLocalPoint);
+    argStream.ReadVector3D(vecDirection);
+    argStream.ReadNumber(fLength);
+    argStream.ReadNumber(fRadius);
+
+    if (!argStream.HasErrors())
+    {
+        if (pVehicle->StretchMesh(vecLocalPoint, vecDirection, fLength, fRadius))
         {
             lua_pushboolean(luaVM, true);
             return 1;

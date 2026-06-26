@@ -2689,7 +2689,24 @@ bool CVehicleSA::DeformMesh(const CVector& vecLocalPoint, float fForce, float fR
     {
         RpGeometry* pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
         if (pGeometry)
-            uiTotalAffected += pGame->GetRenderWareSA()->DentGeometryAtPoint(pGeometry, vecLocalPoint, fForce, fRadius);
+            uiTotalAffected += pGame->GetRenderWareSA()->DeformGeometryAtPoint(pGeometry, vecLocalPoint, fForce, fRadius);
+    }
+    return uiTotalAffected > 0;
+}
+
+bool CVehicleSA::StretchMesh(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius)
+{
+    std::vector<RpAtomic*>& atomics = GetMeshAtomics();
+    if (atomics.empty())
+        return false;
+
+    unsigned int uiTotalAffected = 0;
+
+    for (RpAtomic* pAtomic : atomics)
+    {
+        RpGeometry* pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
+        if (pGeometry)
+            uiTotalAffected += pGame->GetRenderWareSA()->StretchGeometryAtPoint(pGeometry, vecLocalPoint, vecDirection, fLength, fRadius);
     }
     return uiTotalAffected > 0;
 }

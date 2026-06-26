@@ -184,6 +184,7 @@ public:
 
     // Mesh deformation / sculpting
     LUA_DECLARE(DeformVehicle);
+    LUA_DECLARE(StretchVehicleMesh);
     LUA_DECLARE(GetVehicleMeshVertexCount);
     LUA_DECLARE(GetVehicleMeshVertex);
     LUA_DECLARE(SetVehicleMeshVertex);

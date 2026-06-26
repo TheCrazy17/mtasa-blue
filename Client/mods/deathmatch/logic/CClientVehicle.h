@@ -530,6 +530,7 @@ public:
     std::map<SString, SVehicleComponentData>::iterator ComponentsEnd() { return m_ComponentData.end(); }
 
     bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius);
+    bool         StretchMesh(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius);
     unsigned int GetMeshVertexCount();
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition);
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition);

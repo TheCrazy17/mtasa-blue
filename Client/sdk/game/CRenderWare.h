@@ -136,5 +136,10 @@ public:
     virtual bool         SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition) = 0;
     // Pushes vertices within fRadius of vecLocalPoint inward, falling off with distance. Returns the
     // number of vertices that were actually moved (0 if the point/radius didn't reach any vertex).
-    virtual unsigned int DentGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) = 0;
+    virtual unsigned int DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) = 0;
+    // Pushes vertices within fRadius of vecLocalPoint outward along vecDirection by up to fLength,
+    // falling off to zero right at the edge of the radius so the stretched area blends into the rest
+    // of the mesh instead of tearing away from it. Returns the number of vertices actually moved.
+    virtual unsigned int StretchGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecDirection, float fLength,
+                                                 float fRadius) = 0;
 };
