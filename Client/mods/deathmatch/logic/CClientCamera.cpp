@@ -158,6 +158,10 @@ void CClientCamera::DoPulse()
 {
     InvalidateCachedTransforms();
 
+    // Keep our interior in sync with the actual area the engine is currently rendering
+    if (g_pGame)
+        SetInterior(static_cast<unsigned char>(g_pGame->GetWorld()->GetCurrentArea()));
+
     // If we're fixed, force the target vector
     if (m_bFixed)
     {
