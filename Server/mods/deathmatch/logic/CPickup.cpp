@@ -385,8 +385,7 @@ bool CPickup::CanUse(CPlayer& Player, bool bOnfootCheck)
         switch (m_ucType)
         {
             case CPickup::HEALTH:
-                // TODO: calc max health from max_health stat
-                return (Player.GetHealth() < 200.0f);
+                return (Player.GetHealth() < Player.GetMaxHealth());
 
             case CPickup::ARMOR:
                 return (Player.GetArmor() < 100.0f);
