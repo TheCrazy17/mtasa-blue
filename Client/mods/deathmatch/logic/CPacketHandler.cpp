@@ -3436,39 +3436,6 @@ retry:
                         pVehicle->SetLightStatus(i, damage.data.ucLightStates[i]);
                     pVehicle->ResetDamageModelSync();
 
-                    // Replay any mesh deformation this vehicle already had at the time it streamed in
-                    // (see CEntityAddPacket) - applied locally only, must not be re-sent to the server.
-                    unsigned char ucDeformCount = 0;
-                    if (bitStream.Read(ucDeformCount))
-                    {
-                        for (unsigned char i = 0; i < ucDeformCount; i++)
-                        {
-                            bool    bStretch = false;
-                            CVector vecPoint;
-                            float   fRadius = 0.0f;
-                            if (!bitStream.ReadBit(bStretch) || !bitStream.Read(vecPoint.fX) || !bitStream.Read(vecPoint.fY) ||
-                                !bitStream.Read(vecPoint.fZ) || !bitStream.Read(fRadius))
-                                break;
-
-                            if (bStretch)
-                            {
-                                CVector vecDirection;
-                                float   fLength = 0.0f;
-                                if (!bitStream.Read(vecDirection.fX) || !bitStream.Read(vecDirection.fY) || !bitStream.Read(vecDirection.fZ) ||
-                                    !bitStream.Read(fLength))
-                                    break;
-                                pVehicle->StretchMesh(vecPoint, vecDirection, fLength, fRadius);
-                            }
-                            else
-                            {
-                                float fForce = 0.0f;
-                                if (!bitStream.Read(fForce))
-                                    break;
-                                pVehicle->DeformMesh(vecPoint, fForce, fRadius);
-                            }
-                        }
-                    }
-
                     // If the vehicle has a turret, read out its position
                     if (CClientVehicleManager::HasTurret(usModel))
                     {
@@ -3674,6 +3641,40 @@ retry:
                     if (CClientVehicleManager::HasSirens(usModel) || pVehicle->DoesVehicleHaveSirens())
                     {
                         pVehicle->SetSirenOrAlarmActive(bSirenesActive);
+                    }
+
+                    // Replay any mesh deformation this vehicle already had at the time it streamed in
+                    // (see CEntityAddPacket) - applied locally only, must not be re-sent to the server.
+                    // Read last, after every other vehicle field, matching where the server writes it.
+                    unsigned char ucDeformCount = 0;
+                    if (bitStream.Read(ucDeformCount))
+                    {
+                        for (unsigned char i = 0; i < ucDeformCount; i++)
+                        {
+                            bool    bStretch = false;
+                            CVector vecPoint;
+                            float   fRadius = 0.0f;
+                            if (!bitStream.ReadBit(bStretch) || !bitStream.Read(vecPoint.fX) || !bitStream.Read(vecPoint.fY) ||
+                                !bitStream.Read(vecPoint.fZ) || !bitStream.Read(fRadius))
+                                break;
+
+                            if (bStretch)
+                            {
+                                CVector vecDirection;
+                                float   fLength = 0.0f;
+                                if (!bitStream.Read(vecDirection.fX) || !bitStream.Read(vecDirection.fY) || !bitStream.Read(vecDirection.fZ) ||
+                                    !bitStream.Read(fLength))
+                                    break;
+                                pVehicle->StretchMesh(vecPoint, vecDirection, fLength, fRadius);
+                            }
+                            else
+                            {
+                                float fForce = 0.0f;
+                                if (!bitStream.Read(fForce))
+                                    break;
+                                pVehicle->DeformMesh(vecPoint, fForce, fRadius);
+                            }
+                        }
                     }
 
                     pVehicle->ApplyHandling();
