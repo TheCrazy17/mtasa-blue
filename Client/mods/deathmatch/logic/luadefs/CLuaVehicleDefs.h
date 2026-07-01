@@ -192,6 +192,7 @@ public:
     LUA_DECLARE(GetVehicleComponentMeshVertex);
     LUA_DECLARE(SetVehicleComponentMeshVertex);
     LUA_DECLARE(ResetVehicleDeformation);
+    LUA_DECLARE(PrepareVehicleDeformation);
 
     // Components
     LUA_DECLARE(SetVehicleComponentPosition);

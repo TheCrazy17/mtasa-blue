@@ -714,8 +714,9 @@ public:
     bool IsOnFire() override { return GetVehicleInterface()->m_pFire != nullptr; }
     bool SetOnFire(bool onFire) override;
 
-    bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius) override;
+    bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius, bool bAffectWheels) override;
     bool         StretchMesh(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius) override;
+    bool         PrepareMeshDeform() override;
     unsigned int GetMeshVertexCount() override;
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) override;
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) override;

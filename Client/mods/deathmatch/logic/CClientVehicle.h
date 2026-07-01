@@ -529,8 +529,9 @@ public:
     std::map<SString, SVehicleComponentData>::iterator ComponentsBegin() { return m_ComponentData.begin(); }
     std::map<SString, SVehicleComponentData>::iterator ComponentsEnd() { return m_ComponentData.end(); }
 
-    bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius);
+    bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius, bool bAffectWheels = false);
     bool         StretchMesh(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius);
+    bool         PrepareMeshDeform();
     unsigned int GetMeshVertexCount();
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition);
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition);

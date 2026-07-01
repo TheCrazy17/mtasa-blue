@@ -27,7 +27,7 @@ bool CVehicleMeshDeformSyncPacket::Read(NetBitStreamInterface& BitStream)
     {
         return BitStream.Read(m_vecDirection.fX) && BitStream.Read(m_vecDirection.fY) && BitStream.Read(m_vecDirection.fZ) && BitStream.Read(m_fLength);
     }
-    return BitStream.Read(m_fForce);
+    return BitStream.Read(m_fForce) && BitStream.ReadBit(m_bAffectWheels);
 }
 
 bool CVehicleMeshDeformSyncPacket::Write(NetBitStreamInterface& BitStream) const
@@ -53,6 +53,7 @@ bool CVehicleMeshDeformSyncPacket::Write(NetBitStreamInterface& BitStream) const
     else
     {
         BitStream.Write(m_fForce);
+        BitStream.WriteBit(m_bAffectWheels);
     }
 
     return true;

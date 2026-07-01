@@ -344,8 +344,14 @@ public:
     // Mesh deformation ("dent") and per-vertex sculpting. vecLocalPoint/positions are in the
     // vehicle's local model space. The underlying mesh geometry is made unique to this vehicle
     // instance on first use, so edits never affect other vehicles sharing the same model.
-    virtual bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius) = 0;
+    // bAffectWheels: wheels are round and rotate/spin independently of the body, so a dent pushing
+    // their vertices toward the vehicle centre looks broken (flattened/pinched) rather than dented -
+    // excluded by default.
+    virtual bool         DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius, bool bAffectWheels) = 0;
     virtual bool         StretchMesh(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius) = 0;
+    // Pays the one-time per-atomic geometry clone cost up front (see deformVehicle's implementation
+    // notes on RenderWare's native triangle-stripping pass) so it doesn't land on the first real hit.
+    virtual bool         PrepareMeshDeform() = 0;
     virtual unsigned int GetMeshVertexCount() = 0;
     virtual bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) = 0;
     virtual bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) = 0;

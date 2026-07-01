@@ -45,6 +45,7 @@ public:
     CVector m_vecPoint;
     float   m_fRadius = 0.0f;
     float   m_fForce = 0.0f;             // dent only
+    bool    m_bAffectWheels = false;             // dent only
     CVector m_vecDirection;              // stretch only
     float   m_fLength = 0.0f;            // stretch only
 };

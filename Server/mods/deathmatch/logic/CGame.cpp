@@ -2528,6 +2528,7 @@ void CGame::Packet_VehicleMeshDeformSync(CVehicleMeshDeformSyncPacket& Packet)
         record.vecPoint = Packet.m_vecPoint;
         record.fRadius = Packet.m_fRadius;
         record.fForce = Packet.m_fForce;
+        record.bAffectWheels = Packet.m_bAffectWheels;
         record.vecDirection = Packet.m_vecDirection;
         record.fLength = Packet.m_fLength;
 

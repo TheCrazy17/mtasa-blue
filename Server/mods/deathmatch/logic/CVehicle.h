@@ -198,7 +198,8 @@ struct SVehicleMeshDeformRecord
     bool    bStretch;
     CVector vecPoint;
     float   fRadius;
-    float   fForce;             // dent only
+    float   fForce;                  // dent only
+    bool    bAffectWheels;           // dent only
     CVector vecDirection;            // stretch only
     float   fLength;                 // stretch only
 };

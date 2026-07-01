@@ -1026,7 +1026,18 @@ RpGeometry* CRenderWareSA::MakeAtomicGeometryUnique(RpAtomic* pAtomic)
     if (numVerts <= 0 || numTris <= 0 || !pOriginal->morph_target)
         return pOriginal;
 
-    RpGeometry* pClone = RpGeometryCreate(numVerts, numTris, pOriginal->flags);
+    // Drop rpGEOMETRYTRISTRIP (bit 0) for the clone. RenderWare's RpGeometryUnlock builds a "native"
+    // GPU-facing representation the first time a geometry with this flag is unlocked, and it takes one
+    // of two very different paths depending on it (confirmed via disassembly of 0x74C800/0x7591D0/
+    // 0x75D530): with the flag set, it sorts all triangles, then runs a full triangle-strip generation
+    // pass per material group with several O(triangles x distinct materials/textures) dedup searches -
+    // for a high-poly custom vehicle mesh (often one big unsplit atomic, unlike Rockstar's own vehicles)
+    // this is the actual multi-second hang on the first hit. Without the flag, it takes a much cheaper
+    // path: sort once, then a single linear pass grouping triangles by material into a flat list - no
+    // stripping, no per-triangle dedup search. Both paths are natively supported/rendered by RW, so
+    // this only trades a little GPU strip-caching efficiency (negligible on modern hardware) for a
+    // massive reduction in CPU cost on the one-time clone.
+    RpGeometry* pClone = RpGeometryCreate(numVerts, numTris, pOriginal->flags & ~0x1u);
     if (!pClone)
         return pOriginal;
 
@@ -1048,13 +1059,29 @@ RpGeometry* CRenderWareSA::MakeAtomicGeometryUnique(RpAtomic* pAtomic)
             memcpy(pClone->texcoords[i], pOriginal->texcoords[i], sizeof(RwTextureCoordinates) * numVerts);
     }
 
+    // Pre-seed the clone's material list in the exact same order as the original's, so each
+    // material lands at the identical index in both lists (this is a fresh clone, so every one of
+    // these calls is a genuine "not found yet" insert - never a no-op lookup). That lets triangle
+    // material ids be copied directly below instead of re-running RpGeometryTriangleSetMaterial's
+    // linear search-and-insert once per triangle. Confirmed via disassembly (RW funcs at 0x74C690/
+    // 0x74C6C0, and the search/insert helpers at 0x74E420/0x74E350) that this is behaviourally
+    // identical, just paid once per material instead of once per triangle - the difference that
+    // turns a multi-second hang into a non-issue on a high-poly custom vehicle mesh.
+    for (int m = 0; m < pOriginal->materials.entries; m++)
+        RpGeometryTriangleSetMaterial(pClone, &pClone->triangles[0], pOriginal->materials.materials[m]);
+
     for (int i = 0; i < numTris; i++)
     {
         const RpTriangle& srcTri = pOriginal->triangles[i];
-        RpGeometryTriangleSetVertexIndices(pClone, &pClone->triangles[i], srcTri.verts[0], srcTri.verts[1], srcTri.verts[2]);
+
+        // RpGeometryTriangleSetVertexIndices (0x74C690) is just these three field writes with no
+        // other side effects - safe to inline instead of paying a real function call per triangle.
+        pClone->triangles[i].verts[0] = srcTri.verts[0];
+        pClone->triangles[i].verts[1] = srcTri.verts[1];
+        pClone->triangles[i].verts[2] = srcTri.verts[2];
 
         if (srcTri.materialId < (unsigned short)pOriginal->materials.entries)
-            RpGeometryTriangleSetMaterial(pClone, &pClone->triangles[i], pOriginal->materials.materials[srcTri.materialId]);
+            pClone->triangles[i].materialId = srcTri.materialId;
     }
 
     RpGeometryUnlock(pClone);

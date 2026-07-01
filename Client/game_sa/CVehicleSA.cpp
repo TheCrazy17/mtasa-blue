@@ -2684,6 +2684,28 @@ std::vector<RpAtomic*>& CVehicleSA::GetMeshAtomics()
     return m_MeshAtomics;
 }
 
+// Forces every atomic's geometry to be cloned (and, as a side effect, made fully renderable by
+// RenderWare - see the big comment on MakeAtomicGeometryUnique) ahead of time, so the one-time cost
+// doesn't land on the first real deformVehicle/stretchVehicleMesh call. That first call is expensive
+// mainly because of RenderWare's own native triangle-stripping pass inside RpGeometryUnlock, which
+// runs once per newly created geometry and scales with polygon count - unavoidable engine behaviour,
+// not something this clone loop controls. Calling this once (e.g. on vehicle spawn, or when it enters
+// combat) moves that cost to a moment where a brief stutter isn't mistaken for a freeze.
+bool CVehicleSA::PrepareMeshDeform()
+{
+    std::vector<RpAtomic*>& atomics = GetMeshAtomics();
+    if (atomics.empty())
+        return false;
+
+    bool bAny = false;
+    for (RpAtomic* pAtomic : atomics)
+    {
+        if (pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic))
+            bAny = true;
+    }
+    return bAny;
+}
+
 // Accumulates this atomic's own frame and every ancestor frame's `modelling` matrix up to (but not
 // including) the clump root, giving the transform from the atomic's own local vertex space into the
 // vehicle-root-local space that deformVehicle/stretchVehicleMesh points are expressed in. Component
@@ -2706,11 +2728,23 @@ static CMatrix GetAtomicToRootMatrix(RpAtomic* pAtomic)
     return matCombo;
 }
 
-bool CVehicleSA::DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius)
+bool CVehicleSA::DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius, bool bAffectWheels)
 {
     std::vector<RpAtomic*>& atomics = GetMeshAtomics();
     if (atomics.empty())
         return false;
+
+    // Wheels are round and spin independently of the body, so pushing their vertices toward the
+    // vehicle centre (like every other panel) just pinches/flattens them instead of denting - looks
+    // broken. Excluded by default; build the skip list once up front rather than per-atomic below.
+    std::vector<RpAtomic*> wheelAtomics;
+    if (!bAffectWheels)
+    {
+        static const char* const wheelDummyNames[] = {"wheel_lb_dummy", "wheel_rb_dummy", "wheel_lf_dummy", "wheel_rf_dummy"};
+        for (const char* szWheelDummy : wheelDummyNames)
+            for (RpAtomic* pWheelAtomic : GetComponentAtomics(szWheelDummy))
+                wheelAtomics.push_back(pWheelAtomic);
+    }
 
     // Pushes all affected vertices, across every affected component, towards the vehicle's overall
     // centre - computed once here in root space, then re-expressed in each atomic's own local space
@@ -2724,6 +2758,9 @@ bool CVehicleSA::DeformMesh(const CVector& vecLocalPoint, float fForce, float fR
 
     for (RpAtomic* pAtomic : atomics)
     {
+        if (!bAffectWheels && std::find(wheelAtomics.begin(), wheelAtomics.end(), pAtomic) != wheelAtomics.end())
+            continue;
+
         CMatrix matRootToAtomic = GetAtomicToRootMatrix(pAtomic).Inverse();
         CVector vecAtomicLocalPoint = matRootToAtomic.TransformVector(vecLocalPoint);
 

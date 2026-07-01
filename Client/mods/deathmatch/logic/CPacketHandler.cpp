@@ -1733,11 +1733,12 @@ void CPacketHandler::Packet_VehicleMeshDeformSync(NetBitStreamInterface& bitStre
     else
     {
         float fForce = 0.0f;
-        if (!bitStream.Read(fForce))
+        bool  bAffectWheels = false;
+        if (!bitStream.Read(fForce) || !bitStream.ReadBit(bAffectWheels))
             return;
 
         if (pVehicle)
-            pVehicle->DeformMesh(vecPoint, fForce, fRadius);
+            pVehicle->DeformMesh(vecPoint, fForce, fRadius, bAffectWheels);
     }
 }
 
@@ -3670,9 +3671,10 @@ retry:
                             else
                             {
                                 float fForce = 0.0f;
-                                if (!bitStream.Read(fForce))
+                                bool  bAffectWheels = false;
+                                if (!bitStream.Read(fForce) || !bitStream.ReadBit(bAffectWheels))
                                     break;
-                                pVehicle->DeformMesh(vecPoint, fForce, fRadius);
+                                pVehicle->DeformMesh(vecPoint, fForce, fRadius, bAffectWheels);
                             }
                         }
                     }

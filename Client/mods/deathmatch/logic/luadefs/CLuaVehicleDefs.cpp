@@ -155,6 +155,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleComponentMeshVertex", GetVehicleComponentMeshVertex},
         {"setVehicleComponentMeshVertex", SetVehicleComponentMeshVertex},
         {"resetVehicleDeformation", ResetVehicleDeformation},
+        {"prepareVehicleDeformation", PrepareVehicleDeformation},
         {"setVehicleComponentPosition", SetVehicleComponentPosition},
         {"setVehicleComponentRotation", SetVehicleComponentRotation},
         {"setVehicleComponentScale", SetVehicleComponentScale},
@@ -3264,21 +3265,23 @@ int CLuaVehicleDefs::GetVehicleDoorOpenRatio(lua_State* luaVM)
 
 int CLuaVehicleDefs::DeformVehicle(lua_State* luaVM)
 {
-    // bool deformVehicle ( vehicle theVehicle, float x, float y, float z, float force, float radius )
+    // bool deformVehicle ( vehicle theVehicle, float x, float y, float z, float force, float radius [, bool affectWheels = false ] )
     CClientVehicle* pVehicle = NULL;
     CVector         vecLocalPoint;
     float           fForce;
     float           fRadius;
+    bool            bAffectWheels;
 
     CScriptArgReader argStream(luaVM);
     argStream.ReadUserData(pVehicle);
     argStream.ReadVector3D(vecLocalPoint);
     argStream.ReadNumber(fForce);
     argStream.ReadNumber(fRadius);
+    argStream.ReadBool(bAffectWheels, false);
 
     if (!argStream.HasErrors())
     {
-        if (static_cast<CDeathmatchVehicle*>(pVehicle)->DeformMeshSynced(vecLocalPoint, fForce, fRadius))
+        if (static_cast<CDeathmatchVehicle*>(pVehicle)->DeformMeshSynced(vecLocalPoint, fForce, fRadius, bAffectWheels))
         {
             lua_pushboolean(luaVM, true);
             return 1;
@@ -3495,6 +3498,30 @@ int CLuaVehicleDefs::ResetVehicleDeformation(lua_State* luaVM)
         bool bSuccess = strComponent.empty() ? static_cast<CDeathmatchVehicle*>(pVehicle)->ResetMeshDeformSynced()
                                               : pVehicle->ResetComponentMeshDeform(strComponent);
         lua_pushboolean(luaVM, bSuccess);
+        return 1;
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaVehicleDefs::PrepareVehicleDeformation(lua_State* luaVM)
+{
+    // bool prepareVehicleDeformation ( vehicle theVehicle )
+    // Pays deformVehicle/stretchVehicleMesh's one-time per-atomic geometry clone cost up front (most
+    // of which is RenderWare's own native triangle-stripping pass, proportional to polygon count) so
+    // it doesn't land on the first real hit. Call this somewhere less noticeable - vehicle spawn/
+    // stream-in, entering combat, etc. Purely a local optimization, nothing to sync.
+    CClientVehicle* pVehicle = NULL;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pVehicle);
+
+    if (!argStream.HasErrors())
+    {
+        lua_pushboolean(luaVM, pVehicle->PrepareMeshDeform());
         return 1;
     }
     else

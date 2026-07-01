@@ -129,9 +129,9 @@ bool CDeathmatchVehicle::SyncDamageModel()
     return false;
 }
 
-bool CDeathmatchVehicle::DeformMeshSynced(const CVector& vecLocalPoint, float fForce, float fRadius)
+bool CDeathmatchVehicle::DeformMeshSynced(const CVector& vecLocalPoint, float fForce, float fRadius, bool bAffectWheels)
 {
-    if (!DeformMesh(vecLocalPoint, fForce, fRadius))
+    if (!DeformMesh(vecLocalPoint, fForce, fRadius, bAffectWheels))
         return false;
 
     NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
@@ -145,6 +145,7 @@ bool CDeathmatchVehicle::DeformMeshSynced(const CVector& vecLocalPoint, float fF
         pBitStream->Write(vecLocalPoint.fZ);
         pBitStream->Write(fRadius);
         pBitStream->Write(fForce);
+        pBitStream->WriteBit(bAffectWheels);
 
         g_pNet->SendPacket(PACKET_ID_VEHICLE_MESH_DEFORM_SYNC, pBitStream, PACKET_PRIORITY_HIGH, PACKET_RELIABILITY_RELIABLE_ORDERED);
         g_pNet->DeallocateNetBitStream(pBitStream);

@@ -701,6 +701,7 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                         else
                         {
                             BitStream.Write(record.fForce);
+                            BitStream.WriteBit(record.bAffectWheels);
                         }
                     }
 
