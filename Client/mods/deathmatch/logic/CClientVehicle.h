@@ -534,10 +534,12 @@ public:
     unsigned int GetMeshVertexCount();
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition);
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition);
+    bool         ResetMeshDeform();
 
     unsigned int GetComponentMeshVertexCount(const SString& vehicleComponent);
     bool         GetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, CVector& vecOutPosition);
     bool         SetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, const CVector& vecPosition);
+    bool         ResetComponentMeshDeform(const SString& vehicleComponent);
 
     bool DoesSupportUpgrade(const SString& strFrameName);
 

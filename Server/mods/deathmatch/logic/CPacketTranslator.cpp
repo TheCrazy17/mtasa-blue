@@ -30,6 +30,7 @@
 #include "packets/CProjectileSyncPacket.h"
 #include "packets/CVehicleInOutPacket.h"
 #include "packets/CVehicleDamageSyncPacket.h"
+#include "packets/CVehicleMeshDeformSyncPacket.h"
 #include "packets/CVehicleTrailerPacket.h"
 #include "packets/CVoiceDataPacket.h"
 #include "packets/CVoiceEndPacket.h"
@@ -139,6 +140,10 @@ CPacket* CPacketTranslator::Translate(const NetServerPlayerID& Socket, ePacketID
 
         case PACKET_ID_VEHICLE_DAMAGE_SYNC:
             pTemp = new CVehicleDamageSyncPacket;
+            break;
+
+        case PACKET_ID_VEHICLE_MESH_DEFORM_SYNC:
+            pTemp = new CVehicleMeshDeformSyncPacket;
             break;
 
         case PACKET_ID_VEHICLE_TRAILER:

@@ -39,6 +39,7 @@ class CGame;
 #include "packets/CSyncSettingsPacket.h"
 #include "packets/CVehicleInOutPacket.h"
 #include "packets/CVehicleDamageSyncPacket.h"
+#include "packets/CVehicleMeshDeformSyncPacket.h"
 #include "packets/CVehicleTrailerPacket.h"
 #include "packets/CVoiceDataPacket.h"
 #include "packets/CLuaEventPacket.h"
@@ -502,6 +503,7 @@ private:
     void Packet_ProjectileSync(class CProjectileSyncPacket& Packet);
     void Packet_Command(class CCommandPacket& Packet);
     void Packet_VehicleDamageSync(class CVehicleDamageSyncPacket& Packet);
+    void Packet_VehicleMeshDeformSync(class CVehicleMeshDeformSyncPacket& Packet);
     void Packet_VehiclePuresync(class CVehiclePuresyncPacket& Packet);
     void Packet_Keysync(class CKeysyncPacket& Packet);
     void Packet_Bulletsync(class CBulletsyncPacket& packet);

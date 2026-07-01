@@ -129,6 +129,76 @@ bool CDeathmatchVehicle::SyncDamageModel()
     return false;
 }
 
+bool CDeathmatchVehicle::DeformMeshSynced(const CVector& vecLocalPoint, float fForce, float fRadius)
+{
+    if (!DeformMesh(vecLocalPoint, fForce, fRadius))
+        return false;
+
+    NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
+    if (pBitStream)
+    {
+        unsigned char ucMode = 0;            // CVehicleMeshDeformSyncPacket::MODE_DENT
+        pBitStream->Write(m_ID);
+        pBitStream->WriteBits(&ucMode, 2);
+        pBitStream->Write(vecLocalPoint.fX);
+        pBitStream->Write(vecLocalPoint.fY);
+        pBitStream->Write(vecLocalPoint.fZ);
+        pBitStream->Write(fRadius);
+        pBitStream->Write(fForce);
+
+        g_pNet->SendPacket(PACKET_ID_VEHICLE_MESH_DEFORM_SYNC, pBitStream, PACKET_PRIORITY_HIGH, PACKET_RELIABILITY_RELIABLE_ORDERED);
+        g_pNet->DeallocateNetBitStream(pBitStream);
+    }
+
+    return true;
+}
+
+bool CDeathmatchVehicle::StretchMeshSynced(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius)
+{
+    if (!StretchMesh(vecLocalPoint, vecDirection, fLength, fRadius))
+        return false;
+
+    NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
+    if (pBitStream)
+    {
+        unsigned char ucMode = 1;            // CVehicleMeshDeformSyncPacket::MODE_STRETCH
+        pBitStream->Write(m_ID);
+        pBitStream->WriteBits(&ucMode, 2);
+        pBitStream->Write(vecLocalPoint.fX);
+        pBitStream->Write(vecLocalPoint.fY);
+        pBitStream->Write(vecLocalPoint.fZ);
+        pBitStream->Write(fRadius);
+        pBitStream->Write(vecDirection.fX);
+        pBitStream->Write(vecDirection.fY);
+        pBitStream->Write(vecDirection.fZ);
+        pBitStream->Write(fLength);
+
+        g_pNet->SendPacket(PACKET_ID_VEHICLE_MESH_DEFORM_SYNC, pBitStream, PACKET_PRIORITY_HIGH, PACKET_RELIABILITY_RELIABLE_ORDERED);
+        g_pNet->DeallocateNetBitStream(pBitStream);
+    }
+
+    return true;
+}
+
+bool CDeathmatchVehicle::ResetMeshDeformSynced()
+{
+    if (!ResetMeshDeform())
+        return false;
+
+    NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
+    if (pBitStream)
+    {
+        unsigned char ucMode = 2;            // CVehicleMeshDeformSyncPacket::MODE_RESET
+        pBitStream->Write(m_ID);
+        pBitStream->WriteBits(&ucMode, 2);
+
+        g_pNet->SendPacket(PACKET_ID_VEHICLE_MESH_DEFORM_SYNC, pBitStream, PACKET_PRIORITY_HIGH, PACKET_RELIABILITY_RELIABLE_ORDERED);
+        g_pNet->DeallocateNetBitStream(pBitStream);
+    }
+
+    return true;
+}
+
 void CDeathmatchVehicle::ResetDamageModelSync()
 {
     for (unsigned char i = 0; i < MAX_DOORS; i++)

@@ -27,6 +27,13 @@ public:
     bool SyncDamageModel();
     void ResetDamageModelSync();
 
+    // Applies the deform/stretch locally (same as CClientVehicle::DeformMesh/StretchMesh), then - if
+    // it actually changed anything - reports the call to the server so other players replay the same
+    // deterministic algorithm on their own clients. See CVehicleMeshDeformSyncPacket.
+    bool DeformMeshSynced(const CVector& vecLocalPoint, float fForce, float fRadius);
+    bool StretchMeshSynced(const CVector& vecLocalPoint, const CVector& vecDirection, float fLength, float fRadius);
+    bool ResetMeshDeformSynced();
+
 private:
     class CUnoccupiedVehicleSync* m_pUnoccupiedVehicleSync;
     bool                          m_bIsSyncing;

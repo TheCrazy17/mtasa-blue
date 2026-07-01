@@ -719,6 +719,8 @@ public:
     unsigned int GetMeshVertexCount() override;
     bool         GetMeshVertexPosition(unsigned int uiIndex, CVector& vecOutPosition) override;
     bool         SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecPosition) override;
+    bool         ResetMeshDeform() override;
+    bool         ResetComponentMeshDeform(const SString& vehicleComponent) override;
 
     unsigned int GetComponentMeshVertexCount(const SString& vehicleComponent) override;
     bool         GetComponentMeshVertexPosition(const SString& vehicleComponent, unsigned int uiIndex, CVector& vecOutPosition) override;

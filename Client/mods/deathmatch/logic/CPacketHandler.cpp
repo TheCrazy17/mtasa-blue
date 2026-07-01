@@ -107,6 +107,10 @@ bool CPacketHandler::ProcessPacket(unsigned char ucPacketID, NetBitStreamInterfa
             Packet_VehicleDamageSync(bitStream);
             return true;
 
+        case PACKET_ID_VEHICLE_MESH_DEFORM_SYNC:
+            Packet_VehicleMeshDeformSync(bitStream);
+            return true;
+
         case PACKET_ID_VEHICLE_TRAILER:
             Packet_VehicleTrailer(bitStream);
             return true;
@@ -1688,6 +1692,52 @@ void CPacketHandler::Packet_VehicleDamageSync(NetBitStreamInterface& bitStream)
 
             pVehicle->ResetDamageModelSync();
         }
+    }
+}
+
+void CPacketHandler::Packet_VehicleMeshDeformSync(NetBitStreamInterface& bitStream)
+{
+    // Mode: 0 = dent, 1 = stretch, 2 = reset (see CVehicleMeshDeformSyncPacket::EMode)
+    ElementID     ID;
+    unsigned char ucMode = 0;
+
+    if (!bitStream.Read(ID) || !bitStream.ReadBits(&ucMode, 2))
+        return;
+
+    CClientVehicle* pVehicle = g_pClientGame->m_pVehicleManager->Get(ID);
+
+    // Applied via the base (non-synced) methods below - this call came FROM the network, so it must
+    // not be reported back to the server or it would echo forever.
+    if (ucMode == 2)
+    {
+        if (pVehicle)
+            pVehicle->ResetMeshDeform();
+        return;
+    }
+
+    CVector vecPoint;
+    float   fRadius = 0.0f;
+    if (!bitStream.Read(vecPoint.fX) || !bitStream.Read(vecPoint.fY) || !bitStream.Read(vecPoint.fZ) || !bitStream.Read(fRadius))
+        return;
+
+    if (ucMode == 1)
+    {
+        CVector vecDirection;
+        float   fLength = 0.0f;
+        if (!bitStream.Read(vecDirection.fX) || !bitStream.Read(vecDirection.fY) || !bitStream.Read(vecDirection.fZ) || !bitStream.Read(fLength))
+            return;
+
+        if (pVehicle)
+            pVehicle->StretchMesh(vecPoint, vecDirection, fLength, fRadius);
+    }
+    else
+    {
+        float fForce = 0.0f;
+        if (!bitStream.Read(fForce))
+            return;
+
+        if (pVehicle)
+            pVehicle->DeformMesh(vecPoint, fForce, fRadius);
     }
 }
 
@@ -3385,6 +3435,39 @@ retry:
                     for (unsigned char i = 0; i < MAX_LIGHTS; i++)
                         pVehicle->SetLightStatus(i, damage.data.ucLightStates[i]);
                     pVehicle->ResetDamageModelSync();
+
+                    // Replay any mesh deformation this vehicle already had at the time it streamed in
+                    // (see CEntityAddPacket) - applied locally only, must not be re-sent to the server.
+                    unsigned char ucDeformCount = 0;
+                    if (bitStream.Read(ucDeformCount))
+                    {
+                        for (unsigned char i = 0; i < ucDeformCount; i++)
+                        {
+                            bool    bStretch = false;
+                            CVector vecPoint;
+                            float   fRadius = 0.0f;
+                            if (!bitStream.ReadBit(bStretch) || !bitStream.Read(vecPoint.fX) || !bitStream.Read(vecPoint.fY) ||
+                                !bitStream.Read(vecPoint.fZ) || !bitStream.Read(fRadius))
+                                break;
+
+                            if (bStretch)
+                            {
+                                CVector vecDirection;
+                                float   fLength = 0.0f;
+                                if (!bitStream.Read(vecDirection.fX) || !bitStream.Read(vecDirection.fY) || !bitStream.Read(vecDirection.fZ) ||
+                                    !bitStream.Read(fLength))
+                                    break;
+                                pVehicle->StretchMesh(vecPoint, vecDirection, fLength, fRadius);
+                            }
+                            else
+                            {
+                                float fForce = 0.0f;
+                                if (!bitStream.Read(fForce))
+                                    break;
+                                pVehicle->DeformMesh(vecPoint, fForce, fRadius);
+                            }
+                        }
+                    }
 
                     // If the vehicle has a turret, read out its position
                     if (CClientVehicleManager::HasTurret(usModel))

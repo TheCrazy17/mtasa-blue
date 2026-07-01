@@ -71,6 +71,7 @@ public:
     void Packet_DebugEcho(NetBitStreamInterface& bitStream);
     void Packet_VehicleSpawn(NetBitStreamInterface& bitStream);
     void Packet_VehicleDamageSync(NetBitStreamInterface& bitStream);
+    void Packet_VehicleMeshDeformSync(NetBitStreamInterface& bitStream);
     void Packet_Vehicle_InOut(NetBitStreamInterface& bitStream);
     void Packet_VehicleTrailer(NetBitStreamInterface& bitStream);
     void Packet_MapInfo(NetBitStreamInterface& bitStream);

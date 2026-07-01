@@ -19,6 +19,7 @@ class CVehicle;
 #include "CEvents.h"
 #include "CVehicleUpgrades.h"
 #include "CHandlingEntry.h"
+#include <deque>
 
 #define MAX_VEHICLE_SEATS      9
 #define DEFAULT_VEHICLE_HEALTH 1000
@@ -187,6 +188,22 @@ enum class VehicleBlowState : unsigned char
 };
 
 class CTrainTrack;
+
+// One deformVehicle/stretchVehicleMesh call, kept so a player who streams the vehicle in late can
+// have it replayed on their client (see CEntityAddPacket). Bounded per vehicle (see
+// MAX_VEHICLE_DEFORM_HISTORY) rather than kept forever, so a heavily-dented long-lived vehicle can't
+// grow this without limit - old dents simply won't replay for very late joiners.
+struct SVehicleMeshDeformRecord
+{
+    bool    bStretch;
+    CVector vecPoint;
+    float   fRadius;
+    float   fForce;             // dent only
+    CVector vecDirection;            // stretch only
+    float   fLength;                 // stretch only
+};
+
+#define MAX_VEHICLE_DEFORM_HISTORY 64
 
 class CVehicle final : public CElement
 {
@@ -510,4 +527,8 @@ public:  // 'Safe' variables (that have no need for accessors)
     SFixedArray<unsigned char, MAX_LIGHTS> m_ucLightStates;
     SSirenInfo                             m_tSirenBeaconInfo;
     bool                                   m_bOccupantChanged;
+
+    // Bounded history of deformVehicle/stretchVehicleMesh calls, replayed to players who stream this
+    // vehicle in after the hits already happened. See SVehicleMeshDeformRecord.
+    std::deque<SVehicleMeshDeformRecord> m_DeformHistory;
 };

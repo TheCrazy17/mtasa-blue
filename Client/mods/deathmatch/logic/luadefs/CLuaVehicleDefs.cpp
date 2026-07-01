@@ -15,6 +15,7 @@
 #include <game/CVehicleAudioSettingsManager.h>
 #include "lua/CLuaFunctionParser.h"
 #include <CClientVehicleManager.h>
+#include "CDeathmatchVehicle.h"
 
 #include "enums/HandlingProperty.h"
 
@@ -153,6 +154,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleComponentMeshVertexCount", GetVehicleComponentMeshVertexCount},
         {"getVehicleComponentMeshVertex", GetVehicleComponentMeshVertex},
         {"setVehicleComponentMeshVertex", SetVehicleComponentMeshVertex},
+        {"resetVehicleDeformation", ResetVehicleDeformation},
         {"setVehicleComponentPosition", SetVehicleComponentPosition},
         {"setVehicleComponentRotation", SetVehicleComponentRotation},
         {"setVehicleComponentScale", SetVehicleComponentScale},
@@ -3276,7 +3278,7 @@ int CLuaVehicleDefs::DeformVehicle(lua_State* luaVM)
 
     if (!argStream.HasErrors())
     {
-        if (pVehicle->DeformMesh(vecLocalPoint, fForce, fRadius))
+        if (static_cast<CDeathmatchVehicle*>(pVehicle)->DeformMeshSynced(vecLocalPoint, fForce, fRadius))
         {
             lua_pushboolean(luaVM, true);
             return 1;
@@ -3307,7 +3309,7 @@ int CLuaVehicleDefs::StretchVehicleMesh(lua_State* luaVM)
 
     if (!argStream.HasErrors())
     {
-        if (pVehicle->StretchMesh(vecLocalPoint, vecDirection, fLength, fRadius))
+        if (static_cast<CDeathmatchVehicle*>(pVehicle)->StretchMeshSynced(vecLocalPoint, vecDirection, fLength, fRadius))
         {
             lua_pushboolean(luaVM, true);
             return 1;
@@ -3468,6 +3470,32 @@ int CLuaVehicleDefs::SetVehicleComponentMeshVertex(lua_State* luaVM)
             lua_pushboolean(luaVM, true);
             return 1;
         }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaVehicleDefs::ResetVehicleDeformation(lua_State* luaVM)
+{
+    // bool resetVehicleDeformation ( vehicle theVehicle [, string component] )
+    CClientVehicle* pVehicle = NULL;
+    SString         strComponent;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pVehicle);
+    argStream.ReadString(strComponent, "");
+
+    if (!argStream.HasErrors())
+    {
+        // Component-scoped resets aren't synced yet (see stretchVehicleMesh's component path) - only
+        // the whole-vehicle reset is, since that's the common "repair" case.
+        bool bSuccess = strComponent.empty() ? static_cast<CDeathmatchVehicle*>(pVehicle)->ResetMeshDeformSynced()
+                                              : pVehicle->ResetComponentMeshDeform(strComponent);
+        lua_pushboolean(luaVM, bSuccess);
+        return 1;
     }
     else
         m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());

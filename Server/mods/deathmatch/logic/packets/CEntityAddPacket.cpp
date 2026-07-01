@@ -494,6 +494,30 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     damage.data.ucLightStates = pVehicle->m_ucLightStates;
                     BitStream.Write(&damage);
 
+                    // Replay any mesh deformation this vehicle already has, so a player streaming it
+                    // in late (or joining after the hits happened) still sees the dents/stretches.
+                    unsigned char ucDeformCount = static_cast<unsigned char>(pVehicle->m_DeformHistory.size());
+                    BitStream.Write(ucDeformCount);
+                    for (const SVehicleMeshDeformRecord& record : pVehicle->m_DeformHistory)
+                    {
+                        BitStream.WriteBit(record.bStretch);
+                        BitStream.Write(record.vecPoint.fX);
+                        BitStream.Write(record.vecPoint.fY);
+                        BitStream.Write(record.vecPoint.fZ);
+                        BitStream.Write(record.fRadius);
+                        if (record.bStretch)
+                        {
+                            BitStream.Write(record.vecDirection.fX);
+                            BitStream.Write(record.vecDirection.fY);
+                            BitStream.Write(record.vecDirection.fZ);
+                            BitStream.Write(record.fLength);
+                        }
+                        else
+                        {
+                            BitStream.Write(record.fForce);
+                        }
+                    }
+
                     unsigned char ucVariant = pVehicle->GetVariant();
                     BitStream.Write(ucVariant);
 

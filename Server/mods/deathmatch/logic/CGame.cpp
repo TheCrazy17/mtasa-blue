@@ -1262,6 +1262,12 @@ bool CGame::ProcessPacket(CPacket& Packet)
             return true;
         }
 
+        case PACKET_ID_VEHICLE_MESH_DEFORM_SYNC:
+        {
+            Packet_VehicleMeshDeformSync(static_cast<CVehicleMeshDeformSyncPacket&>(Packet));
+            return true;
+        }
+
         case PACKET_ID_VEHICLE_INOUT:
         {
             Packet_Vehicle_InOut(static_cast<CVehicleInOutPacket&>(Packet));
@@ -2493,6 +2499,56 @@ void CGame::Packet_VehicleDamageSync(CVehicleDamageSyncPacket& Packet)
             }
         }
     }
+}
+
+void CGame::Packet_VehicleMeshDeformSync(CVehicleMeshDeformSyncPacket& Packet)
+{
+    CPlayer* pPlayer = Packet.GetSourcePlayer();
+    if (!pPlayer || !pPlayer->IsJoined())
+        return;
+
+    CElement* pVehicleElement = CElementIDs::GetElement(Packet.m_Vehicle);
+    if (!pVehicleElement || !IS_VEHICLE(pVehicleElement))
+        return;
+
+    CVehicle* pVehicle = static_cast<CVehicle*>(pVehicleElement);
+
+    if (Packet.m_ucMode == CVehicleMeshDeformSyncPacket::MODE_RESET)
+    {
+        // A repaired vehicle must not replay its old dents to players who stream it in later.
+        pVehicle->m_DeformHistory.clear();
+    }
+    else
+    {
+        // Cosmetic-only, so any client that currently has the vehicle streamed in may report a hit
+        // (unlike door/wheel/panel/light damage, there's no single authoritative syncer to require
+        // here). Bounded so a heavily-dented long-lived vehicle can't grow this without limit.
+        SVehicleMeshDeformRecord record;
+        record.bStretch = Packet.m_ucMode == CVehicleMeshDeformSyncPacket::MODE_STRETCH;
+        record.vecPoint = Packet.m_vecPoint;
+        record.fRadius = Packet.m_fRadius;
+        record.fForce = Packet.m_fForce;
+        record.vecDirection = Packet.m_vecDirection;
+        record.fLength = Packet.m_fLength;
+
+        if (pVehicle->m_DeformHistory.size() >= MAX_VEHICLE_DEFORM_HISTORY)
+            pVehicle->m_DeformHistory.pop_front();
+        pVehicle->m_DeformHistory.push_back(record);
+    }
+
+    // Relay to every other joined player in the same dimension - mirrors the vehicle damage sync
+    // relay list (see Packet_VehicleDamageSync above), minus the single-syncer/no-driver restriction
+    // since this is purely cosmetic.
+    CSendList sendList;
+    for (auto iter = m_pPlayerManager->IterBegin(); iter != m_pPlayerManager->IterEnd(); ++iter)
+    {
+        CPlayer* pOther = *iter;
+        if (pOther != pPlayer && pOther->IsJoined() && pOther->GetDimension() == pPlayer->GetDimension())
+            sendList.push_back(pOther);
+    }
+
+    if (!sendList.empty())
+        CPlayerManager::Broadcast(Packet, sendList);
 }
 
 void CGame::Packet_VehiclePuresync(CVehiclePuresyncPacket& Packet)

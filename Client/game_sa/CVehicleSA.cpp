@@ -433,6 +433,13 @@ CVehicleSA::~CVehicleSA()
             pWorld->Remove(m_pInterface, CVehicle_Destructor);
             pWorld->RemoveReferencesToDeletedObject(m_pInterface);
 
+            // Drop deform/stretch bookkeeping before the clump's geometries are freed below - must
+            // run first, see CRenderWareSA::ReleaseVehicleDeformState. Skipped entirely for vehicles
+            // that were never deformed (the common case) since GetMeshAtomics() only populates
+            // m_MeshAtomics lazily, on first use.
+            if (!m_MeshAtomics.empty())
+                pGame->GetRenderWareSA()->ReleaseVehicleDeformState((RpClump*)GetInterface()->m_pRwObject);
+
             m_pInterface->Destructor(true);
         }
         BeingDeleted = true;
@@ -2677,19 +2684,67 @@ std::vector<RpAtomic*>& CVehicleSA::GetMeshAtomics()
     return m_MeshAtomics;
 }
 
+// Accumulates this atomic's own frame and every ancestor frame's `modelling` matrix up to (but not
+// including) the clump root, giving the transform from the atomic's own local vertex space into the
+// vehicle-root-local space that deformVehicle/stretchVehicleMesh points are expressed in. Component
+// frames (doors, hoods, bumpers, ...) sit away from the vehicle root, so vertices read straight out
+// of an atomic's geometry cannot be compared against a root-space hit point without this - doing so
+// only happens to work for atomics whose frame is coincident with the root (the main body).
+static CMatrix GetAtomicToRootMatrix(RpAtomic* pAtomic)
+{
+    CMatrix  matCombo;            // identity
+    RwFrame* pFrame = RpAtomicGetFrame(pAtomic);
+    for (; pFrame && pFrame != pFrame->root; pFrame = (RwFrame*)pFrame->object.parent)
+    {
+        CMatrix matFrame;
+        pGame->GetRenderWareSA()->RwMatrixToCMatrix(pFrame->modelling, matFrame);
+        // Each frame's `modelling` maps its own local space into its parent's local space, so as we
+        // walk outward from the atomic's own frame towards the root, every new ancestor's matrix is
+        // appended on the right (applied *after* everything accumulated so far) - not on the left.
+        matCombo = matCombo * matFrame;
+    }
+    return matCombo;
+}
+
 bool CVehicleSA::DeformMesh(const CVector& vecLocalPoint, float fForce, float fRadius)
 {
     std::vector<RpAtomic*>& atomics = GetMeshAtomics();
     if (atomics.empty())
         return false;
 
+    // Pushes all affected vertices, across every affected component, towards the vehicle's overall
+    // centre - computed once here in root space, then re-expressed in each atomic's own local space
+    // below so it still means "inward" after the per-atomic transform.
+    CVector vecPushDirRoot = -vecLocalPoint;
+    if (vecPushDirRoot.Length() < 0.0001f)
+        return false;
+    vecPushDirRoot.Normalize();
+
     unsigned int uiTotalAffected = 0;
 
     for (RpAtomic* pAtomic : atomics)
     {
+        CMatrix matRootToAtomic = GetAtomicToRootMatrix(pAtomic).Inverse();
+        CVector vecAtomicLocalPoint = matRootToAtomic.TransformVector(vecLocalPoint);
+
+        // Cheap reject before cloning/scanning this atomic's geometry: RpAtomic::boundingSphere is
+        // already maintained by the engine (local space, used for its own render culling), so this
+        // costs nothing extra. A radius of 0 means we don't trust it for this atomic - fall back to
+        // always processing it rather than risking skipping a real hit.
+        float fBoundRadius = pAtomic->boundingSphere.radius;
+        if (fBoundRadius > 0.0f)
+        {
+            CVector vecCenter(pAtomic->boundingSphere.position.x, pAtomic->boundingSphere.position.y, pAtomic->boundingSphere.position.z);
+            if ((vecAtomicLocalPoint - vecCenter).Length() > fBoundRadius + fRadius)
+                continue;
+        }
+
         RpGeometry* pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
         if (pGeometry)
-            uiTotalAffected += pGame->GetRenderWareSA()->DeformGeometryAtPoint(pGeometry, vecLocalPoint, fForce, fRadius);
+        {
+            CVector vecPushDirLocal = matRootToAtomic.TransformVectorByRotation(vecPushDirRoot);
+            uiTotalAffected += pGame->GetRenderWareSA()->DeformGeometryAtPoint(pGeometry, vecAtomicLocalPoint, vecPushDirLocal, fForce, fRadius);
+        }
     }
     return uiTotalAffected > 0;
 }
@@ -2704,9 +2759,23 @@ bool CVehicleSA::StretchMesh(const CVector& vecLocalPoint, const CVector& vecDir
 
     for (RpAtomic* pAtomic : atomics)
     {
+        CMatrix matRootToAtomic = GetAtomicToRootMatrix(pAtomic).Inverse();
+        CVector vecAtomicLocalPoint = matRootToAtomic.TransformVector(vecLocalPoint);
+
+        float fBoundRadius = pAtomic->boundingSphere.radius;
+        if (fBoundRadius > 0.0f)
+        {
+            CVector vecCenter(pAtomic->boundingSphere.position.x, pAtomic->boundingSphere.position.y, pAtomic->boundingSphere.position.z);
+            if ((vecAtomicLocalPoint - vecCenter).Length() > fBoundRadius + fRadius)
+                continue;
+        }
+
         RpGeometry* pGeometry = pGame->GetRenderWareSA()->MakeAtomicGeometryUnique(pAtomic);
         if (pGeometry)
-            uiTotalAffected += pGame->GetRenderWareSA()->StretchGeometryAtPoint(pGeometry, vecLocalPoint, vecDirection, fLength, fRadius);
+        {
+            CVector vecDirectionLocal = matRootToAtomic.TransformVectorByRotation(vecDirection);
+            uiTotalAffected += pGame->GetRenderWareSA()->StretchGeometryAtPoint(pGeometry, vecAtomicLocalPoint, vecDirectionLocal, fLength, fRadius);
+        }
     }
     return uiTotalAffected > 0;
 }
@@ -2748,6 +2817,28 @@ bool CVehicleSA::SetMeshVertexPosition(unsigned int uiIndex, const CVector& vecP
         uiIndex -= uiCount;
     }
     return false;
+}
+
+bool CVehicleSA::ResetMeshDeform()
+{
+    bool bAny = false;
+    for (RpAtomic* pAtomic : GetMeshAtomics())
+    {
+        if (pGame->GetRenderWareSA()->ResetGeometryDeform(pAtomic->geometry))
+            bAny = true;
+    }
+    return bAny;
+}
+
+bool CVehicleSA::ResetComponentMeshDeform(const SString& vehicleComponent)
+{
+    bool bAny = false;
+    for (RpAtomic* pAtomic : GetComponentAtomics(vehicleComponent))
+    {
+        if (pGame->GetRenderWareSA()->ResetGeometryDeform(pAtomic->geometry))
+            bAny = true;
+    }
+    return bAny;
 }
 
 std::vector<RpAtomic*> CVehicleSA::GetComponentAtomics(const SString& vehicleComponent)

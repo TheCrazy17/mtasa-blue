@@ -127,9 +127,12 @@ public:
     unsigned int GetGeometryVertexCount(RpGeometry* pGeometry) override;
     bool         GetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, CVector& vecOutPosition) override;
     bool         SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition) override;
-    unsigned int DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) override;
+    unsigned int DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecPushDirection, float fForce,
+                                        float fRadius) override;
     unsigned int StretchGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecDirection, float fLength,
                                          float fRadius) override;
+    bool         ResetGeometryDeform(RpGeometry* pGeometry) override;
+    void         ReleaseVehicleDeformState(RpClump* pClump) override;
 
     // CRenderWareSA methods
     RwTexture*          RightSizeTexture(RwTexture* pTexture, uint uiSizeLimit, SString& strError);

@@ -134,12 +134,21 @@ public:
     virtual unsigned int GetGeometryVertexCount(RpGeometry* pGeometry) = 0;
     virtual bool         GetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, CVector& vecOutPosition) = 0;
     virtual bool         SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned int uiIndex, const CVector& vecPosition) = 0;
-    // Pushes vertices within fRadius of vecLocalPoint inward, falling off with distance. Returns the
-    // number of vertices that were actually moved (0 if the point/radius didn't reach any vertex).
-    virtual unsigned int DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius) = 0;
+    // Pushes vertices within fRadius of vecLocalPoint along vecPushDirection (a normalized direction,
+    // in the same space as vecLocalPoint), falling off with distance. Returns the number of vertices
+    // that were actually moved (0 if the point/radius didn't reach any vertex).
+    virtual unsigned int DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecPushDirection, float fForce,
+                                                float fRadius) = 0;
     // Pushes vertices within fRadius of vecLocalPoint outward along vecDirection by up to fLength,
     // falling off to zero right at the edge of the radius so the stretched area blends into the rest
     // of the mesh instead of tearing away from it. Returns the number of vertices actually moved.
     virtual unsigned int StretchGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecDirection, float fLength,
                                                  float fRadius) = 0;
+    // Restores every vertex of a previously deformed/stretched geometry to its pristine position.
+    // Returns false if this geometry was never deformed (nothing to reset).
+    virtual bool ResetGeometryDeform(RpGeometry* pGeometry) = 0;
+    // Drops all deform/stretch bookkeeping for every atomic in this clump. Must be called before the
+    // clump itself is destroyed - this only releases our own tracking maps, not the RpGeometry memory
+    // (which the engine still owns and frees via its normal refcounting).
+    virtual void ReleaseVehicleDeformState(RpClump* pClump) = 0;
 };

@@ -191,6 +191,7 @@ public:
     LUA_DECLARE(GetVehicleComponentMeshVertexCount);
     LUA_DECLARE(GetVehicleComponentMeshVertex);
     LUA_DECLARE(SetVehicleComponentMeshVertex);
+    LUA_DECLARE(ResetVehicleDeformation);
 
     // Components
     LUA_DECLARE(SetVehicleComponentPosition);

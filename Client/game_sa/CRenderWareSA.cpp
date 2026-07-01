@@ -1117,7 +1117,8 @@ bool CRenderWareSA::SetGeometryVertexPosition(RpGeometry* pGeometry, unsigned in
     return true;
 }
 
-unsigned int CRenderWareSA::DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, float fForce, float fRadius)
+unsigned int CRenderWareSA::DeformGeometryAtPoint(RpGeometry* pGeometry, const CVector& vecLocalPoint, const CVector& vecPushDirection, float fForce,
+                                                   float fRadius)
 {
     if (!pGeometry || !pGeometry->morph_target || fRadius <= 0.0f)
         return 0;
@@ -1131,15 +1132,14 @@ unsigned int CRenderWareSA::DeformGeometryAtPoint(RpGeometry* pGeometry, const C
     if ((int)state.depth.size() != numVerts || (int)state.originalPositions.size() != numVerts)
         return 0;
 
-    // All affected vertices are pushed in the SAME direction (towards the vehicle's local origin),
-    // not along each vertex's own normal. Pushing along individual normals makes adjacent panel
-    // triangles fold towards different directions, which looks like a shattered/spiky mess instead
-    // of a smooth dent.
-    CVector vecPushDir = -vecLocalPoint;
-    float   fPushDirLength = vecPushDir.Length();
+    // All affected vertices are pushed in the SAME direction (towards the vehicle's overall centre,
+    // pre-rotated into this geometry's local space by the caller), not along each vertex's own
+    // normal. Pushing along individual normals makes adjacent panel triangles fold towards different
+    // directions, which looks like a shattered/spiky mess instead of a smooth dent.
+    float fPushDirLength = vecPushDirection.Length();
     if (fPushDirLength < 0.0001f)
         return 0;
-    vecPushDir /= fPushDirLength;
+    CVector vecPushDir = vecPushDirection / fPushDirLength;
 
     // Absolute cap on how deep any single vertex can ever sink, so the panel can't be punched
     // through itself no matter how many times it gets hit.
@@ -1268,4 +1268,65 @@ unsigned int CRenderWareSA::StretchGeometryAtPoint(RpGeometry* pGeometry, const 
     RpGeometryUnlock(pGeometry);
 
     return uiAffected;
+}
+
+bool CRenderWareSA::ResetGeometryDeform(RpGeometry* pGeometry)
+{
+    if (!pGeometry || !pGeometry->morph_target)
+        return false;
+
+    auto it = m_DeformStates.find(pGeometry);
+    if (it == m_DeformStates.end())
+        return false;
+
+    SDeformVertexState& state = it->second;
+    int                 numVerts = pGeometry->vertices_size;
+    if ((int)state.originalPositions.size() != numVerts)
+        return false;
+
+    RpGeometryLock(pGeometry, RP_GEOMETRYLOCKVERTICES);
+
+    RwV3d* pVerts = pGeometry->morph_target->verts;
+    for (int i = 0; i < numVerts; i++)
+        pVerts[i] = state.originalPositions[i];
+
+    std::fill(state.depth.begin(), state.depth.end(), 0.0f);
+    std::fill(state.dentOffset.begin(), state.dentOffset.end(), RwV3d{0.0f, 0.0f, 0.0f});
+    std::fill(state.stretchOffset.begin(), state.stretchOffset.end(), RwV3d{0.0f, 0.0f, 0.0f});
+
+    RpGeometryUnlock(pGeometry);
+
+    return true;
+}
+
+namespace
+{
+    bool CollectClumpDeformAtomicCB(RpAtomic* pAtomic, void* pData)
+    {
+        ((std::vector<RpAtomic*>*)pData)->push_back(pAtomic);
+        return true;
+    }
+}            // namespace
+
+void CRenderWareSA::ReleaseVehicleDeformState(RpClump* pClump)
+{
+    if (!pClump)
+        return;
+
+    std::vector<RpAtomic*> atomics;
+    RpClumpForAllAtomics(pClump, CollectClumpDeformAtomicCB, &atomics);
+
+    for (RpAtomic* pAtomic : atomics)
+    {
+        RpGeometry* pGeometry = pAtomic->geometry;
+        if (!pGeometry)
+            continue;
+
+        // Only drop our own bookkeeping here - the engine still owns the actual RpGeometry free via
+        // its normal refcounting (triggered by the caller destroying the clump right after this).
+        // Leaving these entries behind would leak forever and, per RpGeometryCreate's tendency to
+        // reuse freed addresses, risks a stale pointer in these maps matching an unrelated future clone.
+        m_DeformStates.erase(pGeometry);
+        m_UniqueGeometryClones.erase(pGeometry);
+    }
 }
