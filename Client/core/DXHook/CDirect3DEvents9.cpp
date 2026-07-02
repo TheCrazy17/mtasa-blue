@@ -32,6 +32,7 @@ void                          ResetGTASceneState();
 // Other variables
 static uint                 ms_RequiredAnisotropicLevel = 1;
 static EDiagnosticDebugType ms_DiagnosticDebug = EDiagnosticDebug::NONE;
+static bool                 ms_bDualPassAlphaEnabled = false;
 
 // Tracks frames since the last hardware fault caught by FilterException.
 // Draw calls are skipped for a short cooldown to avoid repeated exceptions,
@@ -751,30 +752,22 @@ HRESULT CDirect3DEvents9::OnDrawPrimitive(IDirect3DDevice9* pDevice, IDirect3DDe
 
     if (!pLayers)
     {
-        // No shaders for this texture.
-        // Apply dual-pass alpha rendering when the mesh has alpha blending with z-write enabled,
-        // but only for 3D world geometry (not pre-transformed 2D elements like the radar/HUD).
-        // This prevents transparent pixels (e.g. fence holes, vegetation cutouts) from writing to
-        // the z-buffer and blocking objects behind them — emulating PS2 per-pixel z-write behavior.
-        if (g_pDeviceState->RenderState.ALPHABLENDENABLE && g_pDeviceState->RenderState.ZWRITEENABLE && !g_pDeviceState->VertexDeclState.PositionT)
+        if (ms_bDualPassAlphaEnabled && g_pDeviceState->RenderState.ALPHABLENDENABLE && g_pDeviceState->RenderState.ZWRITEENABLE &&
+            !g_pDeviceState->VertexDeclState.PositionT)
         {
-            // Save current alpha test state
             const DWORD dwOrigAlphaTestEnable = g_pDeviceState->RenderState.ALPHATESTENABLE;
             const DWORD dwOrigAlphaFunc = g_pDeviceState->RenderState.ALPHAFUNC;
             const DWORD dwOrigAlphaRef = g_pDeviceState->RenderState.ALPHAREF;
 
-            // Pass 1: Draw opaque-enough pixels (alpha >= threshold) with z-write ON
             pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
             pDevice->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATEREQUAL);
             pDevice->SetRenderState(D3DRS_ALPHAREF, DUALPASS_ALPHA_THRESHOLD);
             DrawPrimitiveGuarded(pDevice, PrimitiveType, StartVertex, PrimitiveCount);
 
-            // Pass 2: Draw transparent pixels (alpha < threshold) WITHOUT z-write
             pDevice->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_LESS);
             pDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
             DrawPrimitiveGuarded(pDevice, PrimitiveType, StartVertex, PrimitiveCount);
 
-            // Restore all modified states so the proxy cache stays consistent
             pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, dwOrigAlphaTestEnable);
             pDevice->SetRenderState(D3DRS_ALPHAFUNC, dwOrigAlphaFunc);
             pDevice->SetRenderState(D3DRS_ALPHAREF, dwOrigAlphaRef);
@@ -1002,30 +995,22 @@ HRESULT CDirect3DEvents9::OnDrawIndexedPrimitive(IDirect3DDevice9* pDevice, IDir
 
     if (!pLayers)
     {
-        // No shaders for this texture.
-        // Apply dual-pass alpha rendering when the mesh has alpha blending with z-write enabled,
-        // but only for 3D world geometry (not pre-transformed 2D elements like the radar/HUD).
-        // This prevents transparent pixels (e.g. fence holes, vegetation cutouts) from writing to
-        // the z-buffer and blocking objects behind them — emulating PS2 per-pixel z-write behavior.
-        if (g_pDeviceState->RenderState.ALPHABLENDENABLE && g_pDeviceState->RenderState.ZWRITEENABLE && !g_pDeviceState->VertexDeclState.PositionT)
+        if (ms_bDualPassAlphaEnabled && g_pDeviceState->RenderState.ALPHABLENDENABLE && g_pDeviceState->RenderState.ZWRITEENABLE &&
+            !g_pDeviceState->VertexDeclState.PositionT)
         {
-            // Save current alpha test state
             const DWORD dwOrigAlphaTestEnable = g_pDeviceState->RenderState.ALPHATESTENABLE;
             const DWORD dwOrigAlphaFunc = g_pDeviceState->RenderState.ALPHAFUNC;
             const DWORD dwOrigAlphaRef = g_pDeviceState->RenderState.ALPHAREF;
 
-            // Pass 1: Draw opaque-enough pixels (alpha >= threshold) with z-write ON
             pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
             pDevice->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATEREQUAL);
             pDevice->SetRenderState(D3DRS_ALPHAREF, DUALPASS_ALPHA_THRESHOLD);
             DrawIndexedPrimitiveGuarded(pDevice, PrimitiveType, BaseVertexIndex, MinVertexIndex, NumVertices, startIndex, primCount);
 
-            // Pass 2: Draw transparent pixels (alpha < threshold) WITHOUT z-write
             pDevice->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_LESS);
             pDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
             DrawIndexedPrimitiveGuarded(pDevice, PrimitiveType, BaseVertexIndex, MinVertexIndex, NumVertices, startIndex, primCount);
 
-            // Restore all modified states so the proxy cache stays consistent
             pDevice->SetRenderState(D3DRS_ALPHATESTENABLE, dwOrigAlphaTestEnable);
             pDevice->SetRenderState(D3DRS_ALPHAFUNC, dwOrigAlphaFunc);
             pDevice->SetRenderState(D3DRS_ALPHAREF, dwOrigAlphaRef);
@@ -1034,7 +1019,6 @@ HRESULT CDirect3DEvents9::OnDrawIndexedPrimitive(IDirect3DDevice9* pDevice, IDir
             return D3D_OK;
         }
 
-        // No shaders for this texture
         return DrawIndexedPrimitiveGuarded(pDevice, PrimitiveType, BaseVertexIndex, MinVertexIndex, NumVertices, startIndex, primCount);
     }
     else
@@ -2737,4 +2721,14 @@ ERenderFormat CDirect3DEvents9::DiscoverReadableDepthFormat(IDirect3DDevice9* pD
 
     SAFE_RELEASE(pD3D);
     return discoveredFormat;
+}
+
+void CDirect3DEvents9::SetDualPassAlphaEnabled(bool bEnabled)
+{
+    ms_bDualPassAlphaEnabled = bEnabled;
+}
+
+bool CDirect3DEvents9::IsDualPassAlphaEnabled()
+{
+    return ms_bDualPassAlphaEnabled;
 }

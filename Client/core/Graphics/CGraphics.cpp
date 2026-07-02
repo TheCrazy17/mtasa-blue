@@ -13,6 +13,7 @@
 #include <game/CSettings.h>
 #include <memory>
 #include "DXHook/CProxyDirect3DDevice9.h"
+#include "DXHook/CDirect3DEvents9.h"
 #include "CTileBatcher.h"
 #include "CLine3DBatcher.h"
 #include "CMaterialLine3DBatcher.h"
@@ -2435,6 +2436,16 @@ void CGraphics::RestoreGTARenderStates()
         }
         SAFE_RELEASE(m_pSavedStateBlock);
     }
+}
+
+void CGraphics::SetDualPassAlphaEnabled(bool bEnabled)
+{
+    CDirect3DEvents9::SetDualPassAlphaEnabled(bEnabled);
+}
+
+bool CGraphics::IsDualPassAlphaEnabled()
+{
+    return CDirect3DEvents9::IsDualPassAlphaEnabled();
 }
 
 ////////////////////////////////////////////////////////////////

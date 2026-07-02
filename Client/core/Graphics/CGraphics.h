@@ -184,6 +184,9 @@ public:
     void         SaveGTARenderStates();
     void         RestoreGTARenderStates();
 
+    void SetDualPassAlphaEnabled(bool bEnabled) override;
+    bool IsDualPassAlphaEnabled() override;
+
     // Texture data manipulation
     bool ResizeTextureData(const void* pData, uint uiDataPitch, uint uiWidth, uint uiHeight, uint d3dFormat, uint uiNewWidth, uint uiNewHeight,
                            CBuffer& outBuffer);

@@ -84,4 +84,7 @@ public:
     static IDirect3DVertexBuffer9* GetRealVertexBuffer(IDirect3DVertexBuffer9* pVertexBuffer);
     static IDirect3DIndexBuffer9*  GetRealIndexBuffer(IDirect3DIndexBuffer9* pIndexBuffer);
     static IDirect3DBaseTexture9*  GetRealTexture(IDirect3DBaseTexture9* pTexture);
+
+    static void SetDualPassAlphaEnabled(bool bEnabled);
+    static bool IsDualPassAlphaEnabled();
 };
