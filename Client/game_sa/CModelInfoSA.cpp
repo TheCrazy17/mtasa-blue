@@ -1851,10 +1851,8 @@ void CModelInfoSA::CopyStreamingInfoFromModel(ushort usBaseModelID)
 
 void CModelInfoSA::MakePedModel(const char* szTexture)
 {
-    // Create a new CPedModelInfo
-    CPedModelInfoSA pedModelInfo;
-    ppModelInfo[m_dwModelID] = (CBaseModelInfoSAInterface*)pedModelInfo.GetPedModelInfoInterface();
-    // Load our texture
+    CPedModelInfoSAInterface* pPedInterface = new CPedModelInfoSAInterface();
+    ppModelInfo[m_dwModelID] = pPedInterface;
     pGame->GetStreaming()->RequestSpecialModel(m_dwModelID, szTexture, 0);
 }
 
