@@ -1849,9 +1849,17 @@ void CModelInfoSA::CopyStreamingInfoFromModel(ushort usBaseModelID)
     pTargetModelStreamingInfo->sizeInBlocks = pBaseModelStreamingInfo->sizeInBlocks;
 }
 
-void CModelInfoSA::MakePedModel(const char* szTexture)
+void CModelInfoSA::MakePedModel(ushort usBaseID, const char* szTexture)
 {
     CPedModelInfoSAInterface* pPedInterface = new CPedModelInfoSAInterface();
+
+    CBaseModelInfoSAInterface* pBaseModelInfo = ppModelInfo[usBaseID];
+    MemCpyFast(pPedInterface, pBaseModelInfo, sizeof(CPedModelInfoSAInterface));
+    pPedInterface->usNumberOfRefs = 0;
+    pPedInterface->pRwObject = nullptr;
+    pPedInterface->usUnknown = 65535;
+    pPedInterface->usDynamicIndex = 65535;
+
     ppModelInfo[m_dwModelID] = pPedInterface;
     pGame->GetStreaming()->RequestSpecialModel(m_dwModelID, szTexture, 0);
 }

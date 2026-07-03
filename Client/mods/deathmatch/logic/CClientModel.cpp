@@ -42,7 +42,7 @@ bool CClientModel::Allocate(ushort usParentID)
     switch (m_eModelType)
     {
         case eClientModelType::PED:
-            pModelInfo->MakePedModel("PSYCHO");
+            pModelInfo->MakePedModel(usParentID, "PSYCHO");
             return true;
         case eClientModelType::OBJECT:
             if (g_pClientGame->GetObjectManager()->IsValidModel(usParentID))
