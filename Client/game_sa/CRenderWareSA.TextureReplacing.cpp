@@ -44,29 +44,27 @@ CModelTexturesInfo* CRenderWareSA::GetModelTexturesInfo(ushort usModelId)
     CModelTexturesInfo* pInfo = MapFind(ms_ModelTexturesInfoMap, usTxdId);
     if (!pInfo)
     {
-        // Get txd
+        // Get txd without incrementing ref yet
         RwTexDictionary* pTxd = CTxdStore_GetTxd(usTxdId);
 
         if (!pTxd)
         {
             pModelInfo->Request(BLOCKING, "CRenderWareSA::GetModelTexturesInfo");
-            CTxdStore_AddRef(usTxdId);
             ((void(__cdecl*)(unsigned short))FUNC_RemoveModel)(usModelId);
             pTxd = CTxdStore_GetTxd(usTxdId);
         }
-        else
+        else if (pModelInfo->GetModelType() == eModelInfoType::PED)
         {
-            CTxdStore_AddRef(usTxdId);
-            if (pModelInfo->GetModelType() == eModelInfoType::PED)
-            {
-                // Mystery fix for #9336: (MTA sometimes fails at loading custom textures)
-                // Possibly forces the ped model to be reloaded in some way
-                ((void(__cdecl*)(unsigned short))FUNC_RemoveModel)(usModelId);
-            }
+            // Mystery fix for #9336: (MTA sometimes fails at loading custom textures)
+            // Possibly forces the ped model to be reloaded in some way
+            ((void(__cdecl*)(unsigned short))FUNC_RemoveModel)(usModelId);
         }
 
+        // Only increment ref if we successfully have a valid TXD
         if (!pTxd)
             return NULL;
+
+        CTxdStore_AddRef(usTxdId);
 
         // Add new info
         MapSet(ms_ModelTexturesInfoMap, usTxdId, CModelTexturesInfo());
