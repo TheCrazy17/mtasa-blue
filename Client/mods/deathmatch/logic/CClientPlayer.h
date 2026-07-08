@@ -60,6 +60,53 @@ public:
     unsigned long GetLastNametagShow() { return m_ulLastNametagShow; }
     void          SetLastNametagShow(unsigned long ulTime) { m_ulLastNametagShow = ulTime; }
 
+    eBone GetNametagBone() { return m_eNametagBone; }
+    void  SetNametagBone(eBone bone) { m_eNametagBone = bone; }
+
+    eFontType GetNametagFont() { return m_eNametagFont; }
+    void      SetNametagFont(eFontType fontType) { m_eNametagFont = fontType; }
+
+    bool  IsNametagBorderShowing() { return m_bNametagBorderShowing; }
+    void  SetNametagBorderShowing(bool bShowing) { m_bNametagBorderShowing = bShowing; }
+    float GetNametagBorderSize() { return m_fNametagBorderSize; }
+    void  SetNametagBorderSize(float fSize) { m_fNametagBorderSize = fSize; }
+
+    bool IsNametagColorCodesEnabled() { return m_bNametagColorCodesEnabled; }
+    void SetNametagColorCodesEnabled(bool bEnabled) { m_bNametagColorCodesEnabled = bEnabled; }
+
+    bool IsNametagVisibleToSelf() { return m_bNametagVisibleToSelf; }
+    void SetNametagVisibleToSelf(bool bVisible) { m_bNametagVisibleToSelf = bVisible; }
+
+    float GetNametagMaxDistance() { return m_fNametagMaxDistance; }
+    void  SetNametagMaxDistance(float fDistance) { m_fNametagMaxDistance = fDistance; }
+    bool  IsNametagDistanceFixed() { return m_bNametagDistanceFixed; }
+    void  SetNametagDistanceFixed(bool bFixed) { m_bNametagDistanceFixed = bFixed; }
+    float GetNametagMinDistance() { return m_fNametagMinDistance; }
+    void  SetNametagMinDistance(float fDistance) { m_fNametagMinDistance = fDistance; }
+
+    float GetNametagTextScale() { return m_fNametagTextScale; }
+    void  SetNametagTextScale(float fScale) { m_fNametagTextScale = fScale; }
+
+    float GetNametagVerticalOffset() { return m_fNametagVerticalOffset; }
+    void  SetNametagVerticalOffset(float fOffset) { m_fNametagVerticalOffset = fOffset; }
+
+    float GetNametagHorizontalOffset() { return m_fNametagHorizontalOffset; }
+    void  SetNametagHorizontalOffset(float fOffset) { m_fNametagHorizontalOffset = fOffset; }
+
+    bool IsNametagHealthBarShowing() { return m_bNametagHealthBarShowing; }
+    void SetNametagHealthBarShowing(bool bShowing) { m_bNametagHealthBarShowing = bShowing; }
+    void GetNametagHealthBarColor(unsigned char& ucR, unsigned char& ucG, unsigned char& ucB);
+    void SetNametagHealthBarColor(unsigned char ucR, unsigned char ucG, unsigned char ucB);
+    void RemoveNametagHealthBarColor();
+    bool IsNametagHealthBarColorOverridden() { return m_bNametagHealthBarColorOverridden; }
+
+    bool IsNametagArmorBarShowing() { return m_bNametagArmorBarShowing; }
+    void SetNametagArmorBarShowing(bool bShowing) { m_bNametagArmorBarShowing = bShowing; }
+    void GetNametagArmorBarColor(unsigned char& ucR, unsigned char& ucG, unsigned char& ucB);
+    void SetNametagArmorBarColor(unsigned char ucR, unsigned char ucG, unsigned char ucB);
+    void RemoveNametagArmorBarColor();
+    bool IsNametagArmorBarColorOverridden() { return m_bNametagArmorBarColorOverridden; }
+
     void SetIsExtrapolatingAim(bool m_bExtrap) { m_bDoExtrapolatingAim = m_bExtrap; }
     bool IsExtrapolatingAim() { return m_bDoExtrapolatingAim; }
     void UpdateAimPosition(const CVector& vecAim);
@@ -156,6 +203,25 @@ private:
     unsigned char m_ucNametagColorR, m_ucNametagColorG, m_ucNametagColorB;
     bool          m_bNametagColorOverridden;
     std::string   m_strNametag;
+
+    eBone     m_eNametagBone;
+    eFontType m_eNametagFont;
+    bool      m_bNametagBorderShowing;
+    float     m_fNametagBorderSize;
+    bool      m_bNametagColorCodesEnabled;
+    bool      m_bNametagVisibleToSelf;
+    float     m_fNametagMaxDistance;
+    bool      m_bNametagDistanceFixed;
+    float     m_fNametagMinDistance;
+    float     m_fNametagTextScale;
+    float     m_fNametagVerticalOffset;
+    float     m_fNametagHorizontalOffset;
+    bool      m_bNametagHealthBarShowing;
+    unsigned char m_ucNametagHealthBarColorR, m_ucNametagHealthBarColorG, m_ucNametagHealthBarColorB;
+    bool          m_bNametagHealthBarColorOverridden;
+    bool          m_bNametagArmorBarShowing;
+    unsigned char m_ucNametagArmorBarColorR, m_ucNametagArmorBarColorG, m_ucNametagArmorBarColorB;
+    bool          m_bNametagArmorBarColorOverridden;
 
     unsigned int m_uiPlayerSyncCount;
     unsigned int m_uiKeySyncCount;

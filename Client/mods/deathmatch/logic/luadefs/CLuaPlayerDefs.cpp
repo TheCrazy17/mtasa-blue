@@ -11,6 +11,7 @@
 
 #include "StdInc.h"
 #include "lua/CLuaFunctionParser.h"
+#include <CClientPlayer.h>
 
 void CLuaPlayerDefs::LoadFunctions()
 {
@@ -42,6 +43,11 @@ void CLuaPlayerDefs::LoadFunctions()
         {"setPlayerNametagShowing", SetPlayerNametagShowing},
         {"setPlayerHudComponentProperty", ArgumentParser<SetPlayerHudComponentProperty>},
         {"resetPlayerHudComponentProperty", ArgumentParser<ResetPlayerHudComponentProperty>},
+
+        // Nametag customization
+        {"getPlayerNametagProperty", ArgumentParser<GetPlayerNametagProperty>},
+        {"setPlayerNametagProperty", ArgumentParser<SetPlayerNametagProperty>},
+        {"resetPlayerNametagProperty", ArgumentParser<ResetPlayerNametagProperty>},
 
         // Community funcs
         {"getPlayerUserName", GetPlayerUserName},
@@ -88,6 +94,8 @@ void CLuaPlayerDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setNametagText", "setPlayerNametagText");
     lua_classfunction(luaVM, "setNametagShowing", "setPlayerNametagShowing");
     lua_classfunction(luaVM, "setNametagColor", "setPlayerNametagColor");
+    lua_classfunction(luaVM, "setNametagProperty", "setPlayerNametagProperty");
+    lua_classfunction(luaVM, "resetNametagProperty", "resetPlayerNametagProperty");
 
     lua_classfunction(luaVM, "getPing", "getPlayerPing");
     lua_classfunction(luaVM, "getName", "getPlayerName");
@@ -96,6 +104,7 @@ void CLuaPlayerDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getNametagColor", "getPlayerNametagColor");
     lua_classfunction(luaVM, "getScriptDebugLevel", "getPlayerScriptDebugLevel");
     lua_classfunction(luaVM, "getHudComponentProperty", "getPlayerHudComponentProperty");
+    lua_classfunction(luaVM, "getNametagProperty", "getPlayerNametagProperty");
 
     lua_classfunction(luaVM, "isNametagShowing", "isPlayerNametagShowing");
     lua_classfunction(luaVM, "isCrosshairVisible", "isPlayerCrosshairVisible");
@@ -555,6 +564,263 @@ int CLuaPlayerDefs::SetPlayerNametagShowing(lua_State* luaVM)
     // Failed
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+// Nametag customization, one generic property bag instead of a function per property (see issue #2559)
+
+std::variant<bool, float, std::string, CLuaMultiReturn<uchar, uchar, uchar>> CLuaPlayerDefs::GetPlayerNametagProperty(CClientPlayer* pPlayer,
+                                                                                                                       eNametagProperty property)
+{
+    switch (property)
+    {
+        case eNametagProperty::TEXT_FONT:
+            return EnumToString(pPlayer->GetNametagFont());
+        case eNametagProperty::TEXT_BORDER_SHOWING:
+            return pPlayer->IsNametagBorderShowing();
+        case eNametagProperty::TEXT_BORDER_SIZE:
+            return pPlayer->GetNametagBorderSize();
+        case eNametagProperty::COLOR_CODES_ENABLED:
+            return pPlayer->IsNametagColorCodesEnabled();
+        case eNametagProperty::VISIBLE_TO_SELF:
+            return pPlayer->IsNametagVisibleToSelf();
+        case eNametagProperty::DISTANCE:
+            return pPlayer->GetNametagMaxDistance();
+        case eNametagProperty::DISTANCE_FIXED:
+            return pPlayer->IsNametagDistanceFixed();
+        case eNametagProperty::MIN_DISTANCE:
+            return pPlayer->GetNametagMinDistance();
+        case eNametagProperty::TEXT_SCALE:
+            return pPlayer->GetNametagTextScale();
+        case eNametagProperty::VERTICAL_OFFSET:
+            return pPlayer->GetNametagVerticalOffset();
+        case eNametagProperty::HORIZONTAL_OFFSET:
+            return pPlayer->GetNametagHorizontalOffset();
+        case eNametagProperty::HEALTH_BAR_SHOWING:
+            return pPlayer->IsNametagHealthBarShowing();
+        case eNametagProperty::HEALTH_BAR_COLOR:
+        {
+            if (!pPlayer->IsNametagHealthBarColorOverridden())
+                return false;
+
+            uchar ucR, ucG, ucB;
+            pPlayer->GetNametagHealthBarColor(ucR, ucG, ucB);
+            return CLuaMultiReturn<uchar, uchar, uchar>(ucR, ucG, ucB);
+        }
+        case eNametagProperty::ARMOR_BAR_SHOWING:
+            return pPlayer->IsNametagArmorBarShowing();
+        case eNametagProperty::ARMOR_BAR_COLOR:
+        {
+            if (!pPlayer->IsNametagArmorBarColorOverridden())
+                return false;
+
+            uchar ucR, ucG, ucB;
+            pPlayer->GetNametagArmorBarColor(ucR, ucG, ucB);
+            return CLuaMultiReturn<uchar, uchar, uchar>(ucR, ucG, ucB);
+        }
+        case eNametagProperty::LOCATION:
+            return static_cast<float>(pPlayer->GetNametagBone());
+    }
+
+    return false;
+}
+
+bool CLuaPlayerDefs::SetPlayerNametagProperty(CClientPlayer* pPlayer, eNametagProperty property, std::variant<bool, float, std::string> value,
+                                              std::optional<float> value2, std::optional<float> value3)
+{
+    switch (property)
+    {
+        case eNametagProperty::TEXT_FONT:
+        {
+            if (!std::holds_alternative<std::string>(value))
+                return false;
+
+            eFontType fontType;
+            if (!StringToEnum(std::get<std::string>(value), fontType))
+                return false;
+
+            pPlayer->SetNametagFont(fontType);
+            return true;
+        }
+        case eNametagProperty::TEXT_BORDER_SHOWING:
+        {
+            if (!std::holds_alternative<bool>(value))
+                return false;
+
+            pPlayer->SetNametagBorderShowing(std::get<bool>(value));
+            return true;
+        }
+        case eNametagProperty::TEXT_BORDER_SIZE:
+        {
+            if (!std::holds_alternative<float>(value) || std::get<float>(value) < 0.0f)
+                return false;
+
+            pPlayer->SetNametagBorderSize(std::get<float>(value));
+            return true;
+        }
+        case eNametagProperty::COLOR_CODES_ENABLED:
+        {
+            if (!std::holds_alternative<bool>(value))
+                return false;
+
+            pPlayer->SetNametagColorCodesEnabled(std::get<bool>(value));
+            return true;
+        }
+        case eNametagProperty::VISIBLE_TO_SELF:
+        {
+            if (!std::holds_alternative<bool>(value))
+                return false;
+
+            pPlayer->SetNametagVisibleToSelf(std::get<bool>(value));
+            return true;
+        }
+        case eNametagProperty::DISTANCE:
+        {
+            if (!std::holds_alternative<float>(value) || std::get<float>(value) <= 0.0f)
+                return false;
+
+            pPlayer->SetNametagMaxDistance(std::get<float>(value));
+            return true;
+        }
+        case eNametagProperty::DISTANCE_FIXED:
+        {
+            if (!std::holds_alternative<bool>(value))
+                return false;
+
+            pPlayer->SetNametagDistanceFixed(std::get<bool>(value));
+            return true;
+        }
+        case eNametagProperty::MIN_DISTANCE:
+        {
+            if (!std::holds_alternative<float>(value) || std::get<float>(value) < 0.0f)
+                return false;
+
+            pPlayer->SetNametagMinDistance(std::get<float>(value));
+            return true;
+        }
+        case eNametagProperty::TEXT_SCALE:
+        {
+            if (!std::holds_alternative<float>(value) || std::get<float>(value) <= 0.0f)
+                return false;
+
+            pPlayer->SetNametagTextScale(std::get<float>(value));
+            return true;
+        }
+        case eNametagProperty::VERTICAL_OFFSET:
+        {
+            if (!std::holds_alternative<float>(value))
+                return false;
+
+            pPlayer->SetNametagVerticalOffset(std::get<float>(value));
+            return true;
+        }
+        case eNametagProperty::HORIZONTAL_OFFSET:
+        {
+            if (!std::holds_alternative<float>(value))
+                return false;
+
+            pPlayer->SetNametagHorizontalOffset(std::get<float>(value));
+            return true;
+        }
+        case eNametagProperty::HEALTH_BAR_SHOWING:
+        {
+            if (!std::holds_alternative<bool>(value))
+                return false;
+
+            pPlayer->SetNametagHealthBarShowing(std::get<bool>(value));
+            return true;
+        }
+        case eNametagProperty::HEALTH_BAR_COLOR:
+        {
+            if (!std::holds_alternative<float>(value) || !value2.has_value() || !value3.has_value())
+                return false;
+
+            pPlayer->SetNametagHealthBarColor(static_cast<uchar>(std::get<float>(value)), static_cast<uchar>(*value2), static_cast<uchar>(*value3));
+            return true;
+        }
+        case eNametagProperty::ARMOR_BAR_SHOWING:
+        {
+            if (!std::holds_alternative<bool>(value))
+                return false;
+
+            pPlayer->SetNametagArmorBarShowing(std::get<bool>(value));
+            return true;
+        }
+        case eNametagProperty::ARMOR_BAR_COLOR:
+        {
+            if (!std::holds_alternative<float>(value) || !value2.has_value() || !value3.has_value())
+                return false;
+
+            pPlayer->SetNametagArmorBarColor(static_cast<uchar>(std::get<float>(value)), static_cast<uchar>(*value2), static_cast<uchar>(*value3));
+            return true;
+        }
+        case eNametagProperty::LOCATION:
+        {
+            if (!std::holds_alternative<float>(value))
+                return false;
+
+            pPlayer->SetNametagBone(static_cast<eBone>(static_cast<int>(std::get<float>(value))));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool CLuaPlayerDefs::ResetPlayerNametagProperty(CClientPlayer* pPlayer, eNametagProperty property)
+{
+    switch (property)
+    {
+        case eNametagProperty::TEXT_FONT:
+            pPlayer->SetNametagFont(FONT_DEFAULT);
+            return true;
+        case eNametagProperty::TEXT_BORDER_SHOWING:
+            pPlayer->SetNametagBorderShowing(true);
+            return true;
+        case eNametagProperty::TEXT_BORDER_SIZE:
+            pPlayer->SetNametagBorderSize(1.0f);
+            return true;
+        case eNametagProperty::COLOR_CODES_ENABLED:
+            pPlayer->SetNametagColorCodesEnabled(true);
+            return true;
+        case eNametagProperty::VISIBLE_TO_SELF:
+            pPlayer->SetNametagVisibleToSelf(false);
+            return true;
+        case eNametagProperty::DISTANCE:
+            pPlayer->SetNametagMaxDistance(45.0f);
+            return true;
+        case eNametagProperty::DISTANCE_FIXED:
+            pPlayer->SetNametagDistanceFixed(false);
+            return true;
+        case eNametagProperty::MIN_DISTANCE:
+            pPlayer->SetNametagMinDistance(7.0f);
+            return true;
+        case eNametagProperty::TEXT_SCALE:
+            pPlayer->SetNametagTextScale(1.0f);
+            return true;
+        case eNametagProperty::VERTICAL_OFFSET:
+            pPlayer->SetNametagVerticalOffset(0.3f);
+            return true;
+        case eNametagProperty::HORIZONTAL_OFFSET:
+            pPlayer->SetNametagHorizontalOffset(0.0f);
+            return true;
+        case eNametagProperty::HEALTH_BAR_SHOWING:
+            pPlayer->SetNametagHealthBarShowing(true);
+            return true;
+        case eNametagProperty::HEALTH_BAR_COLOR:
+            pPlayer->RemoveNametagHealthBarColor();
+            return true;
+        case eNametagProperty::ARMOR_BAR_SHOWING:
+            pPlayer->SetNametagArmorBarShowing(true);
+            return true;
+        case eNametagProperty::ARMOR_BAR_COLOR:
+            pPlayer->RemoveNametagArmorBarColor();
+            return true;
+        case eNametagProperty::LOCATION:
+            pPlayer->SetNametagBone(BONE_PELVIS);
+            return true;
+    }
+
+    return false;
 }
 
 // Community

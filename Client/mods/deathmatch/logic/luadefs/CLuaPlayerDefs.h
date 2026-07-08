@@ -12,6 +12,8 @@
 #pragma once
 #include "CLuaDefs.h"
 
+class CClientPlayer;
+
 class CLuaPlayerDefs : public CLuaDefs
 {
 public:
@@ -45,6 +47,12 @@ public:
     LUA_DECLARE(SetPlayerNametagShowing);
     static bool SetPlayerHudComponentProperty(eHudComponent component, eHudComponentProperty property, std::variant<CVector2D, float, bool, std::string> value);
     static bool ResetPlayerHudComponentProperty(eHudComponent component, eHudComponentProperty property) noexcept;
+
+    static std::variant<bool, float, std::string, CLuaMultiReturn<uchar, uchar, uchar>> GetPlayerNametagProperty(CClientPlayer* pPlayer,
+                                                                                                                  eNametagProperty property);
+    static bool SetPlayerNametagProperty(CClientPlayer* pPlayer, eNametagProperty property, std::variant<bool, float, std::string> value,
+                                         std::optional<float> value2, std::optional<float> value3);
+    static bool ResetPlayerNametagProperty(CClientPlayer* pPlayer, eNametagProperty property);
 
     // Community funcs
     LUA_DECLARE(GetPlayerUserName);

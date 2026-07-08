@@ -80,6 +80,23 @@ CClientPlayer::CClientPlayer(CClientManager* pManager, ElementID ID, bool bIsLoc
     m_ulLastNametagShow = 0;
     SetNametagText(m_strNick);
 
+    m_eNametagBone = BONE_PELVIS;
+    m_eNametagFont = FONT_DEFAULT;
+    m_bNametagBorderShowing = true;
+    m_fNametagBorderSize = 1.0f;
+    m_bNametagColorCodesEnabled = true;
+    m_bNametagVisibleToSelf = false;
+    m_fNametagMaxDistance = 45.0f;
+    m_bNametagDistanceFixed = false;
+    m_fNametagMinDistance = 7.0f;
+    m_fNametagTextScale = 1.0f;
+    m_fNametagVerticalOffset = 0.3f;
+    m_fNametagHorizontalOffset = 0.0f;
+    m_bNametagHealthBarShowing = true;
+    m_bNametagHealthBarColorOverridden = false;
+    m_bNametagArmorBarShowing = true;
+    m_bNametagArmorBarColorOverridden = false;
+
     // Add us to the player list
     m_pManager->GetPlayerManager()->AddToList(this);
 
@@ -179,6 +196,46 @@ void CClientPlayer::RemoveNametagOverrideColor()
     m_ucNametagColorG = 255;
     m_ucNametagColorB = 255;
     m_bNametagColorOverridden = false;
+}
+
+void CClientPlayer::GetNametagHealthBarColor(unsigned char& ucR, unsigned char& ucG, unsigned char& ucB)
+{
+    ucR = m_ucNametagHealthBarColorR;
+    ucG = m_ucNametagHealthBarColorG;
+    ucB = m_ucNametagHealthBarColorB;
+}
+
+void CClientPlayer::SetNametagHealthBarColor(unsigned char ucR, unsigned char ucG, unsigned char ucB)
+{
+    m_ucNametagHealthBarColorR = ucR;
+    m_ucNametagHealthBarColorG = ucG;
+    m_ucNametagHealthBarColorB = ucB;
+    m_bNametagHealthBarColorOverridden = true;
+}
+
+void CClientPlayer::RemoveNametagHealthBarColor()
+{
+    m_bNametagHealthBarColorOverridden = false;
+}
+
+void CClientPlayer::GetNametagArmorBarColor(unsigned char& ucR, unsigned char& ucG, unsigned char& ucB)
+{
+    ucR = m_ucNametagArmorBarColorR;
+    ucG = m_ucNametagArmorBarColorG;
+    ucB = m_ucNametagArmorBarColorB;
+}
+
+void CClientPlayer::SetNametagArmorBarColor(unsigned char ucR, unsigned char ucG, unsigned char ucB)
+{
+    m_ucNametagArmorBarColorR = ucR;
+    m_ucNametagArmorBarColorG = ucG;
+    m_ucNametagArmorBarColorB = ucB;
+    m_bNametagArmorBarColorOverridden = true;
+}
+
+void CClientPlayer::RemoveNametagArmorBarColor()
+{
+    m_bNametagArmorBarColorOverridden = false;
 }
 
 void CClientPlayer::SetTeam(CClientTeam* pTeam, bool bChangeTeam)

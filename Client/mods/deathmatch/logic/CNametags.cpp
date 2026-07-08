@@ -20,13 +20,7 @@ using std::list;
 #define WEAPON_RANGE_FACTOR      3.0f
 #define NAMETAG_BEGIN_FADE_TIME  0
 #define NAMETAG_END_FADE_TIME    700
-#define NAMETAG_FONT_SIZE        0.8f
 #define MAX_ALPHA                180.0f  // max value is 255
-
-#define DEFAULT_VIEW_RANGE     45.0f
-#define DEFAULT_VIEW_RANGE_EXP ((DEFAULT_VIEW_RANGE) * (DEFAULT_VIEW_RANGE))
-
-const bool bRenderOwn = false;
 
 CNametags::CNametags(CClientManager* pManager)
 {
@@ -54,16 +48,16 @@ void CNametags::DoPulse()
     static float fResWidth = static_cast<float>(g_pCore->GetGraphics()->GetViewportWidth());
     static float fResHeight = static_cast<float>(g_pCore->GetGraphics()->GetViewportHeight());
 
-    // Got any players that are not local?
-    if (m_pPlayerManager->Count() <= 1 && !bRenderOwn)
-        return;
-
-    list<CClientPlayer*> playerTags;
-
     // Grab the local player
     CClientPlayer* pLocalPlayer = m_pPlayerManager->GetLocalPlayer();
     if (!pLocalPlayer)
         return;
+
+    // Got any players that are not local?
+    if (m_pPlayerManager->Count() <= 1 && !pLocalPlayer->IsNametagVisibleToSelf())
+        return;
+
+    list<CClientPlayer*> playerTags;
 
     CClientVehicle* pSniperTargetedVehicle = NULL;
     CClientPlayer*  pSniperTargetedPlayer = NULL;
@@ -157,7 +151,7 @@ void CNametags::DoPulse()
         if (pElement->GetType() != CCLIENTPLAYER)
             continue;
         pPlayer = static_cast<CClientPlayer*>(pElement);
-        if (pPlayer->IsLocalPlayer() && !bRenderOwn)
+        if (pPlayer->IsLocalPlayer() && !pPlayer->IsNametagVisibleToSelf())
             continue;
 
         // Get the distance from the camera
@@ -165,9 +159,14 @@ void CNametags::DoPulse()
         fDistanceExp = pPlayer->GetExpDistance();
         pPlayerVehicle = pPlayer->GetOccupiedVehicle();
 
+        // Being aimed at with a gun normally shows the nametag no matter the distance, unless the
+        // player asked for a fixed distance (so zooming in with a scope doesn't reveal far away players)
+        const bool bAimedAtBypass = !pPlayer->IsNametagDistanceFixed() &&
+                                    ((pSniperTargetedPlayer == pPlayer) || (pSniperTargetedVehicle && pSniperTargetedVehicle == pPlayerVehicle));
+        const float fMaxDistanceExp = pPlayer->GetNametagMaxDistance() * pPlayer->GetNametagMaxDistance();
+
         // Is he in the same vehicle as the local player?
-        if ((pSniperTargetedPlayer == pPlayer) || (pSniperTargetedVehicle && pSniperTargetedVehicle == pPlayerVehicle) ||
-            (pLocalVehicle && pLocalVehicle == pPlayerVehicle) || (fDistanceExp < DEFAULT_VIEW_RANGE_EXP && pPlayer->IsOnScreen()))
+        if (bAimedAtBypass || (pLocalVehicle && pLocalVehicle == pPlayerVehicle) || (fDistanceExp < fMaxDistanceExp && pPlayer->IsOnScreen()))
         {
             SLineOfSightFlags flags;
             flags.bCheckBuildings = true;
@@ -201,15 +200,18 @@ void CNametags::DoPulse()
         pPlayer = *iterTags;
         fDistance = pPlayer->GetNametagDistance();
 
-        static float fFullAlphaDistance = 7.0f;
-        if ((fDistance < fFullAlphaDistance) || (pSniperTargetedPlayer && pSniperTargetedPlayer == pPlayer) ||
-            (pSniperTargetedVehicle && pSniperTargetedVehicle == pPlayer->GetOccupiedVehicle()))
+        const float fFullAlphaDistance = pPlayer->GetNametagMinDistance();
+        const bool  bAimedAtFullAlpha = !pPlayer->IsNametagDistanceFixed() &&
+                                        ((pSniperTargetedPlayer && pSniperTargetedPlayer == pPlayer) ||
+                                         (pSniperTargetedVehicle && pSniperTargetedVehicle == pPlayer->GetOccupiedVehicle()));
+
+        if ((fDistance < fFullAlphaDistance) || bAimedAtFullAlpha)
         {
             fAlphaModifier = 1.0f;
         }
         else
         {
-            fAlphaModifier = 1.0f - ((fDistance - fFullAlphaDistance) / (DEFAULT_VIEW_RANGE - fFullAlphaDistance));
+            fAlphaModifier = 1.0f - ((fDistance - fFullAlphaDistance) / (pPlayer->GetNametagMaxDistance() - fFullAlphaDistance));
         }
 
         // Calculate the alpha for the nametag
@@ -241,12 +243,13 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
 
     // Get the position
     CVector vecPosition;
-    pPlayer->GetBonePosition(BONE_PELVIS, vecPosition);
+    pPlayer->GetBonePosition(pPlayer->GetNametagBone(), vecPosition);
 
     // Calculate where the player is on our screen
     CVector vecScreenPosition;
-    vecPosition.fZ += 0.3f;
+    vecPosition.fZ += pPlayer->GetNametagVerticalOffset();
     pGraphics->CalcScreenCoors(&vecPosition, &vecScreenPosition);
+    vecScreenPosition.fX += pPlayer->GetNametagHorizontalOffset();
 
     // Grab health and max health
     float fMaxHealth = pPlayer->GetMaxHealth();
@@ -273,15 +276,28 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
         // Draw his name
         unsigned char ucR, ucG, ucB;
         pPlayer->GetNametagColor(ucR, ucG, ucB);
-        // Draw shadow first
+
+        ID3DXFont*  pNametagFont = CStaticFunctionDefinitions::ResolveD3DXFont(pPlayer->GetNametagFont(), nullptr);
+        const bool  bColorCoded = pPlayer->IsNametagColorCodesEnabled();
+        const float fTextScale = pPlayer->GetNametagTextScale();
+
         int iScreenPosX = static_cast<int>(vecScreenPosition.fX);
         int iScreenPosY = static_cast<int>(vecScreenPosition.fY);
-        pGraphics->DrawString(iScreenPosX + 1, iScreenPosY + 1, iScreenPosX + 1, iScreenPosY + 1, COLOR_ARGB(255, 0, 0, 0), szNick, 1.0f, 1.0f,
-                              DT_NOCLIP | DT_CENTER);
-        pGraphics->DrawString(iScreenPosX, iScreenPosY, iScreenPosX, iScreenPosY, COLOR_ARGB(255, ucR, ucG, ucB), szNick, 1.0f, 1.0f, DT_NOCLIP | DT_CENTER);
+
+        // Draw shadow first, always plain text so a raw colorcode never shows up in it
+        if (pPlayer->IsNametagBorderShowing())
+        {
+            float   fBorderSize = pPlayer->GetNametagBorderSize();
+            SString strPlainNick = bColorCoded ? SharedUtil::RemoveColorCodes(szNick) : SString(szNick);
+            pGraphics->DrawStringQueued(iScreenPosX + fBorderSize, iScreenPosY + fBorderSize, iScreenPosX + fBorderSize, iScreenPosY + fBorderSize,
+                                        COLOR_ARGB(255, 0, 0, 0), strPlainNick, fTextScale, fTextScale, DT_NOCLIP | DT_CENTER, pNametagFont, true);
+        }
+
+        pGraphics->DrawStringQueued(iScreenPosX, iScreenPosY, iScreenPosX, iScreenPosY, COLOR_ARGB(255, ucR, ucG, ucB), szNick, fTextScale, fTextScale,
+                                    DT_NOCLIP | DT_CENTER, pNametagFont, true, bColorCoded);
 
         // We need to draw health tags?
-        if (m_bDrawHealth)
+        if (m_bDrawHealth && pPlayer->IsNametagHealthBarShowing())
         {
             fHealth = fHealth / (750.0f / 510.0f);
             long lRed = 0;
@@ -302,6 +318,21 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
             long lRedBlack = static_cast<long>(lRed * 0.33f);
             long lGreenBlack = static_cast<long>(lGreen * 0.33f);
 
+            // A custom color replaces the usual green-to-red health gradient with a fixed one
+            unsigned char ucHealthBarR = 0;
+            unsigned char ucHealthBarG = static_cast<unsigned char>(lGreen);
+            unsigned char ucHealthBarB = static_cast<unsigned char>(lRed);
+            unsigned char ucHealthBarBlackR = 0;
+            unsigned char ucHealthBarBlackG = static_cast<unsigned char>(lGreenBlack);
+            unsigned char ucHealthBarBlackB = static_cast<unsigned char>(lRedBlack);
+            if (pPlayer->IsNametagHealthBarColorOverridden())
+            {
+                pPlayer->GetNametagHealthBarColor(ucHealthBarR, ucHealthBarG, ucHealthBarB);
+                ucHealthBarBlackR = static_cast<unsigned char>(ucHealthBarR * 0.33f);
+                ucHealthBarBlackG = static_cast<unsigned char>(ucHealthBarG * 0.33f);
+                ucHealthBarBlackB = static_cast<unsigned char>(ucHealthBarB * 0.33f);
+            }
+
             // TR - TL - BR - BL
             float fHeight = fResHeight * 0.011f;
             float fWidth = fResWidth * 0.060f;
@@ -314,7 +345,11 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
 
             unsigned char ucArmorAlpha = (unsigned char)(255.0f * fArmorAlpha);
 
-#define ARMOR_BORDER_COLOR COLOR_ABGR(ucArmorAlpha, 167, 177, 179)
+            unsigned char ucArmorBorderR = 167, ucArmorBorderG = 177, ucArmorBorderB = 179;
+            if (pPlayer->IsNametagArmorBarColorOverridden())
+                pPlayer->GetNametagArmorBarColor(ucArmorBorderR, ucArmorBorderG, ucArmorBorderB);
+
+#define ARMOR_BORDER_COLOR COLOR_ABGR(ucArmorAlpha, ucArmorBorderR, ucArmorBorderG, ucArmorBorderB)
 
             // Base rectangle
             CVector vecTopLeftBase(vecScreenPosition.fX - fWidth * 0.5f, vecScreenPosition.fY + fTopOffset, 0);
@@ -326,7 +361,7 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
             pGraphics->DrawRectangle(vecTopLeft.fX, vecTopLeft.fY, vecBotRight.fX - vecTopLeft.fX, vecBotRight.fY - vecTopLeft.fY, COLOR_ABGR(ucAlpha, 0, 0, 0),
                                      true);
 
-            if (fArmor > 0.0f)
+            if (fArmor > 0.0f && pPlayer->IsNametagArmorBarShowing())
             {
                 // Left side of armor indicator
                 vecTopLeft = vecTopLeftBase + CVector(-fSizeIncreaseBorder, -fSizeIncreaseBorder, 0);
@@ -357,13 +392,13 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
             vecTopLeft = vecTopLeftBase + CVector(+0, +0, 0);
             vecBotRight = vecBotRightBase + CVector(-fRemovedWidth, +0, 0);
             pGraphics->DrawRectangle(vecTopLeft.fX, vecTopLeft.fY, vecBotRight.fX - vecTopLeft.fX, vecBotRight.fY - vecTopLeft.fY,
-                                     COLOR_ABGR(ucAlpha, 0, static_cast<unsigned char>(lGreen), static_cast<unsigned char>(lRed)), true);
+                                     COLOR_ABGR(ucAlpha, ucHealthBarB, ucHealthBarG, ucHealthBarR), true);
 
             // the black bit
             vecTopLeft = vecTopLeftBase + CVector(+fWidth - fRemovedWidth, +0, 0);
             vecBotRight = vecBotRightBase + CVector(+0, +0, 0);
             pGraphics->DrawRectangle(vecTopLeft.fX, vecTopLeft.fY, vecBotRight.fX - vecTopLeft.fX, vecBotRight.fY - vecTopLeft.fY,
-                                     COLOR_ABGR(ucAlpha, 0, static_cast<unsigned char>(lGreenBlack), static_cast<unsigned char>(lRedBlack)), true);
+                                     COLOR_ABGR(ucAlpha, ucHealthBarBlackB, ucHealthBarBlackG, ucHealthBarBlackR), true);
 
             // Draw the player status icon
             if (pPlayer->HasConnectionTrouble())

@@ -26,6 +26,7 @@
 #include "enums/SoundEffectType.h"
 #include "enums/ObjectGroupPhysicalProperties.h"
 #include "enums/PostFXType.h"
+#include "enums/NametagProperty.h"
 
 enum eLuaType
 {
@@ -127,6 +128,7 @@ DECLARE_ENUM(eHudComponent);
 DECLARE_ENUM_CLASS(eHudComponentProperty);
 DECLARE_ENUM_CLASS(eFontStyle);
 DECLARE_ENUM_CLASS(eFontAlignment);
+DECLARE_ENUM_CLASS(eNametagProperty);
 
 enum eFieldOfViewMode
 {
