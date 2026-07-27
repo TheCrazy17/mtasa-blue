@@ -19,6 +19,8 @@ class CGUI_Impl;
 #include <unordered_set>
 #include <cstdint>
 #include <windows.h>
+#include <CEGUI/UDim.h>
+#include <CEGUI/CoordConverter.h>
 
 #define CGUI_CHAR_SIZE 6
 
@@ -49,15 +51,17 @@ struct IDirect3DDevice9;
 namespace CEGUI
 {
     class FontManager;
-    class ImagesetManager;
+    class ImageManager;
     class Renderer;
     class System;
     class SchemeManager;
     class WindowManager;
     class Image;
     class EventArgs;
-    class GUISheet;
-    typedef GUISheet DefaultWindow;
+    class DefaultWindow;
+    class XMLParser;
+    class ImageCodec;
+    class GeometryBuffer;
 }  // namespace CEGUI
 
 class CGUI_Impl : public CGUI, public CGUITabList
@@ -88,6 +92,15 @@ public:
     static CEGUI::String GetUTFString(const char* szInput);
     static CEGUI::String GetUTFString(const std::string& strInput);
     static CEGUI::String GetUTFString(const CEGUI::String& strInput);  // Not defined
+
+    // CEGUI 0.8.7 replaced the old Absolute/Relative MetricsMode positioning with a unified
+    // UDim (scale + offset) system. These map our old pixel-or-fraction bool onto that: bRelative
+    // becomes a pure scale (fraction of parent size), non-relative becomes a pure pixel offset.
+    static CEGUI::UDim MakeUDim(float fValue, bool bRelative) { return bRelative ? CEGUI::UDim(fValue, 0.0f) : CEGUI::UDim(0.0f, fValue); }
+    static float        ResolveUDim(const CEGUI::UDim& dim, float fBase, bool bRelative)
+    {
+        return bRelative ? CEGUI::CoordConverter::asRelative(dim, fBase) : CEGUI::CoordConverter::asAbsolute(dim, fBase);
+    }
     //
     CGUIMessageBox* CreateMessageBox(const char* szTitle, const char* szMessage, unsigned int uiFlags);
 
@@ -152,8 +165,9 @@ public:
     eCursorType GetCursorType();
 
     void                    AddChild(CGUIElement_Impl* pChild);
-    CEGUI::FontManager*     GetFontManager();
-    CEGUI::ImagesetManager* GetImageSetManager();
+    CEGUI::FontManager* GetFontManager();
+    CEGUI::ImageManager* GetImageSetManager();
+    CEGUI::GeometryBuffer* GetGeometryBuffer() const { return m_pGeometryBuffer; }
     CEGUI::Renderer*        GetRenderer();
     CEGUI::System*          GetGUISystem();
     CEGUI::SchemeManager*   GetSchemeManager();
@@ -171,7 +185,7 @@ public:
     CGUIFont* GetSAHeaderFont();
     CGUIFont* GetSAGothicFont();
     CGUIFont* GetSansFont();
-    bool      IsFontPresent(const char* szFont) { return m_pFontManager->isFontPresent(szFont); }
+    bool      IsFontPresent(const char* szFont) { return m_pFontManager->isDefined(szFont); }
 
     float GetTextExtent(const char* szText, const char* szFont = "default-normal");
     float GetMaxTextExtent(SString strFont, SString arg, ...);
@@ -311,12 +325,12 @@ private:
 
     IDirect3DDevice9* m_pDevice;
 
-    CEGUI::Renderer*        m_pRenderer;
-    CEGUI::System*          m_pSystem;
-    CEGUI::FontManager*     m_pFontManager;
-    CEGUI::ImagesetManager* m_pImageSetManager;
-    CEGUI::SchemeManager*   m_pSchemeManager;
-    CEGUI::WindowManager*   m_pWindowManager;
+    CEGUI::Renderer*      m_pRenderer;
+    CEGUI::System*        m_pSystem;
+    CEGUI::FontManager*   m_pFontManager;
+    CEGUI::ImageManager*  m_pImageSetManager;
+    CEGUI::SchemeManager* m_pSchemeManager;
+    CEGUI::WindowManager* m_pWindowManager;
 
     CEGUI::DefaultWindow* m_pTop;
     const CEGUI::Image*   m_pCursor;
@@ -365,6 +379,16 @@ private:
     bool         m_HasSchemeLoaded;
     SString      m_CurrentSchemeName;
     CElapsedTime m_RenderOkTimer;
+
+    // CEGUI 0.8.7 has no bidi support compiled in, so this just remembers the
+    // setting for now rather than actually reordering any text.
+    bool m_bBidiEnabled;
+
+    // Our own XML parser and image codec instances, since we link CEGUI
+    // statically instead of letting it dynamically load modules by name.
+    CEGUI::XMLParser* m_pXMLParser;
+    CEGUI::ImageCodec* m_pImageCodec;
+    CEGUI::GeometryBuffer* m_pGeometryBuffer;
 
     void CreateRootWindow();
 };

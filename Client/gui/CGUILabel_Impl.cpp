@@ -42,7 +42,7 @@ CGUILabel_Impl::CGUILabel_Impl(CGUI_Impl* pGUI, CGUIElement* pParent, const char
     SetHorizontalAlign(CGUI_ALIGN_LEFT);
     SetVerticalAlign(CGUI_ALIGN_TOP);
     SetText(szText);
-    reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->setBackgroundEnabled(false);
+    GetStaticText()->setBackgroundEnabled(false);
 
     // If a parent is specified, add it to it's children list, if not, add it as a child to the pManager
     if (pParent)
@@ -69,32 +69,58 @@ void CGUILabel_Impl::SetText(const char* Text)
 
 void CGUILabel_Impl::SetVerticalAlign(CGUIVerticalAlign eAlign)
 {
-    reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->setVerticalFormatting(static_cast<CEGUI::StaticText::VertFormatting>(eAlign));
+    // CEGUI 0.8.7's VerticalTextFormatting enum orders Bottom/Centre differently than our own
+    // enum (which mirrors the old CEGUI 0.4 ordering), so this needs an explicit mapping rather
+    // than a positional cast.
+    CEGUI::VerticalTextFormatting eFormatting = CEGUI::VTF_TOP_ALIGNED;
+    switch (eAlign)
+    {
+        case CGUI_ALIGN_BOTTOM:
+            eFormatting = CEGUI::VTF_BOTTOM_ALIGNED;
+            break;
+        case CGUI_ALIGN_VERTICALCENTER:
+            eFormatting = CEGUI::VTF_CENTRE_ALIGNED;
+            break;
+        default:
+            eFormatting = CEGUI::VTF_TOP_ALIGNED;
+            break;
+    }
+    GetStaticText()->setVerticalFormatting(eFormatting);
 }
 
 CGUIVerticalAlign CGUILabel_Impl::GetVerticalAlign()
 {
-    return static_cast<CGUIVerticalAlign>(reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->getVerticalFormatting());
+    switch (GetStaticText()->getVerticalFormatting())
+    {
+        case CEGUI::VTF_BOTTOM_ALIGNED:
+            return CGUI_ALIGN_BOTTOM;
+        case CEGUI::VTF_CENTRE_ALIGNED:
+            return CGUI_ALIGN_VERTICALCENTER;
+        default:
+            return CGUI_ALIGN_TOP;
+    }
 }
 
 void CGUILabel_Impl::SetHorizontalAlign(CGUIHorizontalAlign eAlign)
 {
-    reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->setHorizontalFormatting(static_cast<CEGUI::StaticText::HorzFormatting>(eAlign));
+    // Unlike the vertical formatting enum, CEGUI 0.8.7's HorizontalTextFormatting values line up
+    // positionally with our own enum, so a direct cast is safe here.
+    GetStaticText()->setHorizontalFormatting(static_cast<CEGUI::HorizontalTextFormatting>(eAlign));
 }
 
 CGUIHorizontalAlign CGUILabel_Impl::GetHorizontalAlign()
 {
-    return static_cast<CGUIHorizontalAlign>(reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->getHorizontalFormatting());
+    return static_cast<CGUIHorizontalAlign>(GetStaticText()->getHorizontalFormatting());
 }
 
 void CGUILabel_Impl::SetTextColor(CGUIColor Color)
 {
-    reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->setTextColours(CEGUI::colour(1.0f / 255.0f * Color.R, 1.0f / 255.0f * Color.G, 1.0f / 255.0f * Color.B));
+    GetStaticText()->setTextColours(CEGUI::ColourRect(CEGUI::Colour(1.0f / 255.0f * Color.R, 1.0f / 255.0f * Color.G, 1.0f / 255.0f * Color.B)));
 }
 
 void CGUILabel_Impl::SetTextColor(unsigned char ucRed, unsigned char ucGreen, unsigned char ucBlue)
 {
-    reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->setTextColours(CEGUI::colour(1.0f / 255.0f * ucRed, 1.0f / 255.0f * ucGreen, 1.0f / 255.0f * ucBlue));
+    GetStaticText()->setTextColours(CEGUI::ColourRect(CEGUI::Colour(1.0f / 255.0f * ucRed, 1.0f / 255.0f * ucGreen, 1.0f / 255.0f * ucBlue)));
 }
 
 CGUIColor CGUILabel_Impl::GetTextColor()
@@ -106,7 +132,7 @@ CGUIColor CGUILabel_Impl::GetTextColor()
 
 void CGUILabel_Impl::GetTextColor(unsigned char& ucRed, unsigned char& ucGreen, unsigned char& ucBlue)
 {
-    CEGUI::colour r = (reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->getTextColours()).getColourAtPoint(0, 0);
+    CEGUI::Colour r = GetStaticText()->getTextColours().getColourAtPoint(0, 0);
 
     ucRed = (unsigned char)(r.getRed() * 255);
     ucGreen = (unsigned char)(r.getGreen() * 255);
@@ -115,12 +141,12 @@ void CGUILabel_Impl::GetTextColor(unsigned char& ucRed, unsigned char& ucGreen, 
 
 void CGUILabel_Impl::SetFrameEnabled(bool bFrameEnabled)
 {
-    reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->setFrameEnabled(bFrameEnabled);
+    GetStaticText()->setFrameEnabled(bFrameEnabled);
 }
 
 bool CGUILabel_Impl::IsFrameEnabled()
 {
-    return reinterpret_cast<CEGUI::StaticText*>(m_pWindow)->isFrameEnabled();
+    return GetStaticText()->isFrameEnabled();
 }
 
 float CGUILabel_Impl::GetCharacterWidth(int iCharIndex)

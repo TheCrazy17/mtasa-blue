@@ -13,6 +13,7 @@
 
 #include <gui/CGUILabel.h>
 #include "CGUIElement_Impl.h"
+#include <CEGUI/WindowRendererSets/Core/StaticText.h>
 
 class CGUIFont;
 
@@ -46,4 +47,9 @@ public:
 #define EXCLUDE_SET_TEXT
 #include "CGUIElement_Inc.h"
 #undef EXCLUDE_SET_TEXT
+
+private:
+    // "CGUI/StaticText" is rendered by a Core/StaticText window renderer attached to a plain
+    // window in CEGUI 0.8.7, rather than being its own Window subclass like it was in 0.4.
+    CEGUI::FalagardStaticText* GetStaticText() const { return static_cast<CEGUI::FalagardStaticText*>(m_pWindow->getWindowRenderer()); }
 };

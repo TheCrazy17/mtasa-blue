@@ -12,7 +12,9 @@ project "GUI"
 		includedirs {
 			"../../Shared/sdk",
 			"../sdk",
-			"../../vendor/cegui-0.4.0-custom/include",
+			"../../vendor/cegui-0.8.7/include",
+			"../../vendor/tinyxml2",
+			"../../vendor/freetype/include",
 			"../../vendor/sparsehash/src/"
 		}
 
@@ -20,11 +22,12 @@ project "GUI"
 	pchsource "StdInc.cpp"
 
 	defines {
-		"_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING"
+		"_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING",
+		"CEGUI_STATIC"
 	}
 
 	links {
-		"CEGUI", "DirectX9GUIRenderer", "Falagard",
+		"CEGUI087", "freetype", "tinyxml2",
 		"d3dx9.lib",
 		"dxerr.lib"
 	}

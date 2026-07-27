@@ -38,4 +38,5 @@ public:
 private:
     CEGUI::Renderer* m_pRenderer;
     CEGUI::Texture*  m_pTexture;
+    CEGUI::String    m_strTextureName;
 };

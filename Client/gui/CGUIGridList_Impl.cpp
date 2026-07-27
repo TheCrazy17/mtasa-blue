@@ -72,7 +72,7 @@ CGUIGridList_Impl::CGUIGridList_Impl(CGUI_Impl* pGUI, CGUIElement* pParent, bool
         m_pWindow = pGUI->GetWindowManager()->createWindow(kGridListNoFrameName, szUnique);
 
     m_pWindow->setDestroyedByParent(false);
-    m_pWindow->setRect(CEGUI::Relative, CEGUI::Rect(0.00f, 0.00f, 0.40f, 0.40f));
+    m_pWindow->setArea(CEGUI::UDim(0.0f, 0.00f), CEGUI::UDim(0.0f, 0.00f), CEGUI::UDim(0.40f, 0.0f), CEGUI::UDim(0.40f, 0.0f));
 
     reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setUserColumnDraggingEnabled(false);
     reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setShowHorzScrollbar(false);
@@ -168,7 +168,7 @@ unsigned int CGUIGridList_Impl::AddColumn(const char* szTitle, float fWidth)
 {
     // Create a new column with an unique handle
     int hUniqueHandle = GetUniqueHandle();
-    reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->addColumn((CGUI_Impl::GetUTFString(szTitle)), hUniqueHandle, fWidth);
+    reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->addColumn((CGUI_Impl::GetUTFString(szTitle)), hUniqueHandle, CEGUI::UDim(0.0f, fWidth));
 
     int iColumnIndex = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getColumnWithID(hUniqueHandle);
 
@@ -183,7 +183,7 @@ void CGUIGridList_Impl::SetColumnWidth(int hColumn, float fWidth, bool bRelative
 {
     try
     {
-        reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setColumnHeaderWidth(GetColumnIndex(hColumn), fWidth, bRelative);
+        reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setColumnHeaderWidth(GetColumnIndex(hColumn), CGUI_Impl::MakeUDim(fWidth, bRelative));
     }
     catch (CEGUI::Exception)
     {
@@ -194,10 +194,11 @@ bool CGUIGridList_Impl::GetColumnWidth(int hColumn, float& fOutWidth, bool bRela
 {
     try
     {
-        fOutWidth = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getColumnHeaderWidth(GetColumnIndex(hColumn));
+        const CEGUI::UDim width = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getColumnHeaderWidth(GetColumnIndex(hColumn));
 
-        if (!bRelative)
-            fOutWidth = m_pWindow->relativeToAbsoluteX(fOutWidth);
+        // Matches CEGUI 0.4's relativeToAbsoluteX/getColumnHeaderWidth, which resolved against
+        // this window's own width rather than its parent's.
+        fOutWidth = CGUI_Impl::ResolveUDim(width, m_pWindow->getPixelSize().d_width, bRelative);
 
         return true;
     }
@@ -209,12 +210,14 @@ bool CGUIGridList_Impl::GetColumnWidth(int hColumn, float& fOutWidth, bool bRela
 
 void CGUIGridList_Impl::SetColumnTitle(int hColumn, const char* szTitle)
 {
-    reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setColumnHeaderTitle(GetColumnIndex(hColumn), szTitle);
+    CEGUI::MultiColumnList* pList = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow);
+    pList->getHeaderSegmentForColumn(GetColumnIndex(hColumn)).setText(CGUI_Impl::GetUTFString(szTitle));
 }
 
 const char* CGUIGridList_Impl::GetColumnTitle(int hColumn)
 {
-    return reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getColumnHeaderTitle(GetColumnIndex(hColumn));
+    CEGUI::MultiColumnList* pList = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow);
+    return pList->getHeaderSegmentForColumn(GetColumnIndex(hColumn)).getText().c_str();
 }
 
 void CGUIGridList_Impl::SetHorizontalScrollBar(bool bEnabled)
@@ -253,14 +256,14 @@ int CGUIGridList_Impl::GetColumnCount()
 
 void CGUIGridList_Impl::ForceUpdate()
 {
-    reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->forceUpdate();
+    m_pWindow->invalidate(true);
 }
 
 int CGUIGridList_Impl::AddRow(bool fast, std::vector<std::pair<SString, bool> >* m_items)
 {
     try
     {
-        int iRow = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->addRow(m_iIndex++, fast);
+        int iRow = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->addRow(m_iIndex++);
         if (m_items)
             return SetRowItemsText(iRow, m_items);
         else
@@ -454,7 +457,7 @@ int CGUIGridList_Impl::SetItemText(int iRow, int hColumn, const char* szText, bo
         {
             pItem = new CGUIListItem_Impl(szText, bNumber);
             CEGUI::ListboxItem* pListboxItem = pItem->GetListItem();
-            list->setItem(pListboxItem, CEGUI::MCLGridRef(iRow, columnIndex), bFast);
+            list->setItem(pListboxItem, CEGUI::MCLGridRef(iRow, columnIndex));
             m_Items[pItem->GetListItem()] = pItem;
         }
 
@@ -538,7 +541,7 @@ void CGUIGridList_Impl::SetColumnSegmentSizingEnabled(int hColumn, bool bEnabled
 {
     try
     {
-        reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setUserColumnSegmentSizingEnabled(hColumn, bEnabled);
+        reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getHeaderSegmentForColumn(hColumn).setSizingEnabled(bEnabled);
     }
     catch (CEGUI::Exception)
     {
@@ -549,7 +552,7 @@ bool CGUIGridList_Impl::IsColumnSegmentSizingEnabled(int hColumn)
 {
     try
     {
-        return reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->isUserColumnSegmentSizingEnabled(GetColumnIndex(hColumn));
+        return reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getHeaderSegmentForColumn(GetColumnIndex(hColumn)).isSizingEnabled();
     }
     catch (CEGUI::Exception)
     {
@@ -576,7 +579,7 @@ void CGUIGridList_Impl::SetItemImage(int iRow, int hColumn, CGUIStaticImage* pIm
             // If it doesn't, create it and set it in the gridlist
             CGUIListItem_Impl*  pNewItem = new CGUIListItem_Impl("", CGUIListItem_Impl::ImageItem, (CGUIStaticImage_Impl*)pImage);
             CEGUI::ListboxItem* pListboxItem = pNewItem->GetListItem();
-            pMultiColumnList->setItem(pListboxItem, CEGUI::MCLGridRef(iRow, GetColumnIndex(hColumn)), true);
+            pMultiColumnList->setItem(pListboxItem, CEGUI::MCLGridRef(iRow, GetColumnIndex(hColumn)));
 
             // Put our new item in the map
             m_Items[pNewItem->GetListItem()] = pNewItem;
@@ -591,7 +594,7 @@ float CGUIGridList_Impl::GetHorizontalScrollPosition()
 {
     try
     {
-        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->d_horzScrollbar;
+        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getHorzScrollbar();
         if (pScrollbar)
             return (pScrollbar->getScrollPosition() / (pScrollbar->getDocumentSize() - pScrollbar->getPageSize()));
     }
@@ -605,7 +608,7 @@ float CGUIGridList_Impl::GetVerticalScrollPosition()
 {
     try
     {
-        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->d_vertScrollbar;
+        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getVertScrollbar();
         if (pScrollbar)
             return (pScrollbar->getScrollPosition() / (pScrollbar->getDocumentSize() - pScrollbar->getPageSize()));
     }
@@ -619,7 +622,7 @@ void CGUIGridList_Impl::SetHorizontalScrollPosition(float fPosition)
 {
     try
     {
-        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->d_horzScrollbar;
+        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getHorzScrollbar();
         if (pScrollbar)
             pScrollbar->setScrollPosition(fPosition * (pScrollbar->getDocumentSize() - pScrollbar->getPageSize()));
     }
@@ -632,7 +635,7 @@ void CGUIGridList_Impl::SetVerticalScrollPosition(float fPosition)
 {
     try
     {
-        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->d_vertScrollbar;
+        CEGUI::Scrollbar* pScrollbar = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getVertScrollbar();
         if (pScrollbar)
             pScrollbar->setScrollPosition(fPosition * (pScrollbar->getDocumentSize() - pScrollbar->getPageSize()));
     }
@@ -712,7 +715,40 @@ SelectionMode CGUIGridList_Impl::GetSelectionMode()
 
 void CGUIGridList_Impl::GetVisibleRowRange(int& iFirst, int& iLast)
 {
-    reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->getVisibleRowRange(iFirst, iLast);
+    // CEGUI 0.8.7 dropped getVisibleRowRange (it used to just return private, render-time
+    // cached state), so this recomputes the same thing from the scrollbar position and each
+    // row's height.
+    iFirst = 0;
+    iLast = -1;
+
+    CEGUI::MultiColumnList* pList = reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow);
+    const CEGUI::uint       rowCount = pList->getRowCount();
+    if (rowCount == 0)
+        return;
+
+    const CEGUI::Scrollbar* pVertScrollbar = pList->getVertScrollbar();
+    const float             fScrollPos = pVertScrollbar ? pVertScrollbar->getScrollPosition() : 0.0f;
+    const float             fViewHeight = pList->getListRenderArea().getHeight();
+
+    bool  bFoundFirst = false;
+    float fY = -fScrollPos;
+    for (CEGUI::uint i = 0; i < rowCount; ++i)
+    {
+        const float fRowHeight = pList->getHighestRowItemHeight(i);
+
+        if (!bFoundFirst && (fY + fRowHeight) > 0.0f)
+        {
+            iFirst = static_cast<int>(i);
+            bFoundFirst = true;
+        }
+
+        if (bFoundFirst)
+            iLast = static_cast<int>(i);
+
+        fY += fRowHeight;
+        if (fY >= fViewHeight)
+            break;
+    }
 }
 
 CGUIListItem* CGUIGridList_Impl::GetSelectedItem()
@@ -773,7 +809,7 @@ void CGUIGridList_Impl::SetSelectedItem(int iRow, int hColumn, bool bReset)
         // grid settings for full row select, etc...
         reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->setItemSelectState(reinterpret_cast<CGUIListItem_Impl*>(pItem)->GetListItem(), true);
 
-        reinterpret_cast<CEGUI::MultiColumnList*>(m_pWindow)->requestRedraw();
+        m_pWindow->invalidate();
     }
 }
 

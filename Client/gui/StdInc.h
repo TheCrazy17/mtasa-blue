@@ -1,5 +1,5 @@
 
-#include <CEGUI.h>
+#include <CEGUI/CEGUI.h>
 #include <windows.h>
 #define MTA_CLIENT
 #define SHARED_UTIL_WITH_FAST_HASH_MAP
@@ -10,9 +10,14 @@
 #include <vector>
 
 #include <d3dx9.h>
-#include <renderers/directx9GUIRenderer/d3d9renderer.h>
-#include <renderers/directx9GUIRenderer/d3d9texture.h>
+#include <CEGUI/RendererModules/Direct3D9/Renderer.h>
+#include <CEGUI/RendererModules/Direct3D9/Texture.h>
+#include <CEGUI/WindowRendererSets/Core/StaticImage.h>
+#include <CEGUI/WindowRendererSets/Core/StaticText.h>
+#include <CEGUI/XMLParserModules/TinyXML2/XMLParser.h>
+#include <CEGUI/ImageCodecModules/STB/ImageCodec.h>
 
+#include "CGUIListboxItems.h"
 #include "CGUITabListItem.h"
 #include "CGUITabList.h"
 #include "CGUI_Impl.h"

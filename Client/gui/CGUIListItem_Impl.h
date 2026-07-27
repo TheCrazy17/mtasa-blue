@@ -12,7 +12,8 @@
 #pragma once
 
 #include <gui/CGUIListItem.h>
-#include <CEGUI.h>
+#include <CEGUI/CEGUI.h>
+#include "CGUIListboxItems.h"
 
 class CGUIStaticImage;
 class CGUIStaticImage_Impl;

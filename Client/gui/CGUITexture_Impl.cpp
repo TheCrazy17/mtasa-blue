@@ -10,20 +10,27 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <CEGUI/RendererModules/Direct3D9/Texture.h>
 
 CGUITexture_Impl::CGUITexture_Impl(CGUI_Impl* pGUI)
 {
     // Save the renderer
     m_pRenderer = pGUI->GetRenderer();
 
+    // CEGUI 0.8.7 textures are named and tracked by the renderer, unlike the anonymous
+    // textures the old CEGUI 0.4 renderer created.
+    char szUnique[CGUI_CHAR_SIZE];
+    pGUI->GetUniqueName(szUnique);
+    m_strTextureName = szUnique;
+
     // Create the texture
-    m_pTexture = m_pRenderer->createTexture();
+    m_pTexture = &m_pRenderer->createTexture(m_strTextureName);
 }
 
 CGUITexture_Impl::~CGUITexture_Impl()
 {
     if (m_pTexture)
-        m_pRenderer->destroyTexture(m_pTexture);
+        m_pRenderer->destroyTexture(*m_pTexture);
 }
 
 bool CGUITexture_Impl::LoadFromFile(const char* szFilename)
@@ -42,14 +49,14 @@ bool CGUITexture_Impl::LoadFromFile(const char* szFilename)
 
 void CGUITexture_Impl::LoadFromMemory(const void* pBuffer, unsigned int uiWidth, unsigned int uiHeight)
 {
-    m_pTexture->loadFromMemory(pBuffer, uiWidth, uiHeight);
+    m_pTexture->loadFromMemory(pBuffer, CEGUI::Sizef(static_cast<float>(uiWidth), static_cast<float>(uiHeight)), CEGUI::Texture::PF_RGBA);
 }
 
 void CGUITexture_Impl::Clear()
 {
-    // Destroy the previous texture and recreate it (empty)
-    m_pRenderer->destroyTexture(m_pTexture);
-    m_pTexture = m_pRenderer->createTexture();
+    // Destroy the previous texture and recreate it (empty), reusing the same name
+    m_pRenderer->destroyTexture(*m_pTexture);
+    m_pTexture = &m_pRenderer->createTexture(m_strTextureName);
 }
 
 CEGUI::Texture* CGUITexture_Impl::GetTexture()
@@ -64,10 +71,14 @@ void CGUITexture_Impl::SetTexture(CEGUI::Texture* pTexture)
 
 LPDIRECT3DTEXTURE9 CGUITexture_Impl::GetD3DTexture()
 {
-    return reinterpret_cast<CEGUI::DirectX9Texture*>(m_pTexture)->getD3DTexture();
+    return reinterpret_cast<CEGUI::Direct3D9Texture*>(m_pTexture)->getDirect3D9Texture();
 }
 
 void CGUITexture_Impl::CreateTexture(unsigned int width, unsigned int height)
 {
-    return reinterpret_cast<CEGUI::DirectX9Texture*>(m_pTexture)->createRenderTarget(width, height);
+    // The old CEGUI 0.4 DirectX9Texture could turn itself into a render target in place; CEGUI
+    // 0.8.7's renderer has no equivalent on Texture itself, so this just recreates a blank
+    // texture of the requested size under the same name instead.
+    m_pRenderer->destroyTexture(*m_pTexture);
+    m_pTexture = &m_pRenderer->createTexture(m_strTextureName, CEGUI::Sizef(static_cast<float>(width), static_cast<float>(height)));
 }

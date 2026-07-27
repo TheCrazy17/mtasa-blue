@@ -10,12 +10,12 @@
  *****************************************************************************/
 #include "StdInc.h"
 #include <core/CWebViewInterface.h>
+#include <CEGUI/RendererModules/Direct3D9/Renderer.h>
 
 CGUIWebBrowser_Impl::CGUIWebBrowser_Impl(CGUI_Impl* pGUI, CGUIElement* pParent)
 {
     // Initialize
-    m_pImagesetManager = pGUI->GetImageSetManager();
-    m_pImageset = nullptr;
+    m_pTexture = nullptr;
     m_pImage = nullptr;
     m_pGUI = pGUI;
     SetManager(pGUI);
@@ -28,8 +28,8 @@ CGUIWebBrowser_Impl::CGUIWebBrowser_Impl(CGUI_Impl* pGUI, CGUIElement* pParent)
     // Create the control and set default properties
     m_pWindow = pGUI->GetWindowManager()->createWindow(CGUIWEBBROWSER_NAME, szUnique);
     m_pWindow->setDestroyedByParent(false);
-    m_pWindow->setRect(CEGUI::Relative, CEGUI::Rect(0.0f, 0.0f, 1.0f, 1.0f));
-    reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->setBackgroundEnabled(false);
+    m_pWindow->setArea(CEGUI::UDim(0.0f, 0.0f), CEGUI::UDim(0.0f, 0.0f), CEGUI::UDim(1.0f, 0.0f), CEGUI::UDim(1.0f, 0.0f));
+    GetStaticImage()->setBackgroundEnabled(false);
 
     // Store the pointer to this CGUI element in the CEGUI element
     m_pWindow->setUserData(reinterpret_cast<void*>(this));
@@ -67,71 +67,74 @@ CGUIWebBrowser_Impl::~CGUIWebBrowser_Impl()
 void CGUIWebBrowser_Impl::Clear()
 {
     // Stop the control from using it
-    reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->setImage(nullptr);
+    GetStaticImage()->setImage(nullptr);
 
-    // Kill the images
-    if (m_pImageset)
+    if (m_pImage)
     {
-        m_pImageset->undefineAllImages();
-        m_pImagesetManager->destroyImageset(m_pImageset);
+        m_pGUI->GetImageSetManager()->destroy(m_strImageName);
+        m_strImageName.clear();
         m_pImage = nullptr;
-        m_pImageset = nullptr;
     }
+
+    if (m_pTexture)
+    {
+        m_pGUI->GetRenderer()->destroyTexture(*m_pTexture);
+        m_pTexture = nullptr;
+    }
+}
+
+void CGUIWebBrowser_Impl::RebindTexture()
+{
+    if (!m_pWebView)
+        return;
+
+    if (m_pTexture)
+        m_pGUI->GetRenderer()->destroyTexture(*m_pTexture);
+
+    // Wrap the web view's existing D3D texture directly (name has to be unique per (re)bind,
+    // since the old one was just destroyed above but CEGUI doesn't immediately free the name).
+    char szUnique[CGUI_CHAR_SIZE];
+    m_pGUI->GetUniqueName(szUnique);
+    auto* pRenderer = static_cast<CEGUI::Direct3D9Renderer*>(m_pGUI->GetRenderer());
+    m_pTexture = &pRenderer->createTexture(szUnique, m_pWebView->GetTexture());
+
+    if (!m_pImage)
+    {
+        m_pGUI->GetUniqueName(szUnique);
+        m_strImageName = szUnique;
+        m_pImage = static_cast<CEGUI::BasicImage*>(&m_pGUI->GetImageSetManager()->create("BasicImage", m_strImageName));
+    }
+
+    m_pImage->setTexture(m_pTexture);
+    m_pImage->setArea(CEGUI::Rectf(CEGUI::Vector2f(0.0f, 0.0f), m_pTexture->getSize()));
+
+    GetStaticImage()->setImage(m_pImage);
 }
 
 void CGUIWebBrowser_Impl::LoadFromWebView(CWebViewInterface* pWebView)
 {
     m_pWebView = pWebView;
-
-    if (m_pImageset && m_pImage)
-    {
-        m_pImageset->undefineAllImages();
-    }
-
-    CGUIWebBrowserTexture* pCEGUITexture = new CGUIWebBrowserTexture(m_pGUI->GetRenderer(), m_pWebView);
-
-    // Get an unique identifier for CEGUI for the imageset
-    char szUnique[CGUI_CHAR_SIZE];
-    m_pGUI->GetUniqueName(szUnique);
-
-    // Create an imageset
-    if (!m_pImageset)
-    {
-        while (m_pImagesetManager->isImagesetPresent(szUnique))
-            m_pGUI->GetUniqueName(szUnique);
-        m_pImageset = m_pImagesetManager->createImageset(szUnique, pCEGUITexture, true);
-    }
-
-    // Get an unique identifier for CEGUI for the image
-    m_pGUI->GetUniqueName(szUnique);
-
-    // Define an image and get its pointer
-    m_pImageset->defineImage(szUnique, CEGUI::Point(0, 0), CEGUI::Size(pCEGUITexture->getWidth(), pCEGUITexture->getHeight()), CEGUI::Point(0, 0));
-    m_pImage = const_cast<CEGUI::Image*>(
-        &m_pImageset->getImage(szUnique));  // const_cast here is a huge hack, but is okay here since all images generated here are unique
-
-    // Set the image just loaded as the image to be drawn for the widget
-    reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->setImage(m_pImage);
+    RebindTexture();
 }
 
 void CGUIWebBrowser_Impl::SetFrameEnabled(bool bFrameEnabled)
 {
-    reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->setFrameEnabled(bFrameEnabled);
+    GetStaticImage()->setFrameEnabled(bFrameEnabled);
 }
 
 bool CGUIWebBrowser_Impl::IsFrameEnabled()
 {
-    return reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->isFrameEnabled();
+    return GetStaticImage()->isFrameEnabled();
 }
 
 CEGUI::Image* CGUIWebBrowser_Impl::GetDirectImage()
 {
-    return const_cast<CEGUI::Image*>(reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->getImage());
+    return m_pImage;
 }
 
 void CGUIWebBrowser_Impl::Render()
 {
-    return reinterpret_cast<CEGUI::StaticImage*>(m_pWindow)->render();
+    GetStaticImage()->render();
 }
 
 bool CGUIWebBrowser_Impl::HasInputFocus()
@@ -145,13 +148,16 @@ void CGUIWebBrowser_Impl::SetSize(const CVector2D& vecSize, bool bRelative)
     CGUIElement_Impl::SetSize(vecSize, bRelative);
     auto absSize = CGUIElement_Impl::GetSize(false);
 
-    // Update image area
-    if (m_pImage)
-        m_pImage->setSourceTextureArea(CEGUI::Rect(0, 0, absSize.fX, absSize.fY));
-
     // Resize underlying web view as well
     if (m_pWebView)
+    {
         m_pWebView->Resize(absSize);
+
+        // D3D render targets can't be resized in place, so CEF hands back a new texture whenever
+        // the view is resized; re-wrap whatever texture it has now rather than just adjusting the
+        // old image's source area.
+        RebindTexture();
+    }
 }
 
 bool CGUIWebBrowser_Impl::Event_MouseButtonDown(const CEGUI::EventArgs& e)
@@ -200,7 +206,8 @@ bool CGUIWebBrowser_Impl::Event_MouseMove(const CEGUI::EventArgs& e)
 {
     const CEGUI::MouseEventArgs& args = reinterpret_cast<const CEGUI::MouseEventArgs&>(e);
 
-    m_pWebView->InjectMouseMove((int)(args.position.d_x - m_pWindow->windowToScreenX(0.0f)), (int)(args.position.d_y - m_pWindow->windowToScreenY(0.0f)));
+    const CEGUI::Vector2f localPos = CEGUI::CoordConverter::screenToWindow(*m_pWindow, args.position);
+    m_pWebView->InjectMouseMove(static_cast<int>(localPos.d_x), static_cast<int>(localPos.d_y));
     return true;
 }
 
@@ -222,23 +229,4 @@ bool CGUIWebBrowser_Impl::Event_Deactivated(const CEGUI::EventArgs& e)
 {
     m_pWebView->Focus(false);
     return true;
-}
-
-CGUIWebBrowserTexture::CGUIWebBrowserTexture(CEGUI::Renderer* pOwner, CWebViewInterface* pWebView) : CEGUI::DirectX9Texture(pOwner), m_pWebView(pWebView)
-{
-}
-
-ushort CGUIWebBrowserTexture::getWidth() const
-{
-    return static_cast<ushort>(m_pWebView->GetSize().fX);
-}
-
-ushort CGUIWebBrowserTexture::getHeight() const
-{
-    return static_cast<ushort>(m_pWebView->GetSize().fY);
-}
-
-LPDIRECT3DTEXTURE9 CGUIWebBrowserTexture::getD3DTexture() const
-{
-    return m_pWebView->GetTexture();
 }

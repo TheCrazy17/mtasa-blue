@@ -10,7 +10,7 @@ project "CEGUI087"
 		"../freetype/include"
 	}
 
-	links { "freetype", "tinyxml2" }
+	links { "freetype", "tinyxml2", "dbghelp.lib" }
 
 	defines {
 		"CEGUI_STATIC",

@@ -30,7 +30,7 @@ CGUIComboBox_Impl::CGUIComboBox_Impl(CGUI_Impl* pGUI, CGUIElement* pParent, cons
 
     m_pWindow->setText(storedCaption);
 
-    m_pWindow->setSize(CEGUI::Absolute, CEGUI::Size(128.0f, 24.0f));
+    m_pWindow->setSize(CEGUI::USize(CEGUI::UDim(0.0f, 128.0f), CEGUI::UDim(0.0f, 24.0f)));
     m_pWindow->setVisible(true);
 
     // Store the pointer to this CGUI element in the CEGUI element
@@ -177,7 +177,7 @@ bool CGUIComboBox_Impl::SetItemText(int index, const char* szText)
     try
     {
         CEGUI::ListboxItem* pItem = reinterpret_cast<CEGUI::Combobox*>(m_pWindow)->getListboxItemFromIndex(index);
-        pItem->setText(CGUI_Impl::GetUTFString(szText), NULL);
+        pItem->setText(CGUI_Impl::GetUTFString(szText));
         if (pItem->isSelected())  // if this is currently selected, let's update the editbox.
         {
             m_pWindow->setText(CGUI_Impl::GetUTFString(szText));

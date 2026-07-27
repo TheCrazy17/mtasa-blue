@@ -12,7 +12,7 @@
 #pragma once
 
 #include <gui/CGUIFont.h>
-#include <CEGUI.h>
+#include <CEGUI/CEGUI.h>
 
 class CGUIFont_Impl : public CGUIFont
 {
@@ -38,6 +38,7 @@ public:
                         float fScaleY);
 
 private:
-    CEGUI::Font*        m_pFont;
-    CEGUI::FontManager* m_pFontManager;
+    CEGUI::Font*           m_pFont;
+    CEGUI::FontManager*    m_pFontManager;
+    CEGUI::GeometryBuffer* m_pGeometryBuffer;
 };

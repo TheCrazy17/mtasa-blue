@@ -10,7 +10,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <CEGUI.h>
+#include <CEGUI/CEGUI.h>
 #include "CGUIElement_Impl.h"
 
 inline void DestroyGuiWindowRecursive(CEGUI::Window* pWindow)

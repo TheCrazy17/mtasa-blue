@@ -13,6 +13,7 @@
 
 #include <gui/CGUIStaticImage.h>
 #include "CGUITexture_Impl.h"
+#include <CEGUI/WindowRendererSets/Core/StaticImage.h>
 
 class CGUITexture;
 class CGUITexture_Impl;
@@ -38,12 +39,16 @@ public:
     eCGUIType GetType() { return CGUI_STATICIMAGE; }
 
 private:
-    class CGUI_Impl*        m_pGUI;
-    bool                    m_bCreatedTexture;
-    CGUITexture_Impl*       m_pTexture;
-    CEGUI::ImagesetManager* m_pImagesetManager;
-    CEGUI::Imageset*        m_pImageset;
-    const CEGUI::Image*     m_pImage;
+    // "CGUI/StaticImage" is rendered by a Core/StaticImage window renderer attached to a plain
+    // window in CEGUI 0.8.7, rather than being its own Window subclass like it was in 0.4.
+    CEGUI::FalagardStaticImage* GetStaticImage() const { return static_cast<CEGUI::FalagardStaticImage*>(m_pWindow->getWindowRenderer()); }
+
+    class CGUI_Impl*     m_pGUI;
+    bool                 m_bCreatedTexture;
+    CGUITexture_Impl*    m_pTexture;
+    CEGUI::ImageManager* m_pImageManager;
+    CEGUI::String        m_strImageName;
+    const CEGUI::Image*  m_pImage;
 
 #include "CGUIElement_Inc.h"
 };
