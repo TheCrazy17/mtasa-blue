@@ -178,6 +178,11 @@ workspace "MTASA"
 		include "vendor/cegui-0.4.0-custom/WidgetSets/Falagard"
 		include "vendor/cegui-0.4.0-custom"
 
+		-- WIP: not yet linked into Client/gui, builds standalone for now
+		-- while the CEGUI 0.4 -> 0.8.7 migration is in progress.
+		group "Client/CEGUI-0.8.7 (WIP)"
+		include "vendor/cegui-0.8.7"
+
 		group "Vendor"
 		include "vendor/portaudio"
 		include "vendor/cef3"
