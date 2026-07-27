@@ -24,7 +24,7 @@ CLocalGUI* CSingleton<CLocalGUI>::m_pSingleton = NULL;
 #endif
 #define GET_WHEEL_DELTA_WPARAM(wParam) ((short)HIWORD(wParam))
 
-const char* const DEFAULT_SKIN_NAME = "Default 2023";  // TODO: Change to whatever the default skin is if it changes
+const char* const DEFAULT_SKIN_NAME = "GWEN";  // Changed from "Default 2023" with the CEGUI 0.8.7 upgrade; old skins are in the 0.4 Falagard format and won't load anymore.
 
 CLocalGUI::CLocalGUI()
 {

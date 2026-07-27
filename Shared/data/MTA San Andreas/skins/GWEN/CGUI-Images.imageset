@@ -1,0 +1,4 @@
+<?xml version="1.0" ?>
+<Imageset autoScaled="false" imagefile="CGUI-Images.png" name="CGUI-Images" nativeHorzRes="800" nativeVertRes="600" version="2">
+    <Image height="25" name="MouseArrow" width="17" xPos="0" yPos="0" />
+</Imageset>

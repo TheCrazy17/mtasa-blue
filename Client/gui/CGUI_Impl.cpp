@@ -219,7 +219,10 @@ void CGUI_Impl::SetSkin(const char* szName)
 
     PushGuiWorkingDirectory(CalcMTASAPath(PathJoin("skins", szName)));
 
-    CEGUI::Scheme& scheme = CEGUI::SchemeManager::getSingleton().createFromFile("CGUI.xml", "schemes");
+    // Unlike the old CEGUI 0.4 skins, which were always a "CGUI.xml" file regardless of what the
+    // skin folder was named, each skin here keeps CEGUI's own native scheme filename convention
+    // (matching whatever its own name is) so stock CEGUI skins can be dropped in unmodified.
+    CEGUI::Scheme& scheme = CEGUI::SchemeManager::getSingleton().createFromFile(SString("%s.scheme", szName).c_str(), "schemes");
     m_CurrentSchemeName = scheme.getName().c_str();
     m_HasSchemeLoaded = true;
 
