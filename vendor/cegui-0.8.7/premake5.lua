@@ -6,11 +6,11 @@ project "CEGUI087"
 
 	includedirs {
 		"include",
-		"dependencies/rapidxml",
+		"../tinyxml2",
 		"../freetype/include"
 	}
 
-	links { "freetype" }
+	links { "freetype", "tinyxml2" }
 
 	defines {
 		"CEGUI_STATIC",

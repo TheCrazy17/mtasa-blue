@@ -66,8 +66,9 @@ only the modules MTA actually vendors and compiles in.
 /* #undef CEGUI_BUILD_XMLPARSER_EXPAT */
 /* #undef CEGUI_BUILD_XMLPARSER_XERCES */
 /* #undef CEGUI_BUILD_XMLPARSER_LIBXML2 */
-#define CEGUI_BUILD_XMLPARSER_RAPIDXML
+/* #undef CEGUI_BUILD_XMLPARSER_RAPIDXML */
 /* #undef CEGUI_BUILD_XMLPARSER_TINYXML */
+#define CEGUI_BUILD_XMLPARSER_TINYXML2
 
 //////////////////////////////////////////////////////////////////////////
 // No scripting modules built in; MTA has its own Lua integration.

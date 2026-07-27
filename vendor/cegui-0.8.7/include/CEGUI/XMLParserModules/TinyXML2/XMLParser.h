@@ -1,6 +1,5 @@
 /***********************************************************************
-    created:    Mar 27 2010
-    author:     Jay Sprenkle
+    created:    27/7/2026
 *************************************************************************/
 /***************************************************************************
  *   Copyright (C) 2004 - 2010 Paul D Turner & The CEGUI Development Team
@@ -24,30 +23,20 @@
  *   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  *   OTHER DEALINGS IN THE SOFTWARE.
  ***************************************************************************/
-#ifndef _CEGUIRapidXMLParser_h_
-#define _CEGUIRapidXMLParser_h_
+#ifndef _CEGUITinyXML2Parser_h_
+#define _CEGUITinyXML2Parser_h_
 
 #include "../../XMLParser.h"
-
-#if (defined( __WIN32__ ) || defined( _WIN32 )) && !defined(CEGUI_STATIC)
-#   ifdef CEGUIRAPIDXMLPARSER_EXPORTS
-#       define CEGUIRAPIDXMLPARSER_API __declspec(dllexport)
-#   else
-#       define CEGUIRAPIDXMLPARSER_API __declspec(dllimport)
-#   endif
-#else
-#   define CEGUIRAPIDXMLPARSER_API
-#endif
 
 // Start of CEGUI namespace section
 namespace CEGUI
 {
-//! Implementation of XMLParser using RapidXML
-class CEGUIRAPIDXMLPARSER_API RapidXMLParser : public XMLParser
+//! Implementation of XMLParser using MTA's vendored tinyxml2
+class CEGUIEXPORT TinyXML2Parser : public XMLParser
 {
 public:
-    RapidXMLParser(void);
-    ~RapidXMLParser(void);
+    TinyXML2Parser(void);
+    ~TinyXML2Parser(void);
 
     // Implementation of public abstract interface
     void parseXML(XMLHandler& handler, const RawDataContainer& source,
@@ -62,5 +51,4 @@ protected:
 } // End of  CEGUI namespace section
 
 
-#endif  // end of guard _CEGUIRapidXMLParser_h_
-
+#endif  // end of guard _CEGUITinyXML2Parser_h_
