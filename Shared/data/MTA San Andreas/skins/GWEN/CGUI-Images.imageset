@@ -1,8 +1,0 @@
-<?xml version="1.0" ?>
-<Imageset autoScaled="false" imagefile="CGUI-Images.png" name="CGUI-Images" nativeHorzRes="800" nativeVertRes="600" version="2">
-    <Image height="25" name="MouseArrow" width="17" xPos="0" yPos="0" />
-    <!-- Same pixels as GWEN's own Input.ListBox.EvenLineSelected, cropped out so MTA's list item
-         code (which sets this brush directly, the same way it did on every skin before this
-         update) doesn't need a skin specific image name. -->
-    <Image height="31" name="ListboxSelectionBrush" width="31" xPos="17" yPos="0" />
-</Imageset>

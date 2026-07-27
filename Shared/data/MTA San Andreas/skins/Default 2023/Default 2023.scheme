@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<GUIScheme name="Default 2023"	version="5">
+  <Imageset filename="Default 2023.imageset" />
+  <Font filename="OpenSans-8.font" />
+  <LookNFeel filename="Default 2023.looknfeel" />
+  <WindowRendererSet filename="CEGUICoreWindowRendererSet" />
+  <FalagardMapping lookNFeel="Default 2023/Button"			renderer="Core/Button"			targetType="CEGUI/PushButton"		windowType="CGUI/Button" />
+  <FalagardMapping lookNFeel="Default 2023/RadioButton"			renderer="Core/ToggleButton"		targetType="CEGUI/RadioButton"		windowType="CGUI/RadioButton" />
+  <FalagardMapping lookNFeel="Default 2023/Checkbox"			renderer="Core/ToggleButton"		targetType="CEGUI/ToggleButton"		windowType="CGUI/Checkbox" />
+  <FalagardMapping lookNFeel="Default 2023/Editbox"			renderer="Core/Editbox"			targetType="CEGUI/Editbox"		windowType="CGUI/Editbox" />
+  <FalagardMapping lookNFeel="Default 2023/Titlebar"			renderer="Core/Titlebar"		targetType="CEGUI/Titlebar"		windowType="Default 2023/Titlebar" />
+  <FalagardMapping lookNFeel="Default 2023/ImageButton"			renderer="Core/Button"			targetType="CEGUI/PushButton"		windowType="Default 2023/ImageButton" />
+  <FalagardMapping lookNFeel="Default 2023/FrameWindow"			renderer="Core/FrameWindow"		targetType="CEGUI/FrameWindow"		windowType="CGUI/FrameWindow" />
+  <FalagardMapping lookNFeel="Default 2023/GroupBox"			renderer="Core/Default"			targetType="CEGUI/GroupBox"		windowType="Default 2023/GroupBox" />
+  <FalagardMapping lookNFeel="Default 2023/ProgressBar"			renderer="Core/ProgressBar"		targetType="CEGUI/ProgressBar"		windowType="CGUI/ProgressBar" />
+  <FalagardMapping lookNFeel="Default 2023/VUMeter"			renderer="Core/ProgressBar"		targetType="CEGUI/ProgressBar"		windowType="Default 2023/VUMeter" />
+  <FalagardMapping lookNFeel="Default 2023/SliderThumb"			renderer="Core/Button"			targetType="CEGUI/Thumb"		windowType="Default 2023/SliderThumb" />
+  <FalagardMapping lookNFeel="Default 2023/HorizontalSliderThumb"	renderer="Core/Button"			targetType="CEGUI/Thumb"		windowType="Default 2023/HorizontalSliderThumb" />	
+  <FalagardMapping lookNFeel="Default 2023/Slider"			renderer="Core/Slider"			targetType="CEGUI/Slider"		windowType="Default 2023/Slider" />
+  <FalagardMapping lookNFeel="Default 2023/HorizontalSlider"		renderer="Core/Slider"			targetType="CEGUI/Slider"		windowType="Default 2023/HorizontalSlider" />
+  <FalagardMapping lookNFeel="Default 2023/HorizontalScrollbarThumb"	renderer="Core/Button"			targetType="CEGUI/Thumb"		windowType="Default 2023/HorizontalScrollbarThumb" />
+  <FalagardMapping lookNFeel="Default 2023/HorizontalScrollbar"		renderer="Core/Scrollbar"		targetType="CEGUI/Scrollbar"		windowType="CGUI/HorizontalScrollbar" />
+  <FalagardMapping lookNFeel="Default 2023/VerticalScrollbarThumb"	renderer="Core/Button"			targetType="CEGUI/Thumb"		windowType="Default 2023/VerticalScrollbarThumb" />
+  <FalagardMapping lookNFeel="Default 2023/VerticalScrollbar"		renderer="Core/Scrollbar"		targetType="CEGUI/Scrollbar"		windowType="CGUI/VerticalScrollbar" />
+  <FalagardMapping lookNFeel="Default 2023/Listbox"			renderer="Core/Listbox"			targetType="CEGUI/Listbox"		windowType="Default 2023/Listbox" />
+  <FalagardMapping lookNFeel="Default 2023/ListboxItem"			renderer="Core/ItemEntry"		targetType="CEGUI/ItemEntry"		windowType="Default 2023/ListboxItem" />
+  <FalagardMapping lookNFeel="Default 2023/ComboDropList"		renderer="Core/Listbox"			targetType="CEGUI/ComboDropList"	windowType="Default 2023/ComboDropList" />
+  <FalagardMapping lookNFeel="Default 2023/ComboEditbox"		renderer="Core/Editbox"			targetType="CEGUI/Editbox"		windowType="Default 2023/ComboEditbox" />
+  <FalagardMapping lookNFeel="Default 2023/Combobox"			renderer="Core/Default"			targetType="CEGUI/Combobox"		windowType="CGUI/Combobox" />
+  <FalagardMapping lookNFeel="Default 2023/Spinner"			renderer="Core/Default"			targetType="CEGUI/Spinner"		windowType="Default 2023/Spinner" />
+  <FalagardMapping lookNFeel="Default 2023/StaticImage"			renderer="Core/StaticImage"		targetType="DefaultWindow"		windowType="CGUI/StaticImage" />
+  <FalagardMapping lookNFeel="Default 2023/StaticText"			renderer="Core/StaticText"		targetType="DefaultWindow"		windowType="CGUI/StaticText" />
+  <FalagardMapping lookNFeel="Default 2023/ListHeaderSegment"		renderer="Core/ListHeaderSegment"	targetType="CEGUI/ListHeaderSegment"	windowType="Default 2023/ListHeaderSegment" />
+  <FalagardMapping lookNFeel="Default 2023/ListHeader"			renderer="Core/ListHeader"		targetType="CEGUI/ListHeader"		windowType="Default 2023/ListHeader" />
+  <FalagardMapping lookNFeel="Default 2023/MultiColumnList"		renderer="Core/MultiColumnList"		targetType="CEGUI/MultiColumnList"	windowType="CGUI/MultiColumnList" />
+  <FalagardMapping lookNFeel="Default 2023/MultiLineEditbox"		renderer="Core/MultiLineEditbox"	targetType="CEGUI/MultiLineEditbox"	windowType="CGUI/MultiLineEditbox" />
+  <FalagardMapping lookNFeel="Default 2023/Button"			renderer="Core/Button"			targetType="CEGUI/PushButton"		windowType="Default 2023/SystemButton" />
+  <FalagardMapping lookNFeel="Default 2023/Tooltip"			renderer="Core/Tooltip"			targetType="CEGUI/Tooltip"		windowType="Default 2023/Tooltip" />
+  <FalagardMapping lookNFeel="Default 2023/ScrollablePane"		renderer="Core/ScrollablePane"		targetType="CEGUI/ScrollablePane"	windowType="CGUI/ScrollablePane" />
+  <FalagardMapping lookNFeel="Default 2023/TabButton"			renderer="Core/TabButton"		targetType="CEGUI/TabButton"		windowType="Default 2023/TabButton" />
+  <FalagardMapping lookNFeel="Default 2023/TabContentPane"		renderer="Core/Default"			targetType="DefaultWindow"		windowType="Default 2023/TabContentPane" />
+  <FalagardMapping lookNFeel="Default 2023/TabButtonPane"		renderer="Core/Default"			targetType="DefaultWindow"		windowType="Default 2023/TabButtonPane" />
+  <FalagardMapping lookNFeel="Default 2023/TabControl"			renderer="Core/TabControl"		targetType="CEGUI/TabControl"		windowType="CGUI/TabControl" />
+  <FalagardMapping lookNFeel="Default 2023/MenuItem"			renderer="Core/MenuItem"		targetType="CEGUI/MenuItem"		windowType="Default 2023/MenuItem" />
+  <FalagardMapping lookNFeel="Default 2023/Menubar"			renderer="Core/Menubar"			targetType="CEGUI/Menubar"		windowType="Default 2023/Menubar" />
+  <FalagardMapping lookNFeel="Default 2023/PopupMenu"			renderer="Core/PopupMenu"		targetType="CEGUI/PopupMenu"		windowType="Default 2023/PopupMenu" />
+  <FalagardMapping lookNFeel="Default 2023/Tree"			renderer="Core/Tree"			targetType="CEGUI/Tree"			windowType="Default 2023/Tree" />
+  <FalagardMapping lookNFeel="Default 2023/Label"			renderer="Core/Default"			targetType="DefaultWindow"		windowType="Default 2023/Label" />
+</GUIScheme>

@@ -147,6 +147,20 @@ CGUI_Impl::CGUI_Impl(IDirect3DDevice9* pDevice)
 
     SetDefaultGuiWorkingDirectory(CalcMTASAPath("MTA"));
 
+    // Loaded once here rather than bundled into each skin: this is MTA's own mouse cursor and
+    // listbox selection brush, referenced directly by fixed name from C++ (see SetSkin() below
+    // and CGUIListItem_Impl.cpp), so it has to survive every skin switch rather than being tied
+    // to whichever skin's scheme happens to be loaded at the time.
+    try
+    {
+        CEGUI::ImageManager::getSingleton().loadImageset(PathJoin("cgui", "CGUI-Images.imageset"), "mta-images");
+    }
+    catch (CEGUI::Exception& e)
+    {
+        SString strMessage = e.getMessage().c_str();
+        BrowseToSolution("create-fonts", EXIT_GAME_FIRST | ASK_GO_ONLINE, SString("Error loading cursor images!\n\n%s", *strMessage));
+    }
+
     // Set logging to Informative for debug and Standard for release
 #if defined(_DEBUG) || defined(DEBUG)
     CEGUI::Logger::getSingleton().setLoggingLevel(CEGUI::Informative);
@@ -259,9 +273,6 @@ void CGUI_Impl::SetSkin(const char* szName)
 
     // Grab our default cursor
     m_pCursor = guiContext.getMouseCursor().getDefaultImage();
-
-    // Used to create unique names for widget instances
-    m_ulPreviousUnique = 0;
 
     SubscribeToMouseEvents();
 

@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<Imageset autoScaled="false" imagefile="cgui/CGUI-Images.png" name="CGUI-Images" nativeHorzRes="800" nativeVertRes="600" resourceGroup="mta-images" version="2">
+    <!-- MTA's mouse cursor and listbox selection brush, shared across every skin regardless of
+         which one is currently loaded (see CGUI_Impl.cpp's constructor and CGUIListItem_Impl.cpp,
+         both of which reference these two images directly by this fixed name). Loaded once here
+         instead of bundled per skin, since CEGUI 0.8.7 never actually unloads an XML imageset when
+         its owning scheme is destroyed, so two skins sharing an imageset name would silently reuse
+         whichever texture happened to load first after a runtime skin switch. -->
+    <Image height="25" name="MouseArrow" width="17" xPos="0" yPos="0" />
+    <Image height="31" name="ListboxSelectionBrush" width="31" xPos="17" yPos="0" />
+</Imageset>

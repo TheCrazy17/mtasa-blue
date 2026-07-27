@@ -1,8 +1,6 @@
 <?xml version="1.0"?>
 <GUIScheme name="GWEN"	version="5">
   <Imageset filename="GWEN.imageset" />
-  <!-- MTA's own mouse cursor image, since GWEN doesn't ship an arrow-shaped one of its own. -->
-  <Imageset filename="CGUI-Images.imageset" />
   <Font filename="OpenSans-8.font" />
   <LookNFeel filename="GWEN.looknfeel" />
   <WindowRendererSet filename="CEGUICoreWindowRendererSet" />
