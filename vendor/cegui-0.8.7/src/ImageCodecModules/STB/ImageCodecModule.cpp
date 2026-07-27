@@ -26,7 +26,12 @@
  *   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  *   OTHER DEALINGS IN THE SOFTWARE.
  ***************************************************************************/
-#include "CEGUI/ImageCodecModules/STB/ImageCodecModule.h" 
+#include "CEGUI/ImageCodecModules/STB/ImageCodecModule.h"
+
+// This is the one translation unit that actually compiles stb_image's decoder; every other
+// file including stb_image.h only sees its declarations.
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 //----------------------------------------------------------------------------//
 CEGUI::ImageCodec* createImageCodec(void)

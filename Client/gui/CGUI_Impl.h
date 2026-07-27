@@ -377,6 +377,7 @@ private:
     std::list<SString> m_GuiWorkingDirectoryStack;
 
     bool         m_HasSchemeLoaded;
+    bool         m_bSkinDirectoryPushed = false;
     SString      m_CurrentSchemeName;
     CElapsedTime m_RenderOkTimer;
 

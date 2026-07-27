@@ -132,8 +132,18 @@ CGUI_Impl::CGUI_Impl(IDirect3DDevice9* pDevice)
     // "absolute" always maps to an empty directory, so a resource loaded through it (e.g. a font
     // file already given as a full Windows path) is used as-is instead of getting a directory
     // prefixed onto it - the resource provider always concatenates group directory + filename.
+    //
+    // "mta-fonts" and "mta-images" are for MTA's own built-in resources (fonts such as sa-gothic
+    // and sans, and hardcoded icons such as the server browser and radar set images), which are
+    // always loaded with a path relative to the MTA folder, never the active skin's folder; they
+    // stay pointed there permanently, unlike "fonts"/"imagesets" which follow whatever skin is
+    // currently loaded.
     if (auto* pResourceProvider = static_cast<CEGUI::DefaultResourceProvider*>(m_pSystem->getResourceProvider()))
+    {
         pResourceProvider->setResourceGroupDirectory("absolute", "");
+        pResourceProvider->setResourceGroupDirectory("mta-fonts", CalcMTASAPath("MTA"));
+        pResourceProvider->setResourceGroupDirectory("mta-images", CalcMTASAPath("MTA"));
+    }
 
     SetDefaultGuiWorkingDirectory(CalcMTASAPath("MTA"));
 
@@ -217,7 +227,16 @@ void CGUI_Impl::SetSkin(const char* szName)
         CEGUI::SchemeManager::getSingleton().destroy(m_CurrentSchemeName);
     }
 
+    // Kept pushed rather than popped once the scheme's loaded: CEGUI 0.8.7 resolves a font or
+    // image from disk again whenever it needs to (e.g. rebuilding a font's glyph atlas after a
+    // device reset changes the display size), and it does so through the same "fonts"/"imagesets"
+    // resource group the skin was first loaded with, so that group has to still point at the
+    // skin's own folder for as long as the skin stays active, not just during this call.
+    if (m_bSkinDirectoryPushed)
+        PopGuiWorkingDirectory();
+
     PushGuiWorkingDirectory(CalcMTASAPath(PathJoin("skins", szName)));
+    m_bSkinDirectoryPushed = true;
 
     // Unlike the old CEGUI 0.4 skins, which were always a "CGUI.xml" file regardless of what the
     // skin folder was named, each skin here keeps CEGUI's own native scheme filename convention
@@ -225,8 +244,6 @@ void CGUI_Impl::SetSkin(const char* szName)
     CEGUI::Scheme& scheme = CEGUI::SchemeManager::getSingleton().createFromFile(SString("%s.scheme", szName).c_str(), "schemes");
     m_CurrentSchemeName = scheme.getName().c_str();
     m_HasSchemeLoaded = true;
-
-    PopGuiWorkingDirectory();
 
     CEGUI::GUIContext& guiContext = m_pSystem->getDefaultGUIContext();
     guiContext.getMouseCursor().setDefaultImage("CGUI-Images/MouseArrow");
@@ -337,8 +354,11 @@ void CGUI_Impl::Restore()
     {
         static_cast<CEGUI::Direct3D9Renderer*>(m_pRenderer)->postD3DReset();
     }
-    catch (CEGUI::RendererException& exception)
+    catch (CEGUI::Exception& exception)
     {
+        // Not just a RendererException: postD3DReset() also rebuilds font glyph atlases for the
+        // new display size, which reloads each font's raw file from disk and can throw its own
+        // CEGUI::Exception if that fails, same as any other resource load can.
         MessageBox(0, exception.getMessage().c_str(), "CEGUI Exception", MB_OK | MB_ICONERROR | MB_TOPMOST);
         TerminateProcess(GetCurrentProcess(), 1);
     }

@@ -2565,7 +2565,7 @@
           </Dim>
       </Area>
     </NamedArea>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -2582,7 +2582,7 @@
       </Area>
       <VertAlignment type="BottomAligned" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -2722,7 +2722,7 @@
           </Dim>
       </Area>
     </NamedArea>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -2739,7 +2739,7 @@
       </Area>
       <VertAlignment type="BottomAligned" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3029,7 +3029,7 @@
   </WidgetLook>
   
   <WidgetLook name="GWEN/Spinner">
-    <Child nameSuffix="__auto_editbox__" type="GWEN/Editbox">
+    <Child nameSuffix="__auto_editbox__" type="CGUI/Editbox">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3422,7 +3422,7 @@
           </Dim>
       </Area>
     </NamedArea>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3439,7 +3439,7 @@
       </Area>
       <VertAlignment type="BottomAligned" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3734,7 +3734,7 @@
           </Dim>
       </Area>
     </Child>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3751,7 +3751,7 @@
       </Area>
       <VertAlignment type="BottomAligned" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3892,7 +3892,7 @@
           </Dim>
       </Area>
     </NamedArea>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -3909,7 +3909,7 @@
       </Area>
       <VertAlignment type="BottomAligned" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -4203,7 +4203,7 @@
           </Dim>
       </Area>
     </NamedArea>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -4221,7 +4221,7 @@
       <VertAlignment type="BottomAligned" />
       <Property name="NonClient" value="True" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -5056,7 +5056,7 @@
         </Dim>
       </Area>
     </NamedArea>
-    <Child nameSuffix="__auto_hscrollbar__" type="GWEN/HorizontalScrollbar">
+    <Child nameSuffix="__auto_hscrollbar__" type="CGUI/HorizontalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />
@@ -5073,7 +5073,7 @@
       </Area>
       <VertAlignment type="BottomAligned" />
     </Child>
-    <Child nameSuffix="__auto_vscrollbar__" type="GWEN/VerticalScrollbar">
+    <Child nameSuffix="__auto_vscrollbar__" type="CGUI/VerticalScrollbar">
       <Area>
         <Dim type="LeftEdge">
           <AbsoluteDim value="0" />

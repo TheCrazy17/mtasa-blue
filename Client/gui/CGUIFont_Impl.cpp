@@ -21,8 +21,10 @@ CGUIFont_Impl::CGUIFont_Impl(CGUI_Impl* pGUI, const char* szFontName, const char
     // CEGUI 0.8.7 resolves font files through named resource groups rather than a plain path, and
     // always prefixes the group's directory onto the filename; an "absolute" group with an empty
     // directory lets already-rooted paths (Windows system fonts, full file paths) pass through
-    // unmodified instead of getting mangled.
-    const CEGUI::String strResourceGroup = SharedUtil::IsAbsolutePath(szFontFile) ? "absolute" : "fonts";
+    // unmodified instead of getting mangled. Relative paths given here (e.g. "cgui/sagothic.ttf")
+    // are always MTA's own bundled fonts, resolved against the MTA folder through "mta-fonts", not
+    // the skin-relative "fonts" group the active skin's own font uses.
+    const CEGUI::String strResourceGroup = SharedUtil::IsAbsolutePath(szFontFile) ? "absolute" : "mta-fonts";
     const CEGUI::AutoScaledMode eScaleMode = bAutoScale ? CEGUI::ASM_Both : CEGUI::ASM_Disabled;
 
     while (!m_pFont)

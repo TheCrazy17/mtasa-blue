@@ -35,10 +35,16 @@ CGUITexture_Impl::~CGUITexture_Impl()
 
 bool CGUITexture_Impl::LoadFromFile(const char* szFilename)
 {
+    // Callers pass either one of MTA's own hardcoded "cgui\images\..." paths (relative to the MTA
+    // folder, never the active skin's folder) or an already-resolved absolute path (script
+    // resources); an empty resource group doesn't fall back to any working directory under CEGUI
+    // 0.8.7 like it did under the old patched CEGUI 0.4, so it has to be picked explicitly here.
+    const CEGUI::String strResourceGroup = SharedUtil::IsAbsolutePath(szFilename) ? "absolute" : "mta-images";
+
     // Try to load it
     try
     {
-        m_pTexture->loadFromFile(szFilename, "");
+        m_pTexture->loadFromFile(szFilename, strResourceGroup);
     }
     catch (CEGUI::Exception)
     {

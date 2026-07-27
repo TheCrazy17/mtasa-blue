@@ -46,7 +46,6 @@
   <FalagardMapping lookNFeel="GWEN/MenuItem"			renderer="Core/MenuItem"		targetType="CEGUI/MenuItem"		windowType="GWEN/MenuItem" />
   <FalagardMapping lookNFeel="GWEN/Menubar"			renderer="Core/Menubar"			targetType="CEGUI/Menubar"		windowType="GWEN/Menubar" />
   <FalagardMapping lookNFeel="GWEN/PopupMenu"			renderer="Core/PopupMenu"		targetType="CEGUI/PopupMenu"		windowType="GWEN/PopupMenu" />
-  <FalagardMapping lookNFeel="GWEN/ItemListbox"			renderer="Core/ItemListbox"		targetType="CEGUI/ItemListbox"		windowType="GWEN/ItemListbox" />
   <FalagardMapping lookNFeel="GWEN/Tree"			renderer="Core/Tree"			targetType="CEGUI/Tree"			windowType="GWEN/Tree" />
   <FalagardMapping lookNFeel="GWEN/Label"			renderer="Core/Default"			targetType="DefaultWindow"		windowType="GWEN/Label" />
 </GUIScheme>
