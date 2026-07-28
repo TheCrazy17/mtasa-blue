@@ -51,9 +51,10 @@ CVector vecLastLocalPlayerBulletEnd;
 
 eVehicleAimDirection cTempGunDirection;
 
-DWORD             vecTargetPosition;
-DWORD             vecAltPos;
-CPedSAInterface*  pShootingPed;
+DWORD               vecTargetPosition;
+DWORD               vecAltPos;
+CPedSAInterface*    pShootingPed;
+CWeaponSAInterface*  pFiringWeapon;
 EDamageReasonType g_GenerateDamageEventReason = EDamageReason::OTHER;
 
 CPedSAInterface*    pBulletImpactInitiator;
@@ -66,6 +67,7 @@ extern PreWeaponFireHandler*  m_pPreWeaponFireHandler;
 extern PostWeaponFireHandler* m_pPostWeaponFireHandler;
 extern BulletImpactHandler*   m_pBulletImpactHandler;
 extern BulletFireHandler*     m_pBulletFireHandler;
+extern GetPedWeaponFiringRateHandler* m_pGetPedWeaponFiringRateHandler;
 extern DamageHandler*         m_pDamageHandler;
 extern DeathHandler*          m_pDeathHandler;
 extern FireHandler*           m_pFireHandler;
@@ -251,6 +253,20 @@ void Event_PostFire()
     {
         m_pPostWeaponFireHandler();
     }
+
+    // The game just worked out the default delay before this ped's weapon can fire again. If a custom
+    // rate is set for it, rescale that delay instead of the game's own default before anything reads it.
+    if (m_pGetPedWeaponFiringRateHandler && pTargetingPed && pFiringWeapon)
+    {
+        float fRate = m_pGetPedWeaponFiringRateHandler(pTargetingPed, pFiringWeapon->m_eWeaponType);
+        if (fRate > 0.0f && fRate != 1.0f)
+        {
+            std::uint32_t currentTime = *reinterpret_cast<std::uint32_t*>(0xB7CB84);            // CTimer::m_snTimeInMilliseconds
+            std::uint32_t baseDelay = pFiringWeapon->m_timeToNextShootInMS > currentTime ? pFiringWeapon->m_timeToNextShootInMS - currentTime : 0;
+            pFiringWeapon->m_timeToNextShootInMS = currentTime + static_cast<std::uint32_t>(baseDelay / fRate);
+        }
+    }
+
     bWeaponFire = false;
 }
 
@@ -581,6 +597,7 @@ static void __declspec(naked) HOOK_CWeapon__Fire()
         mov     vecOrigin, ebx
         mov     ebx, [esp+8]
         mov     pShootingPed, ebx
+        mov     pFiringWeapon, ecx
         pop     ebx
 
         pushad

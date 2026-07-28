@@ -272,6 +272,7 @@ CClientGame::CClientGame(bool bLocalPlay) : m_ServerInfo(new CServerInfo())
     g_pMultiplayer->SetPostWeaponFireHandler(CClientGame::PostWeaponFire);
     g_pMultiplayer->SetBulletImpactHandler(CClientGame::BulletImpact);
     g_pMultiplayer->SetBulletFireHandler(CClientGame::BulletFire);
+    g_pMultiplayer->SetGetPedWeaponFiringRateHandler(CClientGame::GetPedWeaponFiringRate);
     g_pMultiplayer->SetExplosionHandler(CClientExplosionManager::Hook_StaticExplosionCreation);
     g_pMultiplayer->SetBreakTowLinkHandler(CClientGame::StaticBreakTowLinkHandler);
     g_pMultiplayer->SetDrawRadarAreasHandler(CClientGame::StaticDrawRadarAreasHandler);
@@ -488,6 +489,7 @@ CClientGame::~CClientGame()
     g_pMultiplayer->SetPostWeaponFireHandler(NULL);
     g_pMultiplayer->SetBulletImpactHandler(NULL);
     g_pMultiplayer->SetBulletFireHandler(NULL);
+    g_pMultiplayer->SetGetPedWeaponFiringRateHandler(NULL);
     g_pMultiplayer->SetExplosionHandler(NULL);
     g_pMultiplayer->SetBreakTowLinkHandler(NULL);
     g_pMultiplayer->SetDrawRadarAreasHandler(NULL);
@@ -5330,6 +5332,20 @@ void CClientGame::BulletImpact(CPed* pInitiator, CEntity* pVictim, const CVector
             pInitiatorPed->SetBulletImpactData(pClientVictim, vecCollision);
         }
     }
+}
+
+float CClientGame::GetPedWeaponFiringRate(CPed* pPed, eWeaponType weaponType)
+{
+    if (!pPed)
+        return 1.0f;
+
+    CPools*                pPools = g_pGame->GetPools();
+    SClientEntity<CPedSA>* pPedEntity = pPools->GetPed((DWORD*)pPed->GetInterface());
+    CClientPed*            pClientPed = pPedEntity ? reinterpret_cast<CClientPed*>(pPedEntity->pClientEntity) : nullptr;
+    if (!pClientPed)
+        return 1.0f;
+
+    return pClientPed->GetWeaponFiringRate(weaponType);
 }
 
 void CClientGame::BulletFire(CPed* pInitiator, const CVector* pStartPosition, const CVector* pEndPosition)

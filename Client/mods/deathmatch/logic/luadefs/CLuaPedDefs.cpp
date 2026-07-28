@@ -33,6 +33,9 @@ void CLuaPedDefs::LoadFunctions()
         {"warpPedIntoVehicle", WarpPedIntoVehicle},
         {"removePedFromVehicle", RemovePedFromVehicle},
         {"givePedWeapon", GivePedWeapon},
+        {"setPedWeaponFiringRate", SetPedWeaponFiringRate},
+        {"getPedWeaponFiringRate", GetPedWeaponFiringRate},
+        {"resetPedWeaponFiringRate", ResetPedWeaponFiringRate},
 
         {"setPedVoice", SetPedVoice},
         {"setElementBonePosition", ArgumentParserWarn<false, SetElementBonePosition>},
@@ -209,6 +212,9 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setWalkingStyle", "setPedWalkingStyle");
     lua_classfunction(luaVM, "setStat", "setPedStat");
     lua_classfunction(luaVM, "giveWeapon", "givePedWeapon");
+    lua_classfunction(luaVM, "setWeaponFiringRate", "setPedWeaponFiringRate");
+    lua_classfunction(luaVM, "getWeaponFiringRate", "getPedWeaponFiringRate");
+    lua_classfunction(luaVM, "resetWeaponFiringRate", "resetPedWeaponFiringRate");
     lua_classfunction(luaVM, "isReloadingWeapon", "isPedReloadingWeapon");
     lua_classfunction(luaVM, "setEnterVehicle", "setPedEnterVehicle");
     lua_classfunction(luaVM, "setExitVehicle", "setPedExitVehicle");
@@ -1269,6 +1275,84 @@ int CLuaPedDefs::GivePedWeapon(lua_State* luaVM)
     if (!argStream.HasErrors())
     {
         if (CStaticFunctionDefinitions::GivePedWeapon(*pEntity, weaponType, usAmmo, bSetAsCurrent))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaPedDefs::SetPedWeaponFiringRate(lua_State* luaVM)
+{
+    // bool setPedWeaponFiringRate ( ped thePed, int/string weapon, float rate )
+    CClientEntity*   pEntity = NULL;
+    eWeaponType      weaponType;
+    float            fRate = 1.0f;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pEntity);
+    argStream.ReadEnumStringOrNumber(weaponType);
+    argStream.ReadNumber(fRate);
+
+    if (!argStream.HasErrors())
+    {
+        if (CStaticFunctionDefinitions::SetPedWeaponFiringRate(*pEntity, weaponType, fRate))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaPedDefs::GetPedWeaponFiringRate(lua_State* luaVM)
+{
+    // float getPedWeaponFiringRate ( ped thePed, int/string weapon )
+    CClientEntity*   pEntity = NULL;
+    eWeaponType      weaponType;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pEntity);
+    argStream.ReadEnumStringOrNumber(weaponType);
+
+    if (!argStream.HasErrors())
+    {
+        float fRate = 1.0f;
+        if (CStaticFunctionDefinitions::GetPedWeaponFiringRate(*pEntity, weaponType, fRate))
+        {
+            lua_pushnumber(luaVM, fRate);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaPedDefs::ResetPedWeaponFiringRate(lua_State* luaVM)
+{
+    // bool resetPedWeaponFiringRate ( ped thePed, int/string weapon )
+    CClientEntity*   pEntity = NULL;
+    eWeaponType      weaponType;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pEntity);
+    argStream.ReadEnumStringOrNumber(weaponType);
+
+    if (!argStream.HasErrors())
+    {
+        if (CStaticFunctionDefinitions::ResetPedWeaponFiringRate(*pEntity, weaponType))
         {
             lua_pushboolean(luaVM, true);
             return 1;

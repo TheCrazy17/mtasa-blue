@@ -2054,6 +2054,43 @@ bool CStaticFunctionDefinitions::GivePedWeapon(CClientEntity& Entity, uchar ucWe
     return false;
 }
 
+bool CStaticFunctionDefinitions::SetPedWeaponFiringRate(CClientEntity& Entity, eWeaponType weaponType, float fRate)
+{
+    RUN_CHILDREN(SetPedWeaponFiringRate(**iter, weaponType, fRate))
+
+    if (IS_PED(&Entity))
+    {
+        CClientPed& Ped = static_cast<CClientPed&>(Entity);
+        Ped.SetWeaponFiringRate(weaponType, fRate);
+        return true;
+    }
+    return false;
+}
+
+bool CStaticFunctionDefinitions::GetPedWeaponFiringRate(CClientEntity& Entity, eWeaponType weaponType, float& fRate)
+{
+    if (IS_PED(&Entity))
+    {
+        CClientPed& Ped = static_cast<CClientPed&>(Entity);
+        fRate = Ped.GetWeaponFiringRate(weaponType);
+        return true;
+    }
+    return false;
+}
+
+bool CStaticFunctionDefinitions::ResetPedWeaponFiringRate(CClientEntity& Entity, eWeaponType weaponType)
+{
+    RUN_CHILDREN(ResetPedWeaponFiringRate(**iter, weaponType))
+
+    if (IS_PED(&Entity))
+    {
+        CClientPed& Ped = static_cast<CClientPed&>(Entity);
+        Ped.ResetWeaponFiringRate(weaponType);
+        return true;
+    }
+    return false;
+}
+
 bool CStaticFunctionDefinitions::ShowPlayerHudComponent(eHudComponent component, bool bShow)
 {
     g_pGame->GetHud()->SetComponentVisible(component, bShow);

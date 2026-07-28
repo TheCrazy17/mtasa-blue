@@ -224,6 +224,9 @@ public:
     static bool SetPedHeadless(CElement* pElement, bool bIsHeadless);
     static bool SetPedFrozen(CElement* pElement, bool bIsFrozen);
     static bool ReloadPedWeapon(CElement* pElement) noexcept;
+    static bool SetPedWeaponFiringRate(CElement* pElement, eWeaponType weaponType, float fRate);
+    static bool GetPedWeaponFiringRate(CElement* pElement, eWeaponType weaponType, float& fRate);
+    static bool ResetPedWeaponFiringRate(CElement* pElement, eWeaponType weaponType);
     static bool SetWeaponProperty(eWeaponProperty eProperty, eWeaponType eWeapon, eWeaponSkill eSkillLevel, float fData);
     static bool SetWeaponProperty(eWeaponProperty eProperty, eWeaponType eWeapon, eWeaponSkill eSkillLevel, int sData);
     static bool SetWeaponPropertyFlag(eWeaponProperty eProperty, eWeaponType eWeapon, eWeaponSkill eSkillLevel, bool bEnable);

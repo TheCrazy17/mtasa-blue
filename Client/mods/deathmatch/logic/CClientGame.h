@@ -669,8 +669,9 @@ private:
 
     static bool PreWeaponFire(CPlayerPed* pPlayerPed, bool bStopIfUsingBulletSync);
     static void PostWeaponFire();
-    static void BulletImpact(CPed* pInitiator, CEntity* pVictim, const CVector* pStartPosition, const CVector* pEndPosition);
-    static void BulletFire(CPed* pInitiator, const CVector* pStartPosition, const CVector* pEndPosition);
+    static void  BulletImpact(CPed* pInitiator, CEntity* pVictim, const CVector* pStartPosition, const CVector* pEndPosition);
+    static void  BulletFire(CPed* pInitiator, const CVector* pStartPosition, const CVector* pEndPosition);
+    static float GetPedWeaponFiringRate(CPed* pPed, eWeaponType weaponType);
 
 public:
     static bool StaticProcessPacket(unsigned char ucPacketID, NetBitStreamInterface& bitStream);

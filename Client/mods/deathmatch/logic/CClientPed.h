@@ -313,6 +313,15 @@ public:
     bool        IsCurrentWeaponUsingBulletSync();
     void        ValidateRemoteWeapons();
 
+    void  SetWeaponFiringRate(eWeaponType weaponType, float fRate) { m_weaponFiringRates[weaponType] = fRate; }
+    float GetWeaponFiringRate(eWeaponType weaponType) const
+    {
+        auto it = m_weaponFiringRates.find(weaponType);
+        return it != m_weaponFiringRates.end() ? it->second : 1.0f;
+    }
+    void ResetWeaponFiringRate(eWeaponType weaponType) { m_weaponFiringRates.erase(weaponType); }
+    void ResetWeaponFiringRates() { m_weaponFiringRates.clear(); }
+
     std::map<eMovementState, std::string> m_MovementStateNames;
     eMovementState                        GetMovementState();
     bool                                  GetMovementState(std::string& strStateName);
@@ -796,6 +805,9 @@ public:
     bool              m_bTaskToBeRestoredOnAnimEnd;
     eTaskType         m_eTaskTypeToBeRestoredOnAnimEnd;
     bool              m_bWarpInToVehicleRequired = false;
+
+    // Custom rate of fire per weapon type, relative to the weapon's normal speed (1.0 is normal)
+    std::unordered_map<eWeaponType, float> m_weaponFiringRates;
 
     // Enter/exit variables
     unsigned long m_ulLastVehicleInOutTime;    // Last tick where we sent an enter/exit request

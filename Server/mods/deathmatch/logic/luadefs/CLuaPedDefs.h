@@ -25,6 +25,9 @@ public:
     LUA_DECLARE(GiveWeapon);
     LUA_DECLARE(TakeWeapon);
     LUA_DECLARE(TakeAllWeapons);
+    LUA_DECLARE(SetPedWeaponFiringRate);
+    LUA_DECLARE(GetPedWeaponFiringRate);
+    LUA_DECLARE(ResetPedWeaponFiringRate);
 
     // Ped get functions
     LUA_DECLARE(CreatePed);

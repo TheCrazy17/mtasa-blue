@@ -94,6 +94,9 @@ public:
     static bool SetPedArmor(CClientPed* const ped, const float armor);
     LUA_DECLARE(SetPedWeaponSlot);
     LUA_DECLARE(GivePedWeapon);
+    LUA_DECLARE(SetPedWeaponFiringRate);
+    LUA_DECLARE(GetPedWeaponFiringRate);
+    LUA_DECLARE(ResetPedWeaponFiringRate);
     static bool IsPedReloadingWeapon(CClientPed* const ped) noexcept;
     LUA_DECLARE(AddPedClothes);
     LUA_DECLARE(RemovePedClothes);

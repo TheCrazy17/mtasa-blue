@@ -392,6 +392,7 @@ PreWeaponFireHandler*                      m_pPreWeaponFireHandler = NULL;
 PostWeaponFireHandler*                     m_pPostWeaponFireHandler = NULL;
 BulletImpactHandler*                       m_pBulletImpactHandler = NULL;
 BulletFireHandler*                         m_pBulletFireHandler = NULL;
+GetPedWeaponFiringRateHandler*              m_pGetPedWeaponFiringRateHandler = NULL;
 DamageHandler*                             m_pDamageHandler = NULL;
 DeathHandler*                              m_pDeathHandler = NULL;
 FireHandler*                               m_pFireHandler = NULL;
@@ -4354,6 +4355,11 @@ void CMultiplayerSA::SetBulletImpactHandler(BulletImpactHandler* pHandler)
 void CMultiplayerSA::SetBulletFireHandler(BulletFireHandler* pHandler)
 {
     m_pBulletFireHandler = pHandler;
+}
+
+void CMultiplayerSA::SetGetPedWeaponFiringRateHandler(GetPedWeaponFiringRateHandler* pHandler)
+{
+    m_pGetPedWeaponFiringRateHandler = pHandler;
 }
 
 void CMultiplayerSA::Reset()

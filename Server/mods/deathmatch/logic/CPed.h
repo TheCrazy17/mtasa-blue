@@ -309,6 +309,14 @@ public:
     void                   SetAnimationProgress(float progress) { m_animData.progress = progress; };
     void                   SetAnimationSpeed(float speed) { m_animData.speed = speed; };
 
+    void  SetWeaponFiringRate(eWeaponType weaponType, float fRate) { m_weaponFiringRates[weaponType] = fRate; }
+    float GetWeaponFiringRate(eWeaponType weaponType) const
+    {
+        auto it = m_weaponFiringRates.find(weaponType);
+        return it != m_weaponFiringRates.end() ? it->second : 1.0f;
+    }
+    void ResetWeaponFiringRate(eWeaponType weaponType) { m_weaponFiringRates.erase(weaponType); }
+
     void SetHanging(bool hanging) noexcept { m_hanging = hanging; }
     bool IsHanging() const noexcept { return m_hanging; }
 
@@ -352,6 +360,7 @@ protected:
     bool                                 m_reloadingWeapon{};
     CVehicle*                            m_pJackingVehicle;
     SPlayerAnimData                      m_animData{};
+    std::unordered_map<eWeaponType, float> m_weaponFiringRates;
     float                                m_cameraRotation{};
     bool                                 m_hanging{false};  // Is the player hanging during a climb task?
 

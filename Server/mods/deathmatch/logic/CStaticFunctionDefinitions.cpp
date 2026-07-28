@@ -4707,6 +4707,66 @@ bool CStaticFunctionDefinitions::ReloadPedWeapon(CElement* pElement) noexcept
     return true;
 }
 
+bool CStaticFunctionDefinitions::SetPedWeaponFiringRate(CElement* pElement, eWeaponType weaponType, float fRate)
+{
+    assert(pElement);
+    RUN_CHILDREN(SetPedWeaponFiringRate(*iter, weaponType, fRate))
+
+    if (!IS_PED(pElement))
+        return false;
+
+    CPed* pPed = static_cast<CPed*>(pElement);
+    pPed->SetWeaponFiringRate(weaponType, fRate);
+
+    // Only the client actually simulating this ped's shots needs to know its rate, so this is unicast
+    // rather than broadcast: the player themselves, or whichever client is currently syncing them.
+    CPlayer* pTargetPlayer = IS_PLAYER(pElement) ? static_cast<CPlayer*>(pElement) : (pPed->IsSyncable() ? pPed->GetSyncer() : nullptr);
+    if (pTargetPlayer)
+    {
+        CBitStream BitStream;
+        BitStream.pBitStream->Write(static_cast<unsigned char>(weaponType));
+        BitStream.pBitStream->Write(fRate);
+        pTargetPlayer->Send(CElementRPCPacket(pElement, SET_PED_WEAPON_FIRING_RATE, *BitStream.pBitStream));
+    }
+
+    return true;
+}
+
+bool CStaticFunctionDefinitions::GetPedWeaponFiringRate(CElement* pElement, eWeaponType weaponType, float& fRate)
+{
+    assert(pElement);
+
+    if (!IS_PED(pElement))
+        return false;
+
+    CPed* pPed = static_cast<CPed*>(pElement);
+    fRate = pPed->GetWeaponFiringRate(weaponType);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::ResetPedWeaponFiringRate(CElement* pElement, eWeaponType weaponType)
+{
+    assert(pElement);
+    RUN_CHILDREN(ResetPedWeaponFiringRate(*iter, weaponType))
+
+    if (!IS_PED(pElement))
+        return false;
+
+    CPed* pPed = static_cast<CPed*>(pElement);
+    pPed->ResetWeaponFiringRate(weaponType);
+
+    CPlayer* pTargetPlayer = IS_PLAYER(pElement) ? static_cast<CPlayer*>(pElement) : (pPed->IsSyncable() ? pPed->GetSyncer() : nullptr);
+    if (pTargetPlayer)
+    {
+        CBitStream BitStream;
+        BitStream.pBitStream->Write(static_cast<unsigned char>(weaponType));
+        BitStream.pBitStream->Write(1.0f);
+        pTargetPlayer->Send(CElementRPCPacket(pElement, SET_PED_WEAPON_FIRING_RATE, *BitStream.pBitStream));
+    }
+
+    return true;
+}
+
 bool CStaticFunctionDefinitions::GetCameraMatrix(CPlayer* pPlayer, CVector& vecPosition, CVector& vecLookAt, float& fRoll, float& fFOV)
 {
     assert(pPlayer);

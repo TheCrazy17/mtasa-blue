@@ -293,5 +293,7 @@ enum eElementRPCFunctions
 
     SET_ELEMENT_ON_FIRE,
 
+    SET_PED_WEAPON_FIRING_RATE,
+
     NUM_RPC_FUNCS  // Add above this line
 };

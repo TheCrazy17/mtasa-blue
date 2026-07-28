@@ -37,6 +37,7 @@ void CPedRPCs::LoadFunctions()
     AddHandler(SET_PED_HEADLESS, SetPedHeadless, "SetPedHeadless");
     AddHandler(SET_PED_FROZEN, SetPedFrozen, "SetPedFrozen");
     AddHandler(RELOAD_PED_WEAPON, ReloadPedWeapon, "ReloadPedWeapon");
+    AddHandler(SET_PED_WEAPON_FIRING_RATE, SetPedWeaponFiringRate, "SetPedWeaponFiringRate");
 }
 
 void CPedRPCs::SetPedArmor(CClientEntity* pSource, NetBitStreamInterface& bitStream)
@@ -396,5 +397,20 @@ void CPedRPCs::ReloadPedWeapon(CClientEntity* pSource, NetBitStreamInterface& bi
     if (pPed)
     {
         pPed->ReloadWeapon();
+    }
+}
+
+void CPedRPCs::SetPedWeaponFiringRate(CClientEntity* pSource, NetBitStreamInterface& bitStream)
+{
+    unsigned char ucWeaponType;
+    float         fRate;
+
+    if (bitStream.Read(ucWeaponType) && bitStream.Read(fRate))
+    {
+        CClientPed* pPed = m_pPedManager->Get(pSource->GetID(), true);
+        if (pPed)
+        {
+            pPed->SetWeaponFiringRate(static_cast<eWeaponType>(ucWeaponType), fRate);
+        }
     }
 }

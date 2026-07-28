@@ -83,6 +83,7 @@ typedef bool(PreWeaponFireHandler)(class CPlayerPed* pPlayer, bool bStopIfUsingB
 typedef void(PostWeaponFireHandler)();
 typedef void(BulletImpactHandler)(class CPed* pInitiator, class CEntity* pVictim, const CVector* pvecStartPosition, const CVector* pvecEndPosition);
 typedef void(BulletFireHandler)(class CPed* pInitiator, const CVector* pvecStartPosition, const CVector* pvecEndPosition);
+typedef float(GetPedWeaponFiringRateHandler)(class CPed* pPed, enum eWeaponType weaponType);
 typedef bool(DamageHandler)(class CPed* pDamagePed, class CEventDamage* pEvent);
 typedef void(DeathHandler)(class CPed* pKilledPed, unsigned char ucDeathReason, unsigned char ucBodyPart);
 typedef bool(FireHandler)(class CEntitySAInterface* target, class CEntitySAInterface* creator);
@@ -384,6 +385,7 @@ public:
     virtual void SetPostWeaponFireHandler(PostWeaponFireHandler* pHandler) = 0;
     virtual void SetBulletImpactHandler(BulletImpactHandler* pHandler) = 0;
     virtual void SetBulletFireHandler(BulletFireHandler* pHandler) = 0;
+    virtual void SetGetPedWeaponFiringRateHandler(GetPedWeaponFiringRateHandler* pHandler) = 0;
     virtual void SetDrawRadarAreasHandler(DrawRadarAreasHandler* pRadarAreasHandler) = 0;
     virtual void SetRender3DStuffHandler(Render3DStuffHandler* pHandler) = 0;
     virtual void SetPreRenderSkyHandler(PreRenderSkyHandler* pHandler) = 0;

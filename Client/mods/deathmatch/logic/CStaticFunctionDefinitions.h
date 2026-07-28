@@ -168,6 +168,9 @@ public:
 
     static bool SetPedWeaponSlot(CClientEntity& Entity, int iSlot);
     static bool GivePedWeapon(CClientEntity& Entity, uchar ucWeaponID, ushort usWeaponAmmo, bool bSetAsCurrent);
+    static bool SetPedWeaponFiringRate(CClientEntity& Entity, eWeaponType weaponType, float fRate);
+    static bool GetPedWeaponFiringRate(CClientEntity& Entity, eWeaponType weaponType, float& fRate);
+    static bool ResetPedWeaponFiringRate(CClientEntity& Entity, eWeaponType weaponType);
     static bool SetPedRotation(CClientEntity& Entity, float fRotation, bool bNewWay);
     static bool SetPedCanBeKnockedOffBike(CClientEntity& Entity, bool bCanBeKnockedOffBike);
     static bool SetPedAnimation(CClientEntity& Entity, const SString& strBlockName, const char* szAnimName, int iTime, int iBlend, bool bLoop,

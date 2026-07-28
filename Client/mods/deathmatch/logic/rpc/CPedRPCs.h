@@ -37,4 +37,5 @@ public:
     DECLARE_ELEMENT_RPC(SetPedHeadless);
     DECLARE_ELEMENT_RPC(SetPedFrozen);
     DECLARE_ELEMENT_RPC(ReloadPedWeapon);
+    DECLARE_ELEMENT_RPC(SetPedWeaponFiringRate);
 };
