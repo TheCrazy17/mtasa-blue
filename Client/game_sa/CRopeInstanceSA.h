@@ -109,6 +109,39 @@ public:
     bool GetHookPosition(CVector& outPosition) const;
 
 private:
+    // Whether the holder anchoring segment 0 is a real, live entity (as opposed to the fixed
+    // SFakePlaceableHolder Create() falls back to when the caller gives none) - see TrackHolderPosition().
+    bool m_bHasRealHolder = false;
+
+    // Only rope types 1-3 (craneMagnet/craneHarness/magnet) actively re-anchor segment 0 to the holder's
+    // current position every frame in native code - types 4-7 (craneMagno/wreckingBall/quarryCraneArm/
+    // craneTrolley) only do it while a matching value is set in CRopes::PlayerControlsCrane (0xB76898),
+    // a single global the game normally drives from crane-control missions, not something a script
+    // should be fighting over per rope. Rather than rely on that gate at all, this reimplements "follow
+    // the holder" directly and identically for every type: read the holder's current live position (same
+    // fallback GetHookPosition()/CEntitySA::GetPositionInternal() use) and rigidly translate every
+    // segment by however far segment 0 has drifted from it. Translating the whole chain preserves
+    // whatever relative swing/sag shape the native physics already computed this frame - this only
+    // moves where that shape sits, not what it looks like.
+    void TrackHolderPosition();
+
+    // Rewriting m_fSegmentLength alone (see SetSegmentLength()) turned out not to be enough either -
+    // it's consumed as a minor tension-tuning input somewhere inside the spring simulation, not as a
+    // hard constraint, so it doesn't reliably move the actual node positions Render() draws. To make
+    // "shorter/longer" actually show up on screen, this instead directly enforces the desired spacing
+    // between consecutive nodes after the native Update() has run: walking outward from the anchor end
+    // (segment 0, near the holder) to the hook end (segment 31 - where CreateHookObjectForRope
+    // positions the hook prop), each link gets rescaled to the pinned length while keeping the swing
+    // direction/shape the physics already computed for this frame - a standard distance-constraint
+    // pass, not a hack.
+    void EnforceSegmentLength();
+
+    // The hook prop's own position isn't part of m_aSegments - CreateHookObjectForRope just positions it
+    // at the last segment once, at creation, and nothing keeps it in sync after that (that's normally the
+    // native Update()'s job). Whenever TrackHolderPosition()/EnforceSegmentLength() move segment 31 out
+    // from under it, this puts it back or the hook prop visibly detaches from the end of the line.
+    void SyncHookToLastSegment();
+
     // Stand-in for a CPlaceable + CMatrixLink, used as m_pRopeHolder when the caller gives no real
     // holder entity. Crane/magnet-type ropes always hang from a real holder object in vanilla gameplay
     // (a crane), so CRope::Update() reads m_pRopeHolder as a CPlaceable in more than one place:

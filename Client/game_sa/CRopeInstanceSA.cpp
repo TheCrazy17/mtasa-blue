@@ -199,6 +199,7 @@ bool CRopeInstanceSA::Create(eRopeTypeSA ropeType, const CVector& vecPosition, C
     if (pHolder)
     {
         m_instance.m_pRopeHolder = pHolder;
+        m_bHasRealHolder = true;
     }
     else
     {
@@ -236,15 +237,24 @@ bool CRopeInstanceSA::Create(eRopeTypeSA ropeType, const CVector& vecPosition, C
     return true;
 }
 
+namespace
+{
+    // Same "matrix ? matrix->pos : transform.translate" fallback CEntitySA::GetPositionInternal() uses
+    // (CEntitySA.cpp) - this is exactly how MTA already reads any other entity's live position, just
+    // without a CEntitySA wrapper around it (the hook prop and a script-supplied holder are both raw
+    // CEntitySAInterface* here, never wrapped).
+    CVector GetEntityLivePosition(CEntitySAInterface* pEntity)
+    {
+        return pEntity->matrix ? pEntity->matrix->vPos : pEntity->m_transform.m_translate;
+    }
+}
+
 bool CRopeInstanceSA::GetHookPosition(CVector& outPosition) const
 {
     if (!m_bValid || !m_instance.m_pAttachedEntity)
         return false;
 
-    // Same "matrix ? matrix->pos : transform.translate" fallback CEntitySA::GetPositionInternal() uses
-    // (CEntitySA.cpp) - the hook is a real CObject (see CreateHookObjectForRope), so this is exactly how
-    // MTA already reads any other entity's live position, just without a CEntitySA wrapper around it.
-    outPosition = m_instance.m_pAttachedEntity->matrix ? m_instance.m_pAttachedEntity->matrix->vPos : m_instance.m_pAttachedEntity->m_transform.m_translate;
+    outPosition = GetEntityLivePosition(m_instance.m_pAttachedEntity);
     return true;
 }
 
@@ -275,9 +285,66 @@ void CRopeInstanceSA::Update()
         return;
     }
 
+    // Both of these only touch m_aSegments/the hook prop directly - neither depends on which of the 8
+    // rope types this is, so both apply uniformly regardless of whether the native physics for this
+    // type happens to be "active" (see the comment on TrackHolderPosition()).
+    bool bSegmentsMoved = false;
+
+    if (m_bHasRealHolder)
+    {
+        TrackHolderPosition();
+        bSegmentsMoved = true;
+    }
+
     // Re-assert what the script actually asked for - see the comment on SetSegmentLength().
     if (m_bHasPinnedSegmentLength)
+    {
         m_instance.m_fSegmentLength = m_fPinnedSegmentLength;
+        EnforceSegmentLength();
+        bSegmentsMoved = true;
+    }
+
+    if (bSegmentsMoved)
+        SyncHookToLastSegment();
+}
+
+void CRopeInstanceSA::TrackHolderPosition()
+{
+    // Only the anchor (segment 0) is pinned to the holder - segments 1..31 are left exactly where the
+    // native physics put them. CRope::Update()'s own per-segment integration loop (0x5576AD, unconditional
+    // for every type, runs over indices 1..31 based on gravity/tension relative to their neighbours) never
+    // touches segment 0 itself, treating it as a fixed external anchor - so next frame, that loop reacts
+    // to wherever we just moved it exactly the way it reacts to any other force: gradually, chained down
+    // the rope. That's what produces the lag/swing when the holder moves fast. Moving every segment by
+    // the same delta (translating the whole chain as one rigid body) was the previous approach here, and
+    // is exactly what was cancelling that lag out - the hook was moving in perfect lockstep with the
+    // anchor, so there was never any relative motion left for gravity to act on.
+    m_instance.m_aSegments[0] = GetEntityLivePosition(m_instance.m_pRopeHolder);
+}
+
+void CRopeInstanceSA::EnforceSegmentLength()
+{
+    for (uint8 i = 1; i < ROPE_SEGMENT_COUNT; i++)
+    {
+        CVector&    prev = m_instance.m_aSegments[i - 1];
+        CVector&    cur = m_instance.m_aSegments[i];
+        CVector     delta = cur - prev;
+        const float fCurrentLength = delta.Length();
+
+        cur = fCurrentLength > 0.0001f ? prev + delta * (m_fPinnedSegmentLength / fCurrentLength) : prev - CVector(0.0f, 0.0f, m_fPinnedSegmentLength);
+    }
+}
+
+void CRopeInstanceSA::SyncHookToLastSegment()
+{
+    if (!m_instance.m_pAttachedEntity)
+        return;
+
+    const CVector& vecHookPos = m_instance.m_aSegments[ROPE_SEGMENT_COUNT - 1];
+    if (m_instance.m_pAttachedEntity->matrix)
+        m_instance.m_pAttachedEntity->matrix->vPos = vecHookPos;
+    else
+        m_instance.m_pAttachedEntity->m_transform.m_translate = vecHookPos;
 }
 
 void CRopeInstanceSA::Render()
