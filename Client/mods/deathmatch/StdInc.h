@@ -93,6 +93,7 @@
 #include <CClientShader.h>
 #include <CClientWebBrowser.h>
 #include <CClientSearchLight.h>
+#include <CClientRope.h>
 #include <CClientEffect.h>
 #include <CCustomData.h>
 #include <CElementArray.h>
@@ -139,6 +140,7 @@
 #include <luadefs/CLuaRadarAreaDefs.h>
 #include <luadefs/CLuaResourceDefs.h>
 #include <luadefs/CLuaSearchLightDefs.h>
+#include <luadefs/CLuaRopeDefs.h>
 #include <luadefs/CLuaTaskDefs.h>
 #include <luadefs/CLuaTeamDefs.h>
 #include <luadefs/CLuaTimerDefs.h>

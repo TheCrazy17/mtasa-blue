@@ -37,6 +37,7 @@
 #include "game/CClock.h"
 #include <game/CProjectileInfo.h>
 #include <game/CVehicleAudioSettingsManager.h>
+#include <game/CRopes.h>
 #include <windowsx.h>
 #include "CServerInfo.h"
 #include "CClientPed.h"
@@ -1144,6 +1145,11 @@ void CClientGame::DoPulses()
         m_pManager->GetPacketRecorder()->StartPlayback("log.rec", false);
         m_bFirstPlaybackFrame = false;
     }
+
+    // Drives the physics (native Update()) of every rope created with createRope() - the render side is
+    // hooked directly into the game's own render pass (CRopesSA::StaticSetHooks), not driven from here.
+    if (m_pManager->IsGameLoaded())
+        g_pGame->GetRopes()->UpdateRopes();
 
     // Output stuff from our server eventually
     m_Server.Pulse();

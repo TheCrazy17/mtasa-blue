@@ -13,6 +13,9 @@
 
 #include <CVector.h>
 #include <game/CRopes.h>
+#include <memory>
+#include <unordered_map>
+#include "CRopeInstanceSA.h"
 
 #define ROPES_COUNT 8
 
@@ -45,6 +48,30 @@ public:
     int  CreateRopeForSwatPed(const CVector& vecPosition, DWORD dwDuration = 4000);
     void RemoveEntityRope(CEntitySAInterface* pObject);
 
+    int  CreateRope(int ropeType, const CVector& vecPosition, CEntitySAInterface* pHolder = nullptr);
+    void DestroyRope(int ropeHandle);
+    void UpdateRopes();
+    void RenderRopes();
+
+    static void StaticSetHooks();
+
+    bool                AttachRopeToEntity(int ropeHandle, CEntitySAInterface* pEntity);
+    void                DetachRopeEntity(int ropeHandle);
+    CEntitySAInterface* GetRopeAttachedEntity(int ropeHandle);
+    bool                IsEntityAttachedToRope(CEntitySAInterface* pEntity);
+
+    int   GetRopeType(int ropeHandle);
+    bool  SetRopeSegmentLength(int ropeHandle, float length);
+    float GetRopeSegmentLength(int ropeHandle);
+    bool  SetRopeAnchorVelocity(int ropeHandle, const CVector& speed);
+    bool  GetRopeHookPosition(int ropeHandle, CVector& outPosition);
+    bool  GetRopeSegmentPosition(int ropeHandle, uint8 index, CVector& outPosition);
+
 private:
     static CRopesSAInterface (&ms_aRopes)[8];
+
+    CRopeInstanceSA* FindPooledRope(int ropeHandle);
+
+    std::unordered_map<int, std::unique_ptr<CRopeInstanceSA>> m_pooledRopes;
+    int                                                        m_nextRopeHandle = 1;
 };

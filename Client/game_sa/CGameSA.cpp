@@ -251,6 +251,7 @@ CGameSA::CGameSA()
         CPtrNodeSingleLinkPoolSA::StaticSetHooks();
         CVehicleAudioSettingsManagerSA::StaticSetHooks();
         CPointLightsSA::StaticSetHooks();
+        CRopesSA::StaticSetHooks();
     }
     catch (const std::bad_alloc& e)
     {

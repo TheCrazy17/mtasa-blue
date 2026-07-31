@@ -271,6 +271,7 @@ void CLuaManager::LoadCFunctions()
     CLuaRadarAreaDefs::LoadFunctions();
     CLuaResourceDefs::LoadFunctions();
     CLuaSearchLightDefs::LoadFunctions();
+    CLuaRopeDefs::LoadFunctions();
     CLuaShared::LoadFunctions();
     CLuaTaskDefs::LoadFunctions();
     CLuaTeamDefs::LoadFunctions();

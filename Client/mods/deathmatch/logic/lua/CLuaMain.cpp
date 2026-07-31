@@ -122,6 +122,7 @@ void CLuaMain::InitClasses(lua_State* luaVM)
     CLuaRadarAreaDefs::AddClass(luaVM);
     CLuaResourceDefs::AddClass(luaVM);
     CLuaSearchLightDefs::AddClass(luaVM);
+    CLuaRopeDefs::AddClass(luaVM);
     CLuaTeamDefs::AddClass(luaVM);
     CLuaTimerDefs::AddClass(luaVM);
     CLuaVehicleDefs::AddClass(luaVM);
