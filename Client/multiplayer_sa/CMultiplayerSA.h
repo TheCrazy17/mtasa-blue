@@ -334,6 +334,13 @@ public:
     {
         m_fAircraftMaxVelocity = fVelocity;
         m_fAircraftMaxVelocity_Sq = fVelocity * fVelocity;
+
+        // The game also hard caps the aircraft's turn speed every frame, independently of its move
+        // speed. That cap stays at the vanilla ratio below, so raising the move speed here doesn't
+        // leave planes without enough turning authority to pitch back down at setAircraftMaxHeight
+        // (GitHub #709).
+        m_fAircraftMaxTurnSpeed = fVelocity * (VANILLA_AIRCRAFT_MAX_TURN_SPEED / VANILLA_AIRCRAFT_MAX_VELOCITY);
+        m_fAircraftMaxTurnSpeed_Sq = m_fAircraftMaxTurnSpeed * m_fAircraftMaxTurnSpeed;
     };
 
     void SetAutomaticVehicleStartupOnPedEnter(bool bSet);
@@ -381,17 +388,24 @@ private:
     bool                m_bEnabledLODSystem;
     bool                m_bEnabledAltWaterOrder;
     bool                m_bEnabledClothesMemFix;
-    float               m_fAircraftMaxHeight;
-    float               m_fAircraftMaxVelocity;
-    float               m_fAircraftMaxVelocity_Sq;
-    bool                m_bHeatHazeEnabled;
-    bool                m_bHeatHazeCustomized;
-    float               m_fNearClipDistance;
-    float               m_fMaddDoggPoolLevel;
-    eAnimGroup          m_dwLastStaticAnimGroupID;
-    eAnimID             m_dwLastStaticAnimID;
-    DWORD               m_dwLastAnimArrayAddress;
-    float               m_fShadowsOffset;
+    // Vanilla values for the two separate caps the game applies to aircraft every frame:
+    // one on move speed, and a much smaller, independent one on turn speed.
+    static constexpr float VANILLA_AIRCRAFT_MAX_VELOCITY = 1.5f;
+    static constexpr float VANILLA_AIRCRAFT_MAX_TURN_SPEED = 0.2f;
+
+    float      m_fAircraftMaxHeight;
+    float      m_fAircraftMaxVelocity;
+    float      m_fAircraftMaxVelocity_Sq;
+    float      m_fAircraftMaxTurnSpeed;
+    float      m_fAircraftMaxTurnSpeed_Sq;
+    bool       m_bHeatHazeEnabled;
+    bool       m_bHeatHazeCustomized;
+    float      m_fNearClipDistance;
+    float      m_fMaddDoggPoolLevel;
+    eAnimGroup m_dwLastStaticAnimGroupID;
+    eAnimID    m_dwLastStaticAnimID;
+    DWORD      m_dwLastAnimArrayAddress;
+    float      m_fShadowsOffset;
 
     bool m_isRapidVehicleStopFixEnabled{false};
 

@@ -602,8 +602,11 @@ CMultiplayerSA::CMultiplayerSA()
 
     m_fAircraftMaxHeight = 800.0f;
 
-    m_fAircraftMaxVelocity = 1.5f;
+    m_fAircraftMaxVelocity = VANILLA_AIRCRAFT_MAX_VELOCITY;
     m_fAircraftMaxVelocity_Sq = m_fAircraftMaxVelocity * m_fAircraftMaxVelocity;
+
+    m_fAircraftMaxTurnSpeed = VANILLA_AIRCRAFT_MAX_TURN_SPEED;
+    m_fAircraftMaxTurnSpeed_Sq = m_fAircraftMaxTurnSpeed * m_fAircraftMaxTurnSpeed;
 
     m_bHeatHazeEnabled = true;
     m_bHeatHazeCustomized = false;
@@ -1466,6 +1469,15 @@ void CMultiplayerSA::InitHooks()
     MemPut(0x6DADEF, &m_fAircraftMaxVelocity);
     MemPut(0x6DADF8, &m_fAircraftMaxVelocity);
     MemPut(0x6DAE01, &m_fAircraftMaxVelocity);
+
+    // The same function clamps the aircraft's turn speed right after clamping its move speed above,
+    // using a separate, unrelated hard-coded cap (0.2, vs move speed's 1.5). Left alone, that cap
+    // stays this small no matter how high the move speed is raised, so a fast aircraft can no longer
+    // turn quickly enough to pitch back down at the setAircraftMaxHeight ceiling (GitHub #709).
+    MemPut(0x6DAE6E, &m_fAircraftMaxTurnSpeed_Sq);
+    MemPut(0x6DAE7D, &m_fAircraftMaxTurnSpeed);
+    MemPut(0x6DAE86, &m_fAircraftMaxTurnSpeed);
+    MemPut(0x6DAE8F, &m_fAircraftMaxTurnSpeed);
 
     // Disable calls to CFireManager::ExtinguishPoint and CWorld::ExtinguishAllCarFiresInArea
     // from CWorld::ClearExcitingStuffFromArea
