@@ -13,6 +13,7 @@
 
 #include "CLuaDefs.h"
 #include "CSpatialDatabase.h"
+#include <lua/CLuaMultiReturn.h>
 
 class CLuaElementDefs : public CLuaDefs
 {
@@ -87,12 +88,13 @@ public:
     LUA_DECLARE(getElementAttachedTo);
     LUA_DECLARE(setElementAttachedOffsets);
     LUA_DECLARE(getElementAttachedOffsets);
-    LUA_DECLARE(attachElementToBone);
-    LUA_DECLARE(detachElementFromBone);
-    LUA_DECLARE(setElementBoneAttachedOffsets);
-    LUA_DECLARE(getElementBoneAttachedOffsets);
-    LUA_DECLARE(isElementAttachedToBone);
-    LUA_DECLARE(getElementAttachedBone);
+    static bool AttachElementToBone(lua_State* luaVM, CElement* pElement, CElement* pAttachedToElement, std::uint32_t boneId, std::optional<CVector> position,
+                                    std::optional<CVector> rotation);
+    static bool DetachElementFromBone(lua_State* luaVM, CElement* pElement);
+    static bool SetElementBoneAttachedOffsets(lua_State* luaVM, CElement* pElement, std::optional<CVector> position, std::optional<CVector> rotation);
+    static std::variant<bool, CLuaMultiReturn<float, float, float, float, float, float>> GetElementBoneAttachedOffsets(CElement* pElement);
+    static bool                                                                          IsElementAttachedToBone(CElement* pElement) noexcept;
+    static std::variant<bool, CLuaMultiReturn<CElement*, std::uint32_t>>                 GetElementAttachedBone(CElement* pElement);
 
     // Set
     LUA_DECLARE(setElementID);

@@ -10,6 +10,7 @@
 
 #pragma once
 #include "CLuaDefs.h"
+#include <lua/CLuaMultiReturn.h>
 
 class CLuaElementDefs : public CLuaDefs
 {
@@ -53,9 +54,9 @@ public:
     LUA_DECLARE(GetElementDistanceFromCentreOfMassToBaseOfModel);
     LUA_DECLARE(IsElementLocal);
     LUA_DECLARE(GetElementAttachedOffsets);
-    LUA_DECLARE(IsElementAttachedToBone);
-    LUA_DECLARE(GetElementAttachedBone);
-    LUA_DECLARE(GetElementBoneAttachedOffsets);
+    static bool                                                                          IsElementAttachedToBone(CClientEntity* pEntity);
+    static std::variant<bool, CLuaMultiReturn<CClientEntity*, std::uint32_t>>            GetElementAttachedBone(CClientEntity* pEntity);
+    static std::variant<bool, CLuaMultiReturn<float, float, float, float, float, float>> GetElementBoneAttachedOffsets(CClientEntity* pEntity);
     LUA_DECLARE(GetElementAlpha);
     static std::variant<bool, float> GetElementLighting(CClientEntity* entity);
     static bool                      IsElementOnScreen(CClientEntity* entity);
@@ -93,9 +94,10 @@ public:
     LUA_DECLARE(AttachElements);
     LUA_DECLARE(DetachElements);
     LUA_DECLARE(SetElementAttachedOffsets);
-    LUA_DECLARE(AttachElementToBone);
-    LUA_DECLARE(DetachElementFromBone);
-    LUA_DECLARE(SetElementBoneAttachedOffsets);
+    static bool AttachElementToBone(CClientEntity* pEntity, CClientEntity* pAttachedToEntity, std::uint32_t boneId, std::optional<CVector> position,
+                                    std::optional<CVector> rotation);
+    static bool DetachElementFromBone(CClientEntity* pEntity);
+    static bool SetElementBoneAttachedOffsets(CClientEntity* pEntity, std::optional<CVector> position, std::optional<CVector> rotation);
     LUA_DECLARE(SetElementCollisionsEnabled);
     LUA_DECLARE(SetElementAlpha);
     LUA_DECLARE(SetElementHealth);

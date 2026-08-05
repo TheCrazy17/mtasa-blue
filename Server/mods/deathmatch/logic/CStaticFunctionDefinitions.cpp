@@ -733,7 +733,7 @@ CElement* CStaticFunctionDefinitions::GetElementAttachedToBone(CElement* pElemen
 
     CElement* pElementAttachedTo = pElement->GetBoneAttachedToElement();
     if (!pElementAttachedTo)
-        return NULL;
+        return nullptr;
 
     uiBoneId = pElement->GetAttachedBoneId();
     return pElementAttachedTo;
@@ -2024,7 +2024,7 @@ bool CStaticFunctionDefinitions::SetElementAttachedOffsets(CElement* pElement, C
 }
 
 bool CStaticFunctionDefinitions::AttachElementToBone(CElement* pElement, CElement* pAttachedToElement, std::uint32_t uiBoneId, CVector& vecPosition,
-                                                       CVector& vecRotation)
+                                                     CVector& vecRotation)
 {
     assert(pElement);
     assert(pAttachedToElement);
@@ -2060,7 +2060,7 @@ bool CStaticFunctionDefinitions::DetachElementFromBone(CElement* pElement)
     if (!pElement->IsAttachedToBone())
         return false;
 
-    pElement->AttachToBone(NULL, 0);
+    pElement->AttachToBone(nullptr, 0);
 
     CBitStream BitStream;
     m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, DETACH_ELEMENT_FROM_BONE, *BitStream.pBitStream));

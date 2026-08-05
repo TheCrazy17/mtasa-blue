@@ -116,7 +116,7 @@ CElement::~CElement()
         m_pBoneAttachedTo->RemoveBoneAttachedElement(this);
 
     for (CElement* pBoneAttachedElement : m_BoneAttachedElements)
-        pBoneAttachedElement->m_pBoneAttachedTo = NULL;
+        pBoneAttachedElement->m_pBoneAttachedTo = nullptr;
 
     std::list<CPed*>::iterator iterUsers = m_OriginSourceUsers.begin();
     for (; iterUsers != m_OriginSourceUsers.end(); iterUsers++)

@@ -704,7 +704,7 @@ CClientEntity* CStaticFunctionDefinitions::GetElementAttachedToBone(CClientEntit
         return pEntityAttachedTo;
     }
 
-    return NULL;
+    return nullptr;
 }
 
 bool CStaticFunctionDefinitions::GetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation)
@@ -1492,7 +1492,7 @@ bool CStaticFunctionDefinitions::SetElementAttachedOffsets(CClientEntity& Entity
 }
 
 bool CStaticFunctionDefinitions::AttachElementToBone(CClientEntity& Entity, CClientEntity& AttachedToEntity, std::uint32_t uiBoneId, CVector& vecPosition,
-                                                       CVector& vecRotation)
+                                                     CVector& vecRotation)
 {
     RUN_CHILDREN(AttachElementToBone(**iter, AttachedToEntity, uiBoneId, vecPosition, vecRotation))
 

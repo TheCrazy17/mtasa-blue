@@ -210,14 +210,14 @@ public:
     void                                 GetAttachedRotation(CVector& vecRotation);
 
     // Bone attachment (e.g. attaching an element to a ped/player's bone)
-    CElement*                            GetBoneAttachedToElement() const { return m_pBoneAttachedTo; }
-    std::uint32_t                        GetAttachedBoneId() const { return m_uiAttachedBoneId; }
-    bool                                 IsAttachedToBone() const { return m_pBoneAttachedTo != nullptr; }
-    void                                 AttachToBone(CElement* pElement, std::uint32_t uiBoneId);
-    void                                 GetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
-    void                                 SetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
-    void                                 AddBoneAttachedElement(CElement* pElement);
-    void                                 RemoveBoneAttachedElement(CElement* pElement);
+    CElement*     GetBoneAttachedToElement() const { return m_pBoneAttachedTo; }
+    std::uint32_t GetAttachedBoneId() const { return m_uiAttachedBoneId; }
+    bool          IsAttachedToBone() const { return m_pBoneAttachedTo != nullptr; }
+    void          AttachToBone(CElement* pElement, std::uint32_t uiBoneId);
+    void          GetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
+    void          SetBoneAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
+    void          AddBoneAttachedElement(CElement* pElement);
+    void          RemoveBoneAttachedElement(CElement* pElement);
 
     CElementGroup* GetElementGroup() { return m_pElementGroup; }
     void           SetElementGroup(CElementGroup* elementGroup) { m_pElementGroup = elementGroup; }

@@ -101,19 +101,18 @@ public:
     static bool          AttachElements(CClientEntity& Entity, CClientEntity& AttachedToEntity, CVector& vecPosition, CVector& vecRotation);
     static bool          DetachElements(CClientEntity& Entity, CClientEntity* pAttachedToEntity = NULL);
     static bool          SetElementAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
-    static bool          AttachElementToBone(CClientEntity& Entity, CClientEntity& AttachedToEntity, std::uint32_t uiBoneId, CVector& vecPosition,
-                                              CVector& vecRotation);
-    static bool          DetachElementFromBone(CClientEntity& Entity);
-    static bool          SetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
-    static bool          SetElementAlpha(CClientEntity& Entity, unsigned char ucAlpha);
-    static bool          SetElementHealth(CClientEntity& Entity, float fHealth);
-    static bool          SetElementModel(CClientEntity& Entity, unsigned short usModel);
-    static bool          SetElementCollisionsEnabled(CClientEntity& Entity, bool bEnabled);
-    static bool          SetElementCollidableWith(CClientEntity& Entity, CClientEntity& ThisEntity, bool bCanCollide);
-    static bool          SetElementFrozen(CClientEntity& Entity, bool bFrozen);
-    static bool          SetLowLodElement(CClientEntity& Entity, CClientEntity* pLowLodEntity);
-    static bool          SetElementCallPropagationEnabled(CClientEntity& Entity, bool bEnabled);
-    static bool          IsElementFrozenWaitingForGroundToLoad(CClientEntity& Entity, bool& bWaitingForGroundToLoad);
+    static bool AttachElementToBone(CClientEntity& Entity, CClientEntity& AttachedToEntity, std::uint32_t uiBoneId, CVector& vecPosition, CVector& vecRotation);
+    static bool DetachElementFromBone(CClientEntity& Entity);
+    static bool SetElementBoneAttachedOffsets(CClientEntity& Entity, CVector& vecPosition, CVector& vecRotation);
+    static bool SetElementAlpha(CClientEntity& Entity, unsigned char ucAlpha);
+    static bool SetElementHealth(CClientEntity& Entity, float fHealth);
+    static bool SetElementModel(CClientEntity& Entity, unsigned short usModel);
+    static bool SetElementCollisionsEnabled(CClientEntity& Entity, bool bEnabled);
+    static bool SetElementCollidableWith(CClientEntity& Entity, CClientEntity& ThisEntity, bool bCanCollide);
+    static bool SetElementFrozen(CClientEntity& Entity, bool bFrozen);
+    static bool SetLowLodElement(CClientEntity& Entity, CClientEntity* pLowLodEntity);
+    static bool SetElementCallPropagationEnabled(CClientEntity& Entity, bool bEnabled);
+    static bool IsElementFrozenWaitingForGroundToLoad(CClientEntity& Entity, bool& bWaitingForGroundToLoad);
 
     // Radio funcs
     static bool SetRadioChannel(unsigned char& ucChannel);
