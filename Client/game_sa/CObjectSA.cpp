@@ -127,6 +127,13 @@ CObjectSA::CObjectSA(DWORD dwModel, bool bBreakingDisabled)
             pObjectSAInterface->bExplosionProof = true;
         }
         m_pInterface->bStreamingDontDelete = true;
+
+        // Creating from a bare model index skips the entity setup a map placed instance of the same
+        // model gets (CObject::CObject(CDummyObject*) copies this from the model info), so scripted
+        // objects with an alpha-blended model (e.g. glass) render in the opaque pass instead of the
+        // alpha-sorted one, flickering solid/see-through depending on camera angle (GitHub #2074)
+        if (CModelInfo* pModelInfo = pGame->GetModelInfo(dwModel); pModelInfo && pModelInfo->IsAlphaTransparencyEnabled())
+            m_pInterface->bDrawLast = true;
     }
     else
     {
