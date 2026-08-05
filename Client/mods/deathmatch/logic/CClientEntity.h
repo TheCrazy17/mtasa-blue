@@ -376,10 +376,11 @@ protected:
     std::vector<CClientEntity*> m_AttachedEntities;
     bool                        m_bDisallowAttaching;  // Protect against attaching in destructor
 
-    CClientEntity*              m_pBoneAttachedToEntity = nullptr;
-    std::uint32_t               m_uiAttachedBoneId = 0;
-    CVector                     m_vecBoneAttachedPosition;
-    CVector                     m_vecBoneAttachedRotation;
+    CClientEntity* m_pBoneAttachedToEntity = nullptr;
+    std::uint32_t  m_uiAttachedBoneId = 0;
+    CVector        m_vecBoneAttachedPosition;
+    CVector        m_vecBoneAttachedRotation;
+    CMatrix        m_matBoneAttachedOffset;  // Cached CMatrix(m_vecBoneAttachedPosition, m_vecBoneAttachedRotation), rebuilt only when the offsets change
     std::vector<CClientEntity*> m_BoneAttachedEntities;
 
     bool                              m_bBeingDeleted;

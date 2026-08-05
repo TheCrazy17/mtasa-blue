@@ -1251,6 +1251,9 @@ void CClientEntity::SetBoneAttachedOffsets(const CVector& vecPosition, const CVe
 {
     m_vecBoneAttachedPosition = vecPosition;
     m_vecBoneAttachedRotation = vecRotation;
+
+    // Rebuilding this involves 6 trig calls, so do it once here instead of every frame in DoBoneAttaching
+    m_matBoneAttachedOffset = CMatrix(vecPosition, vecRotation);
 }
 
 void CClientEntity::DoBoneAttaching()
@@ -1273,8 +1276,9 @@ void CClientEntity::DoBoneAttaching()
     if (!bGotBoneMatrix && !m_pBoneAttachedToEntity->GetMatrix(matrix))
         m_pBoneAttachedToEntity->GetPosition(matrix.vPos);
 
-    CMatrix returnMatrix;
-    AttachedMatrix(matrix, returnMatrix, m_vecBoneAttachedPosition, m_vecBoneAttachedRotation);
+    // Uses the cached offset matrix from SetBoneAttachedOffsets instead of AttachedMatrix, which
+    // would rebuild it (and redo the trig) on every call
+    CMatrix returnMatrix = m_matBoneAttachedOffset * matrix;
 
     if (!SetMatrix(returnMatrix))
         SetPosition(returnMatrix.vPos);
