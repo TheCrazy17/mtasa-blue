@@ -29,6 +29,35 @@
 #define FUNC_SetFadeColour                0x50BF00
 #define FUNC_ShakeCam                     0x50A9F0
 
+// Research primitives for a possible CCTV/portal camera feature (renders the 3D world from an
+// independent camera into an off-screen texture, similar to how vehicle mirrors work internally).
+// These two are the confirmed, safe-to-call pieces of that sequence; CCamera::SetMatrix already
+// exists above via CCameraSA::SetMatrix, so it can supply the transform.
+//
+// Reference sequence, as used by the game's own mirror renderer (CMirrors::BeforeMainRender):
+//   1. save TheCamera's current matrix
+//   2. CCameraSA::SetMatrix(customMatrix)             (already implemented, writes the interface's matrix fields)
+//   3. CopyCameraMatrixToRWCam(true)                  (pushes that matrix into the live RenderWare camera)
+//   4. CalculateDerivedValues(true, false)             (recomputes view/projection state from it)
+//   5. swap the RW camera's raster/z-raster to an off-screen target (RwCameraSetRaster/SetZRaster are
+//      plain field writes on the RwCamera struct - frameBuffer/zBuffer - no address needed for those)
+//   6. RwCameraBeginUpdate / RenderScene() / RwCameraEndUpdate                       <-- NOT YET CONFIRMED
+//   7. restore the raster/z-raster and the camera matrix (steps 2-4 again, with the saved values)
+//
+// Step 6 is the remaining blocker: RwCameraBeginUpdate/EndUpdate/Clear are real RenderWare-internal
+// functions statically linked into the retail exe, and their addresses aren't in gta-reversed (it links
+// its own RW reimplementation instead of calling into the retail exe). They need a live Ghidra signature
+// scan, ideally anchored on the CMirrors::BeforeMainRender call site (0x727140 in gta-reversed's
+// addressing, which matches this codebase's existing FUNC_ addresses - see cross-check below) to find
+// which functions it actually calls there. Do not guess these addresses; a wrong function pointer call
+// here corrupts the renderer or crashes the client.
+//
+// RenderScene() itself (the actual "draw the world" entry point mirrors call into a second time) is at
+// 0x53DF40 and IS safe to call address-wise, but has no CCameraSA wrapper here yet since it's a free
+// function, not a CCamera method - add it next to whatever ends up driving the raster swap.
+#define FUNC_CopyCameraMatrixToRWCam 0x50AFA0
+#define FUNC_CalculateDerivedValues  0x5150E0
+
 #define VAR_CameraRotation    0xB6F178  // used for controling where the player faces
 #define VAR_VehicleCameraView 0xB6F0DC
 #define VAR_PedCameraView     0xB6F0F0
@@ -425,4 +454,10 @@ public:
 
     // Additional methods
     void RestoreLastGoodState();
+
+    // Research primitives for rendering the world from an independent camera transform (CCTV/portal
+    // feasibility work, see the comment block above FUNC_CopyCameraMatrixToRWCam). Not wired into any
+    // gameplay or Lua path yet; only exposed so the pieces can be composed and tested manually.
+    void CopyCameraMatrixToRWCam(bool bUpdateMatrix) noexcept;
+    void CalculateDerivedValues(bool bForMirror, bool bOriented) noexcept;
 };

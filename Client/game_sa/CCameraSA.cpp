@@ -804,3 +804,23 @@ bool CCameraSA::IsSphereVisible(CVector* center, float radius) const
 
     return ((bool(__thiscall*)(CCameraSAInterface*, CVector*, float))0x420D40)(cameraInterface, center, radius);
 }
+
+void CCameraSA::CopyCameraMatrixToRWCam(bool bUpdateMatrix) noexcept
+{
+    CCameraSAInterface* cameraInterface = GetInterface();
+    if (!cameraInterface)
+        return;
+
+    using CopyCameraMatrixToRWCam_t = void(__thiscall*)(CCameraSAInterface*, bool);
+    ((CopyCameraMatrixToRWCam_t)FUNC_CopyCameraMatrixToRWCam)(cameraInterface, bUpdateMatrix);
+}
+
+void CCameraSA::CalculateDerivedValues(bool bForMirror, bool bOriented) noexcept
+{
+    CCameraSAInterface* cameraInterface = GetInterface();
+    if (!cameraInterface)
+        return;
+
+    using CalculateDerivedValues_t = void(__thiscall*)(CCameraSAInterface*, bool, bool);
+    ((CalculateDerivedValues_t)FUNC_CalculateDerivedValues)(cameraInterface, bForMirror, bOriented);
+}
