@@ -52,9 +52,8 @@
 // and their layout independently matches what the decompile found (e.g. RwRaster::depth landing at
 // the same 0x14 CMirrors::CreateBuffer reads it from).
 //
-// Still open: RwRasterDestroy's address (CMirrors::ShutDown, 0x723050, didn't resolve to a function
-// boundary in this Ghidra project without a full re-analysis pass) - so nothing here frees what it
-// creates yet. Fine for research code nothing calls, not fine for a real feature.
+// RwRasterDestroy is at 0x7FB020 - found in the same decompile, in CMirrors::BeforeConstructRenderList
+// (0x726DF0), which frees the previous mirror rasters before recreating them at a different size.
 #define FUNC_CopyCameraMatrixToRWCam 0x50AFA0
 #define FUNC_CalculateDerivedValues  0x5150E0
 #define VAR_RwCameraPtr              0xC1703C  // RwCamera** - dereference for the live Scene.m_pRwCamera
@@ -63,6 +62,7 @@
 #define FUNC_RwCameraEndUpdate       0x7EE180
 #define FUNC_RenderSceneWorld        0x53DF40
 #define FUNC_RwRasterCreate          0x7FB230
+#define FUNC_RwRasterDestroy         0x7FB020
 
 enum class eRwRasterType : std::uint32_t
 {
@@ -486,8 +486,11 @@ public:
     int GetScreenRasterDepth() const noexcept;
 
     // Wraps RwRasterCreate directly; returns nullptr on failure (matches the real function's own
-    // failure signal). No destroy counterpart yet - see the comment above FUNC_RwRasterCreate.
+    // failure signal).
     static RwRaster* CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept;
+
+    // Wraps RwRasterDestroy. Safe to call with nullptr (no-op).
+    static void DestroyRaster(RwRaster* raster) noexcept;
 
     // Pulls the real Direct3D texture out of a raster created by CreateRaster (or any RwRaster with
     // a D3D9 render resource), via the same RwD3D9Raster reinterpretation CRenderWareSA::RightSizeTexture

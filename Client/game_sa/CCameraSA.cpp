@@ -891,6 +891,15 @@ RwRaster* CCameraSA::CreateRaster(int width, int height, int depth, eRwRasterTyp
     return ((RwRasterCreate_t)FUNC_RwRasterCreate)(width, height, depth, static_cast<std::uint32_t>(type));
 }
 
+void CCameraSA::DestroyRaster(RwRaster* raster) noexcept
+{
+    if (!raster)
+        return;
+
+    using RwRasterDestroy_t = int(__cdecl*)(RwRaster*);
+    ((RwRasterDestroy_t)FUNC_RwRasterDestroy)(raster);
+}
+
 IDirect3DTexture9* CCameraSA::GetRasterTexture(RwRaster* raster) noexcept
 {
     if (!raster)
