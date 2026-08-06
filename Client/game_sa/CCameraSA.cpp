@@ -15,6 +15,8 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <vector>
 
 namespace
 {
@@ -35,6 +37,106 @@ namespace
     inline bool IsFiniteVector(const CVector& vec) noexcept
     {
         return std::isfinite(vec.fX) && std::isfinite(vec.fY) && std::isfinite(vec.fZ);
+    }
+
+    // Locks pTexture's top surface and hand-writes it as an uncompressed 24bpp BMP to filePath.
+    // Only D3DFMT_A8R8G8B8/X8R8G8B8/R5G6B5 are understood; anything else fails. Written this way
+    // (rather than via D3DXSaveTextureToFile) because Game SA doesn't link d3dx9.lib - only Client
+    // Core and Client GUI do - and this is debug/test-only code, so a hand-rolled BMP writer is
+    // simpler than adding that dependency just to validate RenderWorldToRaster works.
+    bool SaveTextureAsBmp(IDirect3DTexture9* pTexture, const char* filePath)
+    {
+        if (!pTexture || !filePath)
+            return false;
+
+        IDirect3DSurface9* pSurface = nullptr;
+        if (FAILED(pTexture->GetSurfaceLevel(0, &pSurface)))
+            return false;
+
+        D3DSURFACE_DESC desc;
+        pSurface->GetDesc(&desc);
+
+        D3DLOCKED_RECT lockedRect;
+        if (FAILED(pSurface->LockRect(&lockedRect, nullptr, D3DLOCK_READONLY)))
+        {
+            pSurface->Release();
+            return false;
+        }
+
+        const int width = static_cast<int>(desc.Width);
+        const int height = static_cast<int>(desc.Height);
+        const int rowSize = ((width * 3 + 3) / 4) * 4;  // rows are padded to a 4-byte boundary
+
+        std::vector<std::uint8_t> pixelData(static_cast<std::size_t>(rowSize) * height);
+        const auto*               pSrcBase = static_cast<const std::uint8_t*>(lockedRect.pBits);
+        bool                      formatSupported = true;
+
+        for (int y = 0; y < height && formatSupported; ++y)
+        {
+            const std::uint8_t* pSrcRow = pSrcBase + static_cast<std::size_t>(y) * lockedRect.Pitch;
+            // BMP rows are stored bottom-up
+            std::uint8_t* pDstRow = pixelData.data() + static_cast<std::size_t>(height - 1 - y) * rowSize;
+
+            for (int x = 0; x < width; ++x)
+            {
+                std::uint8_t b, g, r;
+                if (desc.Format == D3DFMT_A8R8G8B8 || desc.Format == D3DFMT_X8R8G8B8)
+                {
+                    const std::uint8_t* pPixel = pSrcRow + static_cast<std::size_t>(x) * 4;
+                    b = pPixel[0];
+                    g = pPixel[1];
+                    r = pPixel[2];
+                }
+                else if (desc.Format == D3DFMT_R5G6B5)
+                {
+                    const auto pixel16 = *reinterpret_cast<const std::uint16_t*>(pSrcRow + static_cast<std::size_t>(x) * 2);
+                    r = static_cast<std::uint8_t>(((pixel16 >> 11) & 0x1F) << 3);
+                    g = static_cast<std::uint8_t>(((pixel16 >> 5) & 0x3F) << 2);
+                    b = static_cast<std::uint8_t>((pixel16 & 0x1F) << 3);
+                }
+                else
+                {
+                    formatSupported = false;
+                    break;
+                }
+
+                std::uint8_t* pDstPixel = pDstRow + static_cast<std::size_t>(x) * 3;
+                pDstPixel[0] = b;
+                pDstPixel[1] = g;
+                pDstPixel[2] = r;
+            }
+        }
+
+        pSurface->UnlockRect();
+        pSurface->Release();
+
+        if (!formatSupported)
+            return false;
+
+        BITMAPFILEHEADER fileHeader{};
+        fileHeader.bfType = 0x4D42;  // 'BM'
+        fileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+        fileHeader.bfSize = fileHeader.bfOffBits + static_cast<DWORD>(pixelData.size());
+
+        BITMAPINFOHEADER infoHeader{};
+        infoHeader.biSize = sizeof(BITMAPINFOHEADER);
+        infoHeader.biWidth = width;
+        infoHeader.biHeight = height;
+        infoHeader.biPlanes = 1;
+        infoHeader.biBitCount = 24;
+        infoHeader.biCompression = BI_RGB;
+        infoHeader.biSizeImage = static_cast<DWORD>(pixelData.size());
+
+        FILE* pFile = fopen(filePath, "wb");
+        if (!pFile)
+            return false;
+
+        fwrite(&fileHeader, sizeof(fileHeader), 1, pFile);
+        fwrite(&infoHeader, sizeof(infoHeader), 1, pFile);
+        fwrite(pixelData.data(), pixelData.size(), 1, pFile);
+        fclose(pFile);
+
+        return true;
     }
 }
 
@@ -907,4 +1009,49 @@ IDirect3DTexture9* CCameraSA::GetRasterTexture(RwRaster* raster) noexcept
 
     auto* pD3DRaster = reinterpret_cast<RwD3D9Raster*>(&raster->renderResource);
     return pD3DRaster->texture;
+}
+
+bool CCameraSA::DebugRenderWorldToFile(float offsetX, float offsetY, float offsetZ, const char* filePath) noexcept
+{
+    if (!filePath)
+        return false;
+
+    CMatrix currentMatrix;
+    GetMatrix(&currentMatrix);
+
+    CMatrix offsetMatrix = currentMatrix;
+    offsetMatrix.vPos += CVector(offsetX, offsetY, offsetZ);
+
+    const int depth = GetScreenRasterDepth();
+    if (depth == 0)
+        return false;
+
+    constexpr int kTestRasterWidth = 512;
+    constexpr int kTestRasterHeight = 256;
+
+    RwRaster* colorRaster = CreateRaster(kTestRasterWidth, kTestRasterHeight, depth, eRwRasterType::CAMERATEXTURE);
+    if (!colorRaster)
+        return false;
+
+    RwRaster* depthRaster = CreateRaster(kTestRasterWidth, kTestRasterHeight, depth, eRwRasterType::ZBUFFER);
+    if (!depthRaster)
+    {
+        DestroyRaster(colorRaster);
+        return false;
+    }
+
+    const bool renderSucceeded = RenderWorldToRaster(&offsetMatrix, colorRaster, depthRaster);
+    bool       saveSucceeded = false;
+
+    if (renderSucceeded)
+    {
+        IDirect3DTexture9* pTexture = GetRasterTexture(colorRaster);
+        if (pTexture)
+            saveSucceeded = SaveTextureAsBmp(pTexture, filePath);
+    }
+
+    DestroyRaster(depthRaster);
+    DestroyRaster(colorRaster);
+
+    return renderSucceeded && saveSucceeded;
 }

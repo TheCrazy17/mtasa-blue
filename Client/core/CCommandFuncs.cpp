@@ -12,6 +12,7 @@
 #include "StdInc.h"
 #include <game/CGame.h>
 #include <game/CHud.h>
+#include <game/CCamera.h>
 
 using std::list;
 
@@ -57,6 +58,38 @@ void CCommandFuncs::Ver(const char* szParameters)
 void CCommandFuncs::ScreenShot(const char* szParameters)
 {
     g_pCore->InitiateScreenShot(false);
+}
+
+// Debug/test only: exercises CCameraSA::RenderWorldToRaster end to end (see the comment above
+// FUNC_CopyCameraMatrixToRWCam in Client/game_sa/CCameraSA.h for what it does and why). Renders the
+// world from the current camera position offset by the given amount, and writes the result as a BMP
+// under the screenshots folder, so it can be opened and checked by eye - purely to validate whether
+// the virtual camera research primitives actually produce a sane image before wiring anything real
+// on top of them. Usage: testvirtualcamera [offsetX offsetY offsetZ], default offset is 5 0 0.
+void CCommandFuncs::TestVirtualCamera(const char* szParameters)
+{
+    CConsoleInterface* pConsole = g_pCore->GetConsole();
+
+    float fOffsetX = 5.0f, fOffsetY = 0.0f, fOffsetZ = 0.0f;
+    if (szParameters && szParameters[0] != '\0')
+        sscanf(szParameters, "%f %f %f", &fOffsetX, &fOffsetY, &fOffsetZ);
+
+    CCamera* pCamera = g_pCore->GetGame()->GetCamera();
+    if (!pCamera)
+    {
+        pConsole->Print("testvirtualcamera: no camera available\n");
+        return;
+    }
+
+    SString strPath = CalcMTASAPath("screenshots\\virtualcamera_test.bmp");
+    bool    bSuccess = pCamera->DebugRenderWorldToFile(fOffsetX, fOffsetY, fOffsetZ, strPath);
+
+    if (bSuccess)
+        pConsole->Printf("testvirtualcamera: wrote %s\n", *strPath);
+    else
+        pConsole->Print(
+            "testvirtualcamera: failed - camera not ready, raster creation failed, render failed or the raster's pixel format isn't supported by the BMP "
+            "writer\n");
 }
 
 void CCommandFuncs::Vid(const char* szParameters)

@@ -1513,6 +1513,7 @@ void CCore::RegisterCommands()
     m_pCommands->Add("copygtacontrols", _("copies the default gta controls"), CCommandFuncs::CopyGTAControls);
     m_pCommands->Add("screenshot", _("outputs a screenshot"), CCommandFuncs::ScreenShot);
     m_pCommands->Add("saveconfig", _("immediately saves the config"), CCommandFuncs::SaveConfig);
+    m_pCommands->Add("testvirtualcamera", _("debug: renders the world from an offset camera to a bmp file"), CCommandFuncs::TestVirtualCamera);
 
     m_pCommands->Add("cleardebug", _("clears the debug view"), CCommandFuncs::DebugClear);
     m_pCommands->Add("chatscrollup", _("scrolls the chatbox upwards"), CCommandFuncs::ChatScrollUp);

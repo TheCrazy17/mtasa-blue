@@ -157,4 +157,10 @@ public:
     virtual bool         GetTransitionMatrix(CMatrix& matrix) const = 0;
 
     virtual bool IsSphereVisible(CVector* center, float radius) const = 0;
+
+    // Debug/test only, not for gameplay use. Renders the world from a camera offset from the
+    // current one into a temporary off-screen raster and saves the result as a BMP to filePath, to
+    // validate CCameraSA::RenderWorldToRaster end-to-end (see Client/game_sa/CCameraSA.cpp for the
+    // real primitives this composes). Returns false on any failure along the way.
+    virtual bool DebugRenderWorldToFile(float offsetX, float offsetY, float offsetZ, const char* filePath) noexcept = 0;
 };
