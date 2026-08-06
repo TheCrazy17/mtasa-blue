@@ -72,6 +72,24 @@
 #define FUNC_RwCameraEndUpdate      0x7EE180
 #define FUNC_RenderSceneWorld       0x53DF40
 
+// RwRasterCreate, confirmed the same way by decompiling CMirrors::CreateBuffer (0x7230A0), which
+// calls it to allocate the mirror's own offscreen colour/z rasters. The raster depth field is a
+// plain read at offset 0x14 (also confirmed there - CreateBuffer reads the screen raster's own
+// depth this way rather than hardcoding one), so no separate RwRasterGetDepth address is needed.
+// RwRasterDestroy's address is NOT yet confirmed - CMirrors::ShutDown (0x723050) didn't resolve to
+// a function boundary in this Ghidra project without a full re-analysis pass. Don't guess it; any
+// raster this creates just isn't freed yet, which is fine for research code nothing calls, but
+// needs solving before this leaks in a real feature.
+#define FUNC_RwRasterCreate   0x7FB230
+#define RWRASTER_OFFSET_DEPTH 0x14
+
+enum class eRwRasterType : std::uint32_t
+{
+    ZBUFFER = 0x01,
+    CAMERA = 0x02,
+    CAMERATEXTURE = 0x05,
+};
+
 #define VAR_CameraRotation    0xB6F178  // used for controling where the player faces
 #define VAR_VehicleCameraView 0xB6F0DC
 #define VAR_PedCameraView     0xB6F0F0
@@ -481,4 +499,12 @@ public:
     // Returns false if the RW camera isn't ready or the update couldn't begin (matches RsCameraBeginUpdate's
     // own failure signal). Untested in a running game - addresses are decompile-confirmed, not gameplay-verified.
     bool RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, void* targetZRaster) noexcept;
+
+    // Depth of the live screen raster (Scene.m_pRwCamera->frameBuffer), for sizing an offscreen
+    // raster the same way CMirrors::CreateBuffer does. Returns 0 if the RW camera isn't ready.
+    int GetScreenRasterDepth() const noexcept;
+
+    // Wraps RwRasterCreate directly; returns nullptr on failure (matches the real function's own
+    // failure signal). No destroy counterpart yet - see the comment above FUNC_RwRasterCreate.
+    static void* CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept;
 };

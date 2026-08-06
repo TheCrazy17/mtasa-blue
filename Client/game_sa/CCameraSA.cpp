@@ -878,3 +878,22 @@ bool CCameraSA::RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, v
 
     return succeeded;
 }
+
+int CCameraSA::GetScreenRasterDepth() const noexcept
+{
+    void* pRwCamera = *reinterpret_cast<void**>(VAR_RwCameraPtr);
+    if (!pRwCamera)
+        return 0;
+
+    void* pFrameBuffer = *reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(pRwCamera) + RWCAMERA_OFFSET_FRAMEBUFFER);
+    if (!pFrameBuffer)
+        return 0;
+
+    return *reinterpret_cast<int*>(reinterpret_cast<std::uint8_t*>(pFrameBuffer) + RWRASTER_OFFSET_DEPTH);
+}
+
+void* CCameraSA::CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept
+{
+    using RwRasterCreate_t = void*(__cdecl*)(int, int, int, std::uint32_t);
+    return ((RwRasterCreate_t)FUNC_RwRasterCreate)(width, height, depth, static_cast<std::uint32_t>(type));
+}
