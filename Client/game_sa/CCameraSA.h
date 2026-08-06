@@ -12,6 +12,7 @@
 #pragma once
 
 #include <game/CCamera.h>
+#include <game/RenderWareD3D.h>
 #include <CMatrix_Pad.h>
 #include "CCamSA.h"
 #include "CGarageSA.h"
@@ -29,59 +30,39 @@
 #define FUNC_SetFadeColour                0x50BF00
 #define FUNC_ShakeCam                     0x50A9F0
 
-// Research primitives for a possible CCTV/portal camera feature (renders the 3D world from an
-// independent camera into an off-screen texture, similar to how vehicle mirrors work internally).
-// These two are the confirmed, safe-to-call pieces of that sequence; CCamera::SetMatrix already
-// exists above via CCameraSA::SetMatrix, so it can supply the transform.
+// Research primitives for a possible CCTV/portal camera feature: render the 3D world from an
+// independent camera into an off-screen texture, the same trick GTA:SA's vehicle mirrors use
+// internally, then read that texture out as a real IDirect3DTexture9 MTA can display. Nothing here
+// is wired into any gameplay or Lua path yet.
 //
-// Reference sequence, as used by the game's own mirror renderer (CMirrors::BeforeMainRender):
-//   1. save TheCamera's current matrix
-//   2. CCameraSA::SetMatrix(customMatrix)             (already implemented, writes the interface's matrix fields)
-//   3. CopyCameraMatrixToRWCam(true)                  (pushes that matrix into the live RenderWare camera)
-//   4. CalculateDerivedValues(true, false)             (recomputes view/projection state from it)
-//   5. swap the RW camera's raster/z-raster to an off-screen target (RwCameraSetRaster/SetZRaster are
-//      plain field writes on the RwCamera struct - frameBuffer/zBuffer - no address needed for those)
-//   6. RwCameraBeginUpdate / RenderScene() / RwCameraEndUpdate                       <-- NOT YET CONFIRMED
-//   7. restore the raster/z-raster and the camera matrix (steps 2-4 again, with the saved values)
+// Confirmed by decompiling the retail exe's own CMirrors::BeforeMainRender (0x727140) and
+// CMirrors::CreateBuffer (0x7230A0), not by guessing:
+//   - CopyCameraMatrixToRWCam (0x50AFA0) and CalculateDerivedValues (0x5150E0) push a CCamera
+//     matrix into the live RenderWare camera and recompute its view/projection state.
+//   - RwCameraClear (0x7EE340), RsCameraBeginUpdate (0x745210) and RwCameraEndUpdate (0x7EE180)
+//     bracket the render call. RenderScene() (0x53DF40) is the actual "draw the world" entry
+//     point - the same one the main frame loop calls for the real backbuffer.
+//   - the live camera the renderer actually uses (Scene.m_pRwCamera, not necessarily identical to
+//     CCameraSAInterface::m_pRwCamera above, though normally in sync with it) is a global RwCamera*
+//     stored at 0xC1703C.
+//   - RwRasterCreate is at 0x7FB230, same signature as the RW SDK (width, height, depth, type).
+// The raster/camera-buffer fields and struct layouts this all reads/writes (RwCamera::bufferColor/
+// bufferDepth, RwRaster::depth, RwRaster::renderResource as RwD3D9Raster) all come straight from
+// this codebase's own <game/RenderWare.h>/<game/RenderWareD3D.h> - no manual offsets needed there,
+// and their layout independently matches what the decompile found (e.g. RwRaster::depth landing at
+// the same 0x14 CMirrors::CreateBuffer reads it from).
 //
-// Step 6 is the remaining blocker: RwCameraBeginUpdate/EndUpdate/Clear are real RenderWare-internal
-// functions statically linked into the retail exe, and their addresses aren't in gta-reversed (it links
-// its own RW reimplementation instead of calling into the retail exe). They need a live Ghidra signature
-// scan, ideally anchored on the CMirrors::BeforeMainRender call site (0x727140 in gta-reversed's
-// addressing, which matches this codebase's existing FUNC_ addresses - see cross-check below) to find
-// which functions it actually calls there. Do not guess these addresses; a wrong function pointer call
-// here corrupts the renderer or crashes the client.
-//
-// Update: step 6 above is now confirmed too, straight from decompiling the retail exe's
-// CMirrors::BeforeMainRender (0x727140) rather than guessing:
-//   - the frameBuffer/zBuffer swap is a plain field write at offsets 0x60/0x64 on the RwCamera struct
-//   - RwCameraClear is at 0x7EE340 (cdecl, camera/colour/clearFlags)
-//   - RsCameraBeginUpdate is at 0x745210 (cdecl, camera; returns nonzero on success)
-//   - RwCameraEndUpdate is at 0x7EE180 (cdecl, camera)
-//   - RenderScene() is at 0x53DF40 (cdecl, no args)
-//   - the live camera pointer (Scene.m_pRwCamera) is a global RwCamera* stored at 0xC1703C
-// See RenderWorldToRaster() below, which composes all of this into one primitive.
+// Still open: RwRasterDestroy's address (CMirrors::ShutDown, 0x723050, didn't resolve to a function
+// boundary in this Ghidra project without a full re-analysis pass) - so nothing here frees what it
+// creates yet. Fine for research code nothing calls, not fine for a real feature.
 #define FUNC_CopyCameraMatrixToRWCam 0x50AFA0
 #define FUNC_CalculateDerivedValues  0x5150E0
-
-#define VAR_RwCameraPtr             0xC1703C  // RwCamera** - dereference for the live Scene.m_pRwCamera
-#define RWCAMERA_OFFSET_FRAMEBUFFER 0x60
-#define RWCAMERA_OFFSET_ZBUFFER     0x64
-#define FUNC_RwCameraClear          0x7EE340
-#define FUNC_RsCameraBeginUpdate    0x745210
-#define FUNC_RwCameraEndUpdate      0x7EE180
-#define FUNC_RenderSceneWorld       0x53DF40
-
-// RwRasterCreate, confirmed the same way by decompiling CMirrors::CreateBuffer (0x7230A0), which
-// calls it to allocate the mirror's own offscreen colour/z rasters. The raster depth field is a
-// plain read at offset 0x14 (also confirmed there - CreateBuffer reads the screen raster's own
-// depth this way rather than hardcoding one), so no separate RwRasterGetDepth address is needed.
-// RwRasterDestroy's address is NOT yet confirmed - CMirrors::ShutDown (0x723050) didn't resolve to
-// a function boundary in this Ghidra project without a full re-analysis pass. Don't guess it; any
-// raster this creates just isn't freed yet, which is fine for research code nothing calls, but
-// needs solving before this leaks in a real feature.
-#define FUNC_RwRasterCreate   0x7FB230
-#define RWRASTER_OFFSET_DEPTH 0x14
+#define VAR_RwCameraPtr              0xC1703C  // RwCamera** - dereference for the live Scene.m_pRwCamera
+#define FUNC_RwCameraClear           0x7EE340
+#define FUNC_RsCameraBeginUpdate     0x745210
+#define FUNC_RwCameraEndUpdate       0x7EE180
+#define FUNC_RenderSceneWorld        0x53DF40
+#define FUNC_RwRasterCreate          0x7FB230
 
 enum class eRwRasterType : std::uint32_t
 {
@@ -493,18 +474,25 @@ public:
     void CopyCameraMatrixToRWCam(bool bUpdateMatrix) noexcept;
     void CalculateDerivedValues(bool bForMirror, bool bOriented) noexcept;
 
-    // Renders the world once from cameraMatrix into targetRaster/targetZRaster (both raw RwRaster*,
-    // already-created and sized by the caller - this does not create rasters), then restores the real
-    // camera. Mirrors the exact sequence CMirrors::BeforeMainRender uses for the mirror reflection pass.
-    // Returns false if the RW camera isn't ready or the update couldn't begin (matches RsCameraBeginUpdate's
-    // own failure signal). Untested in a running game - addresses are decompile-confirmed, not gameplay-verified.
-    bool RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, void* targetZRaster) noexcept;
+    // Renders the world once from cameraMatrix into targetRaster/targetZRaster (already created and
+    // sized by the caller - this does not create rasters), then restores the real camera. Mirrors the
+    // exact sequence CMirrors::BeforeMainRender uses for the mirror reflection pass. Returns false if
+    // the RW camera isn't ready or the update couldn't begin (matches RsCameraBeginUpdate's own
+    // failure signal). Untested in a running game - addresses are decompile-confirmed, not gameplay-verified.
+    bool RenderWorldToRaster(CMatrix* cameraMatrix, RwRaster* targetRaster, RwRaster* targetZRaster) noexcept;
 
-    // Depth of the live screen raster (Scene.m_pRwCamera->frameBuffer), for sizing an offscreen
+    // Depth of the live screen raster (Scene.m_pRwCamera->bufferColor), for sizing an offscreen
     // raster the same way CMirrors::CreateBuffer does. Returns 0 if the RW camera isn't ready.
     int GetScreenRasterDepth() const noexcept;
 
     // Wraps RwRasterCreate directly; returns nullptr on failure (matches the real function's own
     // failure signal). No destroy counterpart yet - see the comment above FUNC_RwRasterCreate.
-    static void* CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept;
+    static RwRaster* CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept;
+
+    // Pulls the real Direct3D texture out of a raster created by CreateRaster (or any RwRaster with
+    // a D3D9 render resource), via the same RwD3D9Raster reinterpretation CRenderWareSA::RightSizeTexture
+    // already uses elsewhere in this codebase. This is the missing link between "the world got rendered
+    // into a raster" and "a player could actually see it" (e.g. via dxDrawImage on the client side).
+    // Returns nullptr if raster is null or its render resource has no texture yet.
+    static IDirect3DTexture9* GetRasterTexture(RwRaster* raster) noexcept;
 };

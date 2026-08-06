@@ -825,34 +825,31 @@ void CCameraSA::CalculateDerivedValues(bool bForMirror, bool bOriented) noexcept
     ((CalculateDerivedValues_t)FUNC_CalculateDerivedValues)(cameraInterface, bForMirror, bOriented);
 }
 
-bool CCameraSA::RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, void* targetZRaster) noexcept
+bool CCameraSA::RenderWorldToRaster(CMatrix* cameraMatrix, RwRaster* targetRaster, RwRaster* targetZRaster) noexcept
 {
     if (!cameraMatrix || !targetRaster)
         return false;
 
-    void* pRwCamera = *reinterpret_cast<void**>(VAR_RwCameraPtr);
+    RwCamera* pRwCamera = *reinterpret_cast<RwCamera**>(VAR_RwCameraPtr);
     if (!pRwCamera)
         return false;
 
-    auto* pFrameBufferSlot = reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(pRwCamera) + RWCAMERA_OFFSET_FRAMEBUFFER);
-    auto* pZBufferSlot = reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(pRwCamera) + RWCAMERA_OFFSET_ZBUFFER);
-
-    void*   savedFrameBuffer = *pFrameBufferSlot;
-    void*   savedZBuffer = *pZBufferSlot;
-    CMatrix savedMatrix;
+    RwRaster* savedColorBuffer = pRwCamera->bufferColor;
+    RwRaster* savedDepthBuffer = pRwCamera->bufferDepth;
+    CMatrix   savedMatrix;
     GetMatrix(&savedMatrix);
 
     // Swap in the caller's target and camera, and push that camera into the live RW state,
     // exactly like CMirrors::BeforeMainRender does for the mirror's own offscreen pass.
-    *pFrameBufferSlot = targetRaster;
-    *pZBufferSlot = targetZRaster;
+    pRwCamera->bufferColor = targetRaster;
+    pRwCamera->bufferDepth = targetZRaster;
     SetMatrix(cameraMatrix);
     CopyCameraMatrixToRWCam(true);
     CalculateDerivedValues(true, false);
 
-    using RwCameraClear_t = void(__cdecl*)(void*, const void*, std::uint32_t);
-    using RsCameraBeginUpdate_t = int(__cdecl*)(void*);
-    using RwCameraEndUpdate_t = void(__cdecl*)(void*);
+    using RwCameraClear_t = void(__cdecl*)(RwCamera*, const void*, std::uint32_t);
+    using RsCameraBeginUpdate_t = int(__cdecl*)(RwCamera*);
+    using RwCameraEndUpdate_t = void(__cdecl*)(RwCamera*);
     using RenderSceneWorld_t = void(__cdecl*)();
 
     const std::uint32_t clearColour = 0xFF000000;
@@ -870,8 +867,8 @@ bool CCameraSA::RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, v
     }
 
     // Restore the real camera and raster the same way CMirrors::RestoreCameraAfterMirror does.
-    *pFrameBufferSlot = savedFrameBuffer;
-    *pZBufferSlot = savedZBuffer;
+    pRwCamera->bufferColor = savedColorBuffer;
+    pRwCamera->bufferDepth = savedDepthBuffer;
     SetMatrix(&savedMatrix);
     CopyCameraMatrixToRWCam(true);
     CalculateDerivedValues(false, false);
@@ -881,19 +878,24 @@ bool CCameraSA::RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, v
 
 int CCameraSA::GetScreenRasterDepth() const noexcept
 {
-    void* pRwCamera = *reinterpret_cast<void**>(VAR_RwCameraPtr);
-    if (!pRwCamera)
+    RwCamera* pRwCamera = *reinterpret_cast<RwCamera**>(VAR_RwCameraPtr);
+    if (!pRwCamera || !pRwCamera->bufferColor)
         return 0;
 
-    void* pFrameBuffer = *reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(pRwCamera) + RWCAMERA_OFFSET_FRAMEBUFFER);
-    if (!pFrameBuffer)
-        return 0;
-
-    return *reinterpret_cast<int*>(reinterpret_cast<std::uint8_t*>(pFrameBuffer) + RWRASTER_OFFSET_DEPTH);
+    return pRwCamera->bufferColor->depth;
 }
 
-void* CCameraSA::CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept
+RwRaster* CCameraSA::CreateRaster(int width, int height, int depth, eRwRasterType type) noexcept
 {
-    using RwRasterCreate_t = void*(__cdecl*)(int, int, int, std::uint32_t);
+    using RwRasterCreate_t = RwRaster*(__cdecl*)(int, int, int, std::uint32_t);
     return ((RwRasterCreate_t)FUNC_RwRasterCreate)(width, height, depth, static_cast<std::uint32_t>(type));
+}
+
+IDirect3DTexture9* CCameraSA::GetRasterTexture(RwRaster* raster) noexcept
+{
+    if (!raster)
+        return nullptr;
+
+    auto* pD3DRaster = reinterpret_cast<RwD3D9Raster*>(&raster->renderResource);
+    return pD3DRaster->texture;
 }
