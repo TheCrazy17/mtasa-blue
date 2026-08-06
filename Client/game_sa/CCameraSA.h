@@ -52,11 +52,25 @@
 // which functions it actually calls there. Do not guess these addresses; a wrong function pointer call
 // here corrupts the renderer or crashes the client.
 //
-// RenderScene() itself (the actual "draw the world" entry point mirrors call into a second time) is at
-// 0x53DF40 and IS safe to call address-wise, but has no CCameraSA wrapper here yet since it's a free
-// function, not a CCamera method - add it next to whatever ends up driving the raster swap.
+// Update: step 6 above is now confirmed too, straight from decompiling the retail exe's
+// CMirrors::BeforeMainRender (0x727140) rather than guessing:
+//   - the frameBuffer/zBuffer swap is a plain field write at offsets 0x60/0x64 on the RwCamera struct
+//   - RwCameraClear is at 0x7EE340 (cdecl, camera/colour/clearFlags)
+//   - RsCameraBeginUpdate is at 0x745210 (cdecl, camera; returns nonzero on success)
+//   - RwCameraEndUpdate is at 0x7EE180 (cdecl, camera)
+//   - RenderScene() is at 0x53DF40 (cdecl, no args)
+//   - the live camera pointer (Scene.m_pRwCamera) is a global RwCamera* stored at 0xC1703C
+// See RenderWorldToRaster() below, which composes all of this into one primitive.
 #define FUNC_CopyCameraMatrixToRWCam 0x50AFA0
 #define FUNC_CalculateDerivedValues  0x5150E0
+
+#define VAR_RwCameraPtr             0xC1703C  // RwCamera** - dereference for the live Scene.m_pRwCamera
+#define RWCAMERA_OFFSET_FRAMEBUFFER 0x60
+#define RWCAMERA_OFFSET_ZBUFFER     0x64
+#define FUNC_RwCameraClear          0x7EE340
+#define FUNC_RsCameraBeginUpdate    0x745210
+#define FUNC_RwCameraEndUpdate      0x7EE180
+#define FUNC_RenderSceneWorld       0x53DF40
 
 #define VAR_CameraRotation    0xB6F178  // used for controling where the player faces
 #define VAR_VehicleCameraView 0xB6F0DC
@@ -460,4 +474,11 @@ public:
     // gameplay or Lua path yet; only exposed so the pieces can be composed and tested manually.
     void CopyCameraMatrixToRWCam(bool bUpdateMatrix) noexcept;
     void CalculateDerivedValues(bool bForMirror, bool bOriented) noexcept;
+
+    // Renders the world once from cameraMatrix into targetRaster/targetZRaster (both raw RwRaster*,
+    // already-created and sized by the caller - this does not create rasters), then restores the real
+    // camera. Mirrors the exact sequence CMirrors::BeforeMainRender uses for the mirror reflection pass.
+    // Returns false if the RW camera isn't ready or the update couldn't begin (matches RsCameraBeginUpdate's
+    // own failure signal). Untested in a running game - addresses are decompile-confirmed, not gameplay-verified.
+    bool RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, void* targetZRaster) noexcept;
 };

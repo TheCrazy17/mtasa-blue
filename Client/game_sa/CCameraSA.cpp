@@ -824,3 +824,57 @@ void CCameraSA::CalculateDerivedValues(bool bForMirror, bool bOriented) noexcept
     using CalculateDerivedValues_t = void(__thiscall*)(CCameraSAInterface*, bool, bool);
     ((CalculateDerivedValues_t)FUNC_CalculateDerivedValues)(cameraInterface, bForMirror, bOriented);
 }
+
+bool CCameraSA::RenderWorldToRaster(CMatrix* cameraMatrix, void* targetRaster, void* targetZRaster) noexcept
+{
+    if (!cameraMatrix || !targetRaster)
+        return false;
+
+    void* pRwCamera = *reinterpret_cast<void**>(VAR_RwCameraPtr);
+    if (!pRwCamera)
+        return false;
+
+    auto* pFrameBufferSlot = reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(pRwCamera) + RWCAMERA_OFFSET_FRAMEBUFFER);
+    auto* pZBufferSlot = reinterpret_cast<void**>(reinterpret_cast<std::uint8_t*>(pRwCamera) + RWCAMERA_OFFSET_ZBUFFER);
+
+    void*   savedFrameBuffer = *pFrameBufferSlot;
+    void*   savedZBuffer = *pZBufferSlot;
+    CMatrix savedMatrix;
+    GetMatrix(&savedMatrix);
+
+    // Swap in the caller's target and camera, and push that camera into the live RW state,
+    // exactly like CMirrors::BeforeMainRender does for the mirror's own offscreen pass.
+    *pFrameBufferSlot = targetRaster;
+    *pZBufferSlot = targetZRaster;
+    SetMatrix(cameraMatrix);
+    CopyCameraMatrixToRWCam(true);
+    CalculateDerivedValues(true, false);
+
+    using RwCameraClear_t = void(__cdecl*)(void*, const void*, std::uint32_t);
+    using RsCameraBeginUpdate_t = int(__cdecl*)(void*);
+    using RwCameraEndUpdate_t = void(__cdecl*)(void*);
+    using RenderSceneWorld_t = void(__cdecl*)();
+
+    const std::uint32_t clearColour = 0xFF000000;
+    // rwCAMERACLEARZ | rwCAMERACLEARIMAGE; the mirror path also ORs in rwCAMERACLEARSTENCIL for high
+    // graphics quality, skipped here to avoid depending on that quality-check function too.
+    constexpr std::uint32_t kClearFlags = 3;
+    ((RwCameraClear_t)FUNC_RwCameraClear)(pRwCamera, &clearColour, kClearFlags);
+
+    bool succeeded = false;
+    if (((RsCameraBeginUpdate_t)FUNC_RsCameraBeginUpdate)(pRwCamera) != 0)
+    {
+        ((RenderSceneWorld_t)FUNC_RenderSceneWorld)();
+        ((RwCameraEndUpdate_t)FUNC_RwCameraEndUpdate)(pRwCamera);
+        succeeded = true;
+    }
+
+    // Restore the real camera and raster the same way CMirrors::RestoreCameraAfterMirror does.
+    *pFrameBufferSlot = savedFrameBuffer;
+    *pZBufferSlot = savedZBuffer;
+    SetMatrix(&savedMatrix);
+    CopyCameraMatrixToRWCam(true);
+    CalculateDerivedValues(false, false);
+
+    return succeeded;
+}
