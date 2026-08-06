@@ -45,6 +45,7 @@ class CHud;
 class CKeyGen;
 class CModelInfo;
 class CObjectGroupPhysicalProperties;
+class COcclusion;
 class CPad;
 class CPathFind;
 class CPed;
@@ -148,6 +149,7 @@ public:
     virtual CFx*                      GetFx() = 0;
     virtual CFxManager*               GetFxManager() = 0;
     virtual CWaterManager*            GetWaterManager() = 0;
+    virtual COcclusion*               GetOcclusion() = 0;
     virtual CWeaponStatManager*       GetWeaponStatManager() = 0;
     virtual CPointLights*             GetPointLights() = 0;
     virtual CColStore*                GetCollisionStore() = 0;

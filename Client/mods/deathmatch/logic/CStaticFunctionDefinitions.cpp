@@ -6615,6 +6615,48 @@ CClientWater* CStaticFunctionDefinitions::CreateWater(CResource& resource, CVect
     return pWater;
 }
 
+CClientOcclusion* CStaticFunctionDefinitions::CreateOcclusionZone(CResource& resource, const CVector& vecPosition, const CVector& vecSize,
+                                                                  const CVector& vecRotation, bool bInterior)
+{
+    CClientOcclusion* pOcclusion = g_pClientGame->GetManager()->GetOcclusionManager()->CreateCustomZone(vecPosition, vecSize, vecRotation, bInterior);
+    if (!pOcclusion)
+        return nullptr;
+
+    pOcclusion->SetParent(resource.GetResourceDynamicEntity());
+    resource.AddToElementGroup(pOcclusion);
+    return pOcclusion;
+}
+
+bool CStaticFunctionDefinitions::GetOcclusionZoneSize(CClientOcclusion* pOcclusion, CVector& vecSize)
+{
+    assert(pOcclusion);
+    return pOcclusion->GetSize(vecSize);
+}
+
+bool CStaticFunctionDefinitions::SetOcclusionZoneSize(CClientOcclusion* pOcclusion, const CVector& vecSize)
+{
+    assert(pOcclusion);
+    return pOcclusion->SetSize(vecSize);
+}
+
+bool CStaticFunctionDefinitions::GetOcclusionZoneRotation(CClientOcclusion* pOcclusion, CVector& vecRotation)
+{
+    assert(pOcclusion);
+    return pOcclusion->GetRotation(vecRotation);
+}
+
+bool CStaticFunctionDefinitions::SetOcclusionZoneRotation(CClientOcclusion* pOcclusion, const CVector& vecRotation)
+{
+    assert(pOcclusion);
+    return pOcclusion->SetRotation(vecRotation);
+}
+
+bool CStaticFunctionDefinitions::SetOcclusionZoneEnabled(CClientOcclusion* pOcclusion, bool bEnabled)
+{
+    assert(pOcclusion);
+    return pOcclusion->SetEnabled(bEnabled);
+}
+
 bool CStaticFunctionDefinitions::GetWaterLevel(CVector& vecPosition, float& fWaterLevel, bool ignoreDistanceToWaterThreshold, CVector& vecUnknown)
 {
     return g_pGame->GetWaterManager()->GetWaterLevel(vecPosition, &fWaterLevel, ignoreDistanceToWaterThreshold, &vecUnknown);

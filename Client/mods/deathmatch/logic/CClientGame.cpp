@@ -101,6 +101,7 @@ CClientGame::CClientGame(bool bLocalPlay) : m_ServerInfo(new CServerInfo())
     m_bShowNametags = true;
     m_bWaitingForLocalConnect = false;
     m_bShowRadar = false;
+    m_bShowOcclusions = false;
     m_bGameLoaded = false;
     m_bTriggeredIngameAndConnected = false;
     m_bGracefulDisconnect = false;
@@ -854,6 +855,7 @@ void CClientGame::DoPulsePreHUDRender(bool bDidUnminimize, bool bDidRecreateRend
     g_pCore->GetGraphics()->GetRenderItemManager()->RestoreDefaultRenderTarget();
 
     DebugElementRender();
+    DebugOcclusionRender();
 }
 
 void CClientGame::DoPulsePostFrame()
@@ -3473,6 +3475,7 @@ void CClientGame::Event_OnIngame()
 
     g_pGame->GetBuildingRemoval()->ClearRemovedBuildingLists();
     g_pGame->GetWorld()->SetOcclusionsEnabled(true);
+    m_pManager->GetOcclusionManager()->PopulateFromNative();
 
     g_pGame->ResetModelLodDistances();
     g_pGame->ResetModelFlags();
@@ -6336,6 +6339,30 @@ void CClientGame::DebugElementRender()
         if (pEntity->GetParent())
             pEntity->DebugRender(vecCameraPos, fDrawRadius);
     }
+}
+
+//
+// If debug render mode is on, draw every occlusion zone within range; not spatially
+// registered like streamed entities, so this walks the manager's lists directly.
+//
+void CClientGame::DebugOcclusionRender()
+{
+    if (!GetDevelopmentMode() || !GetShowOcclusions())
+        return;
+
+    CVector vecCameraPos;
+    m_pCamera->GetPosition(vecCameraPos);
+    const float fDrawRadius = 500.f;
+
+    const auto RenderZones = [&](const std::vector<CClientOcclusion*>& zones)
+    {
+        for (CClientOcclusion* pZone : zones)
+            if (pZone)
+                pZone->DebugRender(vecCameraPos, fDrawRadius);
+    };
+
+    RenderZones(m_pManager->GetOcclusionManager()->GetMapZones());
+    RenderZones(m_pManager->GetOcclusionManager()->GetInteriorZones());
 }
 
 //////////////////////////////////////////////////////////////////

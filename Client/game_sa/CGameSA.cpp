@@ -38,6 +38,7 @@
 #include "CHudSA.h"
 #include "CKeyGenSA.h"
 #include "CObjectGroupPhysicalPropertiesSA.h"
+#include "COcclusionSA.h"
 #include "CPadSA.h"
 #include "CPickupsSA.h"
 #include "CPlayerInfoSA.h"
@@ -140,6 +141,7 @@ CGameSA::CGameSA()
         m_pFx = new CFxSA((CFxSAInterface*)CLASS_CFx);
         m_pFxManager = new CFxManagerSA((CFxManagerSAInterface*)CLASS_CFxManager);
         m_pWaterManager = new CWaterManagerSA();
+        m_pOcclusion = new COcclusionSA();
         m_pWeaponStatsManager = new CWeaponStatManagerSA();
         m_pPointLights = new CPointLightsSA();
         m_collisionStore = new CColStoreSA();
@@ -312,6 +314,7 @@ CGameSA::~CGameSA()
     delete reinterpret_cast<CAEAudioHardwareSA*>(m_pAEAudioHardware);
     delete reinterpret_cast<CAudioContainerSA*>(m_pAudioContainer);
     delete reinterpret_cast<CPointLightsSA*>(m_pPointLights);
+    delete static_cast<COcclusionSA*>(m_pOcclusion);
     delete static_cast<CColStoreSA*>(m_collisionStore);
     delete static_cast<CIplStore*>(m_pIplStore);
     delete static_cast<CBuildingRemovalSA*>(m_pBuildingRemoval);

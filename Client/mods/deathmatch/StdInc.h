@@ -70,6 +70,7 @@
 #include <CClientDFF.h>
 #include <CClientDummy.h>
 #include <CClientEntity.h>
+#include <CClientOcclusion.h>
 #include <CClientSpatialDatabase.h>
 #include <CClientExplosionManager.h>
 #include <CClientPed.h>
@@ -147,6 +148,7 @@
 #include <luadefs/CLuaWeaponDefs.h>
 #include <luadefs/CLuaWorldDefs.h>
 #include <luadefs/CLuaBuildingDefs.h>
+#include <luadefs/CLuaOcclusionDefs.h>
 #include <CRemoteCalls.h>
 
 // Shared includes

@@ -487,6 +487,8 @@ public:
     bool GetShowCollision() { return m_bShowCollision; }
     void SetShowSound(bool bEnable) { m_bShowSound = bEnable; }
     bool GetShowSound() { return m_bShowSound; }
+    void SetShowOcclusions(bool bEnable) { m_bShowOcclusions = bEnable; }
+    bool GetShowOcclusions() { return m_bShowOcclusions; }
 
     void        TakePlayerScreenShot(uint uiSizeX, uint uiSizeY, const SString& strTag, uint uiQuality, uint uiMaxBandwidth, uint uiMaxPacketSize,
                                      CResource* pResource, uint uiServerSentTime);
@@ -680,6 +682,7 @@ public:
 
     bool VerifySADataFiles(int iEnableClientChecks = 0);
     void DebugElementRender();
+    void DebugOcclusionRender();
 
     void SendExplosionSync(const CVector& vecPosition, eExplosionType Type, CClientEntity* pOrigin = nullptr,
                            std::optional<VehicleBlowState> vehicleBlowState = std::nullopt);
@@ -893,6 +896,7 @@ private:
     bool m_bDevelopmentMode;
     bool m_bShowCollision;
     bool m_bShowSound;
+    bool m_bShowOcclusions;
 
 private:
     CEvents                                     m_Events;

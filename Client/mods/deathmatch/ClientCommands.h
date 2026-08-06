@@ -69,3 +69,4 @@ void COMMAND_ShowInterpolation(const char* szCmdLine);
 // Commands enabled when development mode in on
 void COMMAND_ShowCollision(const char* szCmdLine);
 void COMMAND_ShowSound(const char* szCmdLine);
+void COMMAND_ShowOcclusions(const char* szCmdLine);

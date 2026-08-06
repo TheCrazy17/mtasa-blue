@@ -165,6 +165,7 @@ public:
     CFx*                      GetFx() { return m_pFx; }
     CFxManager*               GetFxManager() { return m_pFxManager; }
     CWaterManager*            GetWaterManager() { return m_pWaterManager; }
+    COcclusion*               GetOcclusion() { return m_pOcclusion; }
     CWeaponStatManager*       GetWeaponStatManager() { return m_pWeaponStatsManager; }
     CPointLights*             GetPointLights() { return m_pPointLights; }
     CColStore*                GetCollisionStore() override { return m_collisionStore; }
@@ -349,6 +350,7 @@ private:
     CFx*                              m_pFx;
     CFxManagerSA*                     m_pFxManager;
     CWaterManager*                    m_pWaterManager;
+    COcclusion*                       m_pOcclusion;
     CWeaponStatManager*               m_pWeaponStatsManager;
     CPointLights*                     m_pPointLights;
     CColStore*                        m_collisionStore;
