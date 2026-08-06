@@ -235,6 +235,12 @@ public:
 
     void SetTargetTarget(unsigned long ulDelay, const CVector& vecSource, const CVector& vecTarget);
 
+    // Local-player counterpart to SetTargetTarget. That function only ever updates shot-sync data
+    // (the network replication of where a *remote* ped appears to be aiming to other clients), so it
+    // has no effect on the local player at all; this actually points the local player's gun via the
+    // native CTaskSimpleUseGun, which is what setPedAimTarget was supposed to control (issue #380).
+    bool SetLocalAimTarget(CVector vecTarget);
+
     int  GetVehicleInOutState() const noexcept { return m_iVehicleInOutState; };
     void SetVehicleInOutState(int iState) noexcept { m_iVehicleInOutState = iState; };
 

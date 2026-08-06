@@ -2516,8 +2516,11 @@ bool CStaticFunctionDefinitions::SetPedAimTarget(CClientEntity& Entity, CVector&
     {
         CClientPed& Ped = static_cast<CClientPed&>(Entity);
 
+        // The local player isn't driven by shot-sync (the rest of this function is purely shot-sync
+        // bookkeeping for how a *remote* ped's aim gets replicated to other clients), so it needs its
+        // own path into the native gun-aiming task instead.
         if (Ped.IsLocalPlayer())
-            return false;
+            return Ped.SetLocalAimTarget(vecTarget);
 
         // Grab the gun muzzle position
         CWeapon* pWeapon = Ped.GetWeapon(Ped.GetCurrentWeaponSlot());

@@ -1052,6 +1052,29 @@ void CClientPed::SetTargetTarget(unsigned long ulDelay, const CVector& vecSource
     }
 }
 
+bool CClientPed::SetLocalAimTarget(CVector vecTarget)
+{
+    if (!m_bIsLocalPlayer || !m_pPlayerPed)
+        return false;
+
+    CTaskSimpleUseGun* pTaskUseGun = m_pPlayerPed->GetPedIntelligence()->GetTaskUseGun();
+    if (!pTaskUseGun)
+        return false;
+
+    // The native task treats an X or Y of exactly 0.0f as "no target position set" and falls back to
+    // whatever the camera/analog stick would normally produce, so a legitimate target that happens to
+    // land on either axis needs nudging off it to actually take effect.
+    if (vecTarget.fX == 0.0f)
+        vecTarget.fX = 0.0001f;
+    if (vecTarget.fY == 0.0f)
+        vecTarget.fY = 0.0001f;
+
+    // pTargetEntity is deliberately null: the task ignores vecTarget entirely whenever a target
+    // entity is set, and we're aiming at a free-standing point, not an entity.
+    pTaskUseGun->Reset(m_pPlayerPed, nullptr, vecTarget, GCOMMAND_AIM);
+    return true;
+}
+
 bool CClientPed::SetModel(unsigned long ulModel, bool bTemp)
 {
     // Valid model?
