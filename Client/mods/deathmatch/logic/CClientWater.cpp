@@ -27,6 +27,7 @@ CClientWater::CClientWater(CClientManager* pManager, ElementID ID, CVector& vecB
     m_bShallow = bShallow;
 
     RelateDimension(m_pManager->GetWaterManager()->GetDimension());
+    RelateInterior(m_pManager->GetWaterManager()->GetInterior());
 
     m_pWaterManager->AddToList(this);
 }
@@ -45,6 +46,7 @@ CClientWater::CClientWater(CClientManager* pManager, ElementID ID, CVector& vecL
     m_bShallow = bShallow;
 
     RelateDimension(m_pManager->GetWaterManager()->GetDimension());
+    RelateInterior(m_pManager->GetWaterManager()->GetInterior());
     m_pWaterManager->AddToList(this);
 }
 
@@ -161,9 +163,26 @@ void CClientWater::SetDimension(unsigned short usDimension)
     RelateDimension(m_pManager->GetWaterManager()->GetDimension());
 }
 
-void CClientWater::RelateDimension(unsigned short usWorldDimension)
+void CClientWater::RelateDimension(unsigned short)
 {
-    if (usWorldDimension == m_usDimension)
+    UpdateVisibility();
+}
+
+void CClientWater::RelateInterior(unsigned char)
+{
+    UpdateVisibility();
+}
+
+void CClientWater::SetInterior(unsigned char ucInterior)
+{
+    CClientEntity::SetInterior(ucInterior);
+    UpdateVisibility();
+}
+
+void CClientWater::UpdateVisibility()
+{
+    bool bShouldExist = (m_pWaterManager->GetDimension() == m_usDimension) && (m_pWaterManager->GetInterior() == m_ucInterior);
+    if (bShouldExist)
         Create();
     else
         Destroy();

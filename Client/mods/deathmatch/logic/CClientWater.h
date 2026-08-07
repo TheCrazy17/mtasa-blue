@@ -35,8 +35,13 @@ public:
 
     void SetDimension(unsigned short usDimension);
     void RelateDimension(unsigned short usWorldDimension);
+    void RelateInterior(unsigned char ucWorldInterior);
+
+    void SetInterior(unsigned char ucInterior) override;
 
 private:
+    void UpdateVisibility();
+
     CWaterPoly*          m_pPoly;
     CClientWaterManager* m_pWaterManager;
     bool                 m_bTriangle;  // Is this water a triangle or a quad type?

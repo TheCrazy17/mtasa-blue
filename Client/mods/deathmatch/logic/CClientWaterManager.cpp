@@ -16,6 +16,7 @@ CClientWaterManager::CClientWaterManager(CClientManager* pManager)
 {
     m_pManager = pManager;
     m_bDontRemoveFromList = false;
+    m_ucInterior = 0;
 }
 
 CClientWaterManager::~CClientWaterManager()
@@ -127,5 +128,16 @@ void CClientWaterManager::SetDimension(unsigned short usDimension)
     for (; iter != m_List.end(); iter++)
     {
         (*iter)->RelateDimension(m_usDimension);
+    }
+}
+
+void CClientWaterManager::SetInterior(unsigned char ucInterior)
+{
+    m_ucInterior = ucInterior;
+
+    list<CClientWater*>::const_iterator iter = m_List.begin();
+    for (; iter != m_List.end(); iter++)
+    {
+        (*iter)->RelateInterior(m_ucInterior);
     }
 }

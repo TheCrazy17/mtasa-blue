@@ -2203,6 +2203,7 @@ void CClientGame::SetAllDimensions(unsigned short usDimension)
 void CClientGame::SetAllInteriors(unsigned char ucInterior)
 {
     m_pNametags->m_ucInterior = ucInterior;
+    m_pManager->GetWaterManager()->SetInterior(ucInterior);
 }
 
 bool CClientGame::StaticKeyStrokeHandler(const SString& strKey, bool bState, bool bIsConsoleInputKey)
