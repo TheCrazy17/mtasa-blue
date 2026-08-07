@@ -452,6 +452,7 @@ bool CStaticFunctionDefinitions::GetElementRotation(CClientEntity& Entity, CVect
         }
         case CCLIENTCAMERA:
         case CCLIENTEFFECT:
+        case CCLIENTOCCLUSION:
         {
             Entity.GetRotationDegrees(vecRotation);
             break;
@@ -1164,6 +1165,7 @@ bool CStaticFunctionDefinitions::SetElementRotation(CClientEntity& Entity, const
         }
         case CCLIENTCAMERA:
         case CCLIENTEFFECT:
+        case CCLIENTOCCLUSION:
         {
             Entity.SetRotationDegrees(vecRotation);
             break;
@@ -6627,34 +6629,55 @@ CClientOcclusion* CStaticFunctionDefinitions::CreateOcclusionZone(CResource& res
     return pOcclusion;
 }
 
-bool CStaticFunctionDefinitions::GetOcclusionZoneSize(CClientOcclusion* pOcclusion, CVector& vecSize)
+bool CStaticFunctionDefinitions::GetOcclusionSize(CClientOcclusion* pOcclusion, CVector& vecSize)
 {
     assert(pOcclusion);
     return pOcclusion->GetSize(vecSize);
 }
 
-bool CStaticFunctionDefinitions::SetOcclusionZoneSize(CClientOcclusion* pOcclusion, const CVector& vecSize)
+bool CStaticFunctionDefinitions::SetOcclusionSize(CClientOcclusion* pOcclusion, const CVector& vecSize)
 {
     assert(pOcclusion);
     return pOcclusion->SetSize(vecSize);
 }
 
-bool CStaticFunctionDefinitions::GetOcclusionZoneRotation(CClientOcclusion* pOcclusion, CVector& vecRotation)
-{
-    assert(pOcclusion);
-    return pOcclusion->GetRotation(vecRotation);
-}
-
-bool CStaticFunctionDefinitions::SetOcclusionZoneRotation(CClientOcclusion* pOcclusion, const CVector& vecRotation)
-{
-    assert(pOcclusion);
-    return pOcclusion->SetRotation(vecRotation);
-}
-
-bool CStaticFunctionDefinitions::SetOcclusionZoneEnabled(CClientOcclusion* pOcclusion, bool bEnabled)
+bool CStaticFunctionDefinitions::SetOcclusionEnabled(CClientOcclusion* pOcclusion, bool bEnabled)
 {
     assert(pOcclusion);
     return pOcclusion->SetEnabled(bEnabled);
+}
+
+bool CStaticFunctionDefinitions::IsOcclusionEnabled(CClientOcclusion* pOcclusion)
+{
+    assert(pOcclusion);
+    return pOcclusion->IsEnabled();
+}
+
+void CStaticFunctionDefinitions::GetOcclusions(bool bInterior, std::vector<SOcclusionZoneEntry>& outEntries)
+{
+    COcclusion*       pOcclusion = g_pGame->GetOcclusion();
+    const std::size_t uiCount = pOcclusion->GetZoneCount(bInterior);
+
+    outEntries.reserve(uiCount);
+    for (std::size_t index = 0; index < uiCount; index++)
+    {
+        SOcclusionZoneInfo info;
+        if (!pOcclusion->GetZoneData(index, bInterior, info))
+            continue;
+
+        const std::size_t id = MakeOcclusionId(index, bInterior);
+        outEntries.push_back({id, bInterior, info.vecPosition, info.vecSize, info.vecRotation, pOcclusion->IsZoneEnabled(id)});
+    }
+}
+
+bool CStaticFunctionDefinitions::SetNativeOcclusionEnabled(std::size_t id, bool bEnabled, CResource* pResource)
+{
+    return g_pGame->GetOcclusion()->SetZoneEnabled(id, bEnabled, pResource);
+}
+
+bool CStaticFunctionDefinitions::IsNativeOcclusionEnabled(std::size_t id)
+{
+    return g_pGame->GetOcclusion()->IsZoneEnabled(id);
 }
 
 bool CStaticFunctionDefinitions::GetWaterLevel(CVector& vecPosition, float& fWaterLevel, bool ignoreDistanceToWaterThreshold, CVector& vecUnknown)

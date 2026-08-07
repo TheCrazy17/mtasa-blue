@@ -10,23 +10,11 @@
 
 #include "StdInc.h"
 
-CClientOcclusion::CClientOcclusion(CClientManager* pManager, ElementID ID, std::size_t index, bool bInterior, bool bNative)
-    : ClassInit(this),
-      CClientEntity(ID),
-      m_pOcclusionManager(pManager->GetOcclusionManager()),
-      m_index(index),
-      m_bInterior(bInterior),
-      m_bNative(bNative),
-      m_bEnabled(true)
+CClientOcclusion::CClientOcclusion(CClientManager* pManager, ElementID ID, std::size_t index, bool bInterior)
+    : ClassInit(this), CClientEntity(ID), m_pOcclusionManager(pManager->GetOcclusionManager()), m_index(index), m_bInterior(bInterior), m_bEnabled(true)
 {
     m_pManager = pManager;
     SetTypeName("occlusion");
-
-    // Native zones exist for the whole session; destroyElement() must not be able to drop the
-    // element and orphan the still-live native slot. setOcclusionEnabled is the only way to
-    // touch those. Custom zones keep the default (destroyable).
-    if (m_bNative)
-        SetCanBeDestroyedByScript(false);
 
     SOcclusionZoneInfo info;
     if (g_pGame->GetOcclusion()->GetZoneData(m_index, m_bInterior, info))
@@ -35,11 +23,9 @@ CClientOcclusion::CClientOcclusion(CClientManager* pManager, ElementID ID, std::
 
 CClientOcclusion::~CClientOcclusion()
 {
-    // Custom zones can't be removed from the native table, only shrunk into irrelevance;
-    // native zones are left as-is, only setOcclusionEnabled ever touches those.
-    if (!m_bNative)
-        SetEnabled(false);
-
+    // The native table has no concept of a hole; a destroyed custom zone is just shrunk down
+    // and left in its slot, same as a disabled one.
+    SetEnabled(false);
     m_pOcclusionManager->RemoveFromList(this);
 }
 
@@ -57,6 +43,23 @@ void CClientOcclusion::SetPosition(const CVector& vecPosition)
         return;
 
     info.vecPosition = vecPosition;
+    g_pGame->GetOcclusion()->SetZoneData(m_index, m_bInterior, info);
+}
+
+void CClientOcclusion::GetRotationDegrees(CVector& vecOutDegrees) const
+{
+    SOcclusionZoneInfo info;
+    if (g_pGame->GetOcclusion()->GetZoneData(m_index, m_bInterior, info))
+        vecOutDegrees = info.vecRotation;
+}
+
+void CClientOcclusion::SetRotationDegrees(const CVector& vecDegrees)
+{
+    SOcclusionZoneInfo info;
+    if (!g_pGame->GetOcclusion()->GetZoneData(m_index, m_bInterior, info))
+        return;
+
+    info.vecRotation = vecDegrees;
     g_pGame->GetOcclusion()->SetZoneData(m_index, m_bInterior, info);
 }
 
@@ -88,26 +91,6 @@ bool CClientOcclusion::SetSize(const CVector& vecSize)
     return g_pGame->GetOcclusion()->SetZoneData(m_index, m_bInterior, info);
 }
 
-bool CClientOcclusion::GetRotation(CVector& vecRotation) const
-{
-    SOcclusionZoneInfo info;
-    if (!g_pGame->GetOcclusion()->GetZoneData(m_index, m_bInterior, info))
-        return false;
-
-    vecRotation = info.vecRotation;
-    return true;
-}
-
-bool CClientOcclusion::SetRotation(const CVector& vecRotation)
-{
-    SOcclusionZoneInfo info;
-    if (!g_pGame->GetOcclusion()->GetZoneData(m_index, m_bInterior, info))
-        return false;
-
-    info.vecRotation = vecRotation;
-    return g_pGame->GetOcclusion()->SetZoneData(m_index, m_bInterior, info);
-}
-
 bool CClientOcclusion::SetEnabled(bool bEnabled)
 {
     if (bEnabled == m_bEnabled)
@@ -124,7 +107,7 @@ bool CClientOcclusion::SetEnabled(bool bEnabled)
     else
     {
         m_vecLastEnabledSize = info.vecSize;
-        info.vecSize = CVector(0.01f, 0.01f, 0.01f);  // shrink rather than remove; see CreateZone/AddOne
+        info.vecSize = CVector(0.01f, 0.01f, 0.01f);
     }
 
     if (!g_pGame->GetOcclusion()->SetZoneData(m_index, m_bInterior, info))
@@ -134,29 +117,38 @@ bool CClientOcclusion::SetEnabled(bool bEnabled)
     return true;
 }
 
-//
-// Draw a translucent, cross-braced box matching the zone's actual world position/size/rotation
-//
-void CClientOcclusion::DebugRender(const CVector& vecPosition, float fDrawRadius)
+void CClientOcclusion::DebugRender(const CVector& vecCameraPos, float fDrawRadius)
 {
     SOcclusionZoneInfo info;
     if (!g_pGame->GetOcclusion()->GetZoneData(m_index, m_bInterior, info))
         return;
 
-    CVector vecSize = m_bEnabled ? info.vecSize : m_vecLastEnabledSize;
+    const CVector vecSize = m_bEnabled ? info.vecSize : m_vecLastEnabledSize;
+    const auto    id = MakeOcclusionId(m_index, m_bInterior);
+    DebugRenderZone(info.vecPosition, vecSize, info.vecRotation, m_bEnabled, SColorARGB(255, 60, 220, 90), "Custom #" + std::to_string(id), vecCameraPos,
+                    fDrawRadius);
+}
 
+//
+// Draw a translucent, cross-braced box matching the zone's actual world position/size/rotation,
+// with a label above it; shared between custom zones (which have an element to call this from)
+// and native zones (which don't, see CClientGame::DebugOcclusionRender).
+//
+void CClientOcclusion::DebugRenderZone(const CVector& vecPosition, const CVector& vecSize, const CVector& vecRotation, bool bEnabled,
+                                       const SColorARGB& baseColor, const std::string& strLabel, const CVector& vecCameraPos, float fDrawRadius)
+{
     // Zones can be building-sized, so cull against the camera distance to the nearest point
     // of the box, not its center; otherwise a large zone the camera is standing inside of
     // (but whose center is far away) gets skipped even though it's actively occluding.
     const float fZoneRadius = vecSize.Length() * 0.5f;
-    if ((info.vecPosition - vecPosition).Length() > fDrawRadius + fZoneRadius)
+    if ((vecPosition - vecCameraPos).Length() > fDrawRadius + fZoneRadius)
         return;
 
     // AddOne bakes a +180 degree offset into the stored rotation before encoding it (see
     // COcclusion::AddOne in the reversed engine); GetZoneData already strips that offset back
     // out so scripts see the value they'd pass in. For matching the engine's actual box
     // orientation here, that offset has to go back in.
-    CVector vecRawRotationRadians = info.vecRotation + CVector(180.0f, 180.0f, 180.0f);
+    CVector vecRawRotationRadians = vecRotation + CVector(180.0f, 180.0f, 180.0f);
     ConvertDegreesToRadians(vecRawRotationRadians);
 
     const float fSinX = sinf(vecRawRotationRadians.fX), fCosX = cosf(vecRawRotationRadians.fX);
@@ -171,13 +163,13 @@ void CClientOcclusion::DebugRender(const CVector& vecPosition, float fDrawRadius
     const CVector axisForward(-(fSinZ * fCosX), fCosZ * fCosX, fSinX);
     const CVector axisUp(fCosZ * fSinY + fSinZ * fSinX * fCosY, fSinZ * fSinY - fCosZ * fSinX * fCosY, fCosY * fCosX);
 
-    // vecSize.fX/fY/fZ are width/length/height respectively (see SetZoneData); those map to the
-    // right/forward/up axes the same way COccluder::ProcessOneOccluder builds its box.
+    // vecSize.fX/fY/fZ are width/length/height respectively (see COcclusionSA::SetZoneData);
+    // those map to the right/forward/up axes the same way COccluder::ProcessOneOccluder builds its box.
     const CVector halfWidth = axisRight * (vecSize.fX * 0.5f);
     const CVector halfLength = axisForward * (vecSize.fY * 0.5f);
     const CVector halfHeight = axisUp * (vecSize.fZ * 0.5f);
 
-    const CVector& center = info.vecPosition;
+    const CVector& center = vecPosition;
     CVector        worldCorners[8] = {
         center - halfWidth - halfLength - halfHeight, center + halfWidth - halfLength - halfHeight, center + halfWidth + halfLength - halfHeight,
         center - halfWidth + halfLength - halfHeight, center - halfWidth - halfLength + halfHeight, center + halfWidth - halfLength + halfHeight,
@@ -201,22 +193,14 @@ void CClientOcclusion::DebugRender(const CVector& vecPosition, float fDrawRadius
         {1, 2, 6, 5},  // right
     };
 
-    // Colored by kind so map/interior/custom zones are distinguishable at a glance; dimmed
-    // (not recolored) when disabled so the kind still reads even when it's shrunk down.
     // The pre-existing global toggle (setOcclusionsEnabled) overrides all of that: if the whole
     // system is off, nothing here is actually occluding, so it's shown as flat grey regardless
-    // of kind or per-zone state, rather than looking like it's still working.
+    // of the zone's own state, rather than looking like it's still working.
     const bool bGloballyEnabled = g_pGame->GetWorld()->GetOcclusionsEnabled();
+    SColorARGB color = bGloballyEnabled ? baseColor : SColorARGB(255, 120, 120, 120);
 
-    SColorARGB baseColor = !m_bNative ? SColorARGB(255, 60, 220, 90) :  // custom: green
-                               m_bInterior ? SColorARGB(255, 60, 180, 255)
-                                           :                  // native, interior table: blue
-                               SColorARGB(255, 255, 140, 0);  // native, map table: orange
-    if (!bGloballyEnabled)
-        baseColor = SColorARGB(255, 120, 120, 120);
-
-    const SColorARGB colorEdge(m_bEnabled && bGloballyEnabled ? 220 : 90, baseColor.R, baseColor.G, baseColor.B);
-    const SColorARGB colorFill(m_bEnabled && bGloballyEnabled ? 50 : 20, baseColor.R, baseColor.G, baseColor.B);
+    const SColorARGB colorEdge(bEnabled && bGloballyEnabled ? 220 : 90, color.R, color.G, color.B);
+    const SColorARGB colorFill(bEnabled && bGloballyEnabled ? 50 : 20, color.R, color.G, color.B);
 
     CGraphicsInterface* const pGraphics = g_pCore->GetGraphics();
 
@@ -239,4 +223,20 @@ void CClientOcclusion::DebugRender(const CVector& vecPosition, float fDrawRadius
             pVertices->push_back({faceCorners[idx].fX, faceCorners[idx].fY, faceCorners[idx].fZ, colorFill});
     }
     pGraphics->DrawPrimitive3DQueued(pVertices, D3DPT_TRIANGLELIST, eRenderStage::POST_FX);
+
+    // Label, drawn a bit above the box so it doesn't sit inside the fill.
+    CVector vecLabelPos = center;
+    vecLabelPos.fZ += vecSize.fZ * 0.5f + 0.5f;
+
+    CVector vecScreenPosition;
+    pGraphics->CalcScreenCoors(&vecLabelPos, &vecScreenPosition);
+    if (vecScreenPosition.fZ <= 0.1f)
+        return;
+
+    const int iScreenPosX = static_cast<int>(vecScreenPosition.fX);
+    const int iScreenPosY = static_cast<int>(vecScreenPosition.fY);
+    pGraphics->DrawString(iScreenPosX + 1, iScreenPosY + 1, iScreenPosX + 1, iScreenPosY + 1, COLOR_ARGB(255, 0, 0, 0), strLabel.c_str(), 1.0f, 1.0f,
+                          DT_NOCLIP | DT_CENTER);
+    pGraphics->DrawString(iScreenPosX, iScreenPosY, iScreenPosX, iScreenPosY, COLOR_ARGB(color.A, color.R, color.G, color.B), strLabel.c_str(), 1.0f, 1.0f,
+                          DT_NOCLIP | DT_CENTER);
 }

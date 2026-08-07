@@ -3475,7 +3475,6 @@ void CClientGame::Event_OnIngame()
 
     g_pGame->GetBuildingRemoval()->ClearRemovedBuildingLists();
     g_pGame->GetWorld()->SetOcclusionsEnabled(true);
-    m_pManager->GetOcclusionManager()->PopulateFromNative();
 
     g_pGame->ResetModelLodDistances();
     g_pGame->ResetModelFlags();
@@ -3499,6 +3498,7 @@ void CClientGame::Event_OnIngame()
     // Reset anything from last game
     ResetMapInfo();
     g_pGame->GetWaterManager()->Reset();  // Deletes all custom water elements, ResetMapInfo only reverts changes to water level
+    g_pGame->GetOcclusion()->Reset();     // Drops custom occlusion zones and restores any disabled native one
     g_pGame->GetWaterManager()->SetWaterDrawnLast(true);
     m_pCamera->ResetCameraClip();
 
@@ -6342,8 +6342,8 @@ void CClientGame::DebugElementRender()
 }
 
 //
-// If debug render mode is on, draw every occlusion zone within range; not spatially
-// registered like streamed entities, so this walks the manager's lists directly.
+// If debug render mode is on, draw every occlusion zone within range: native zones read
+// straight from the native table, custom zones from the occlusion manager's element lists.
 //
 void CClientGame::DebugOcclusionRender()
 {
@@ -6354,15 +6354,33 @@ void CClientGame::DebugOcclusionRender()
     m_pCamera->GetPosition(vecCameraPos);
     const float fDrawRadius = 500.f;
 
-    const auto RenderZones = [&](const std::vector<CClientOcclusion*>& zones)
+    // Native zones aren't elements, so they're read straight from the native table here.
+    COcclusion* pOcclusion = g_pGame->GetOcclusion();
+    for (bool bInterior : {false, true})
+    {
+        const std::size_t uiCount = pOcclusion->GetZoneCount(bInterior);
+        for (std::size_t index = 0; index < uiCount; index++)
+        {
+            SOcclusionZoneInfo info;
+            if (!pOcclusion->GetZoneData(index, bInterior, info))
+                continue;
+
+            const std::size_t id = MakeOcclusionId(index, bInterior);
+            const SColorARGB  baseColor = bInterior ? SColorARGB(255, 60, 180, 255) : SColorARGB(255, 255, 140, 0);
+            CClientOcclusion::DebugRenderZone(info.vecPosition, info.vecSize, info.vecRotation, pOcclusion->IsZoneEnabled(id), baseColor,
+                                              "Native #" + std::to_string(id), vecCameraPos, fDrawRadius);
+        }
+    }
+
+    const auto RenderCustomZones = [&](const std::vector<CClientOcclusion*>& zones)
     {
         for (CClientOcclusion* pZone : zones)
             if (pZone)
                 pZone->DebugRender(vecCameraPos, fDrawRadius);
     };
 
-    RenderZones(m_pManager->GetOcclusionManager()->GetMapZones());
-    RenderZones(m_pManager->GetOcclusionManager()->GetInteriorZones());
+    RenderCustomZones(m_pManager->GetOcclusionManager()->GetMapZones());
+    RenderCustomZones(m_pManager->GetOcclusionManager()->GetInteriorZones());
 }
 
 //////////////////////////////////////////////////////////////////

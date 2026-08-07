@@ -21,10 +21,6 @@ public:
     CClientOcclusionManager(class CClientManager* pManager);
     ~CClientOcclusionManager();
 
-    // Wraps every occlusion zone the engine already loaded from IPL data as an element;
-    // called once from CClientGame::Event_OnIngame, after the native tables are populated.
-    void PopulateFromNative();
-
     CClientOcclusion* CreateCustomZone(const CVector& vecPosition, const CVector& vecSize, const CVector& vecRotation, bool bInterior);
 
     const std::vector<CClientOcclusion*>& GetMapZones() const noexcept { return m_MapZones; }
@@ -36,5 +32,4 @@ private:
     class CClientManager*          m_pManager;
     std::vector<CClientOcclusion*> m_MapZones;
     std::vector<CClientOcclusion*> m_InteriorZones;
-    bool                           m_bPopulated;
 };

@@ -20,6 +20,17 @@ class CStaticFunctionDefinitions;
 #include "enums/WeaponProperty.h"
 #include "enums/ObjectProperty.h"
 
+// One entry returned by getOcclusions; id is the flattened MakeOcclusionId value.
+struct SOcclusionZoneEntry
+{
+    std::size_t id;
+    bool        bInterior;
+    CVector     vecPosition;
+    CVector     vecSize;
+    CVector     vecRotation;
+    bool        bEnabled;
+};
+
 class CStaticFunctionDefinitions
 {
 public:
@@ -583,11 +594,13 @@ public:
     static CClientWater*     CreateWater(CResource& resource, CVector* pV1, CVector* pV2, CVector* pV3, CVector* pV4, bool bShallow);
     static CClientOcclusion* CreateOcclusionZone(CResource& resource, const CVector& vecPosition, const CVector& vecSize, const CVector& vecRotation,
                                                  bool bInterior);
-    static bool              GetOcclusionZoneSize(CClientOcclusion* pOcclusion, CVector& vecSize);
-    static bool              SetOcclusionZoneSize(CClientOcclusion* pOcclusion, const CVector& vecSize);
-    static bool              GetOcclusionZoneRotation(CClientOcclusion* pOcclusion, CVector& vecRotation);
-    static bool              SetOcclusionZoneRotation(CClientOcclusion* pOcclusion, const CVector& vecRotation);
-    static bool              SetOcclusionZoneEnabled(CClientOcclusion* pOcclusion, bool bEnabled);
+    static bool              GetOcclusionSize(CClientOcclusion* pOcclusion, CVector& vecSize);
+    static bool              SetOcclusionSize(CClientOcclusion* pOcclusion, const CVector& vecSize);
+    static bool              SetOcclusionEnabled(CClientOcclusion* pOcclusion, bool bEnabled);
+    static bool              IsOcclusionEnabled(CClientOcclusion* pOcclusion);
+    static void              GetOcclusions(bool bInterior, std::vector<SOcclusionZoneEntry>& outEntries);
+    static bool              SetNativeOcclusionEnabled(std::size_t id, bool bEnabled, CResource* pResource);
+    static bool              IsNativeOcclusionEnabled(std::size_t id);
     static bool              GetWaterLevel(CVector& vecPosition, float& fLevel, bool ignoreDistanceToWaterThreshold, CVector& vecUnknown);
     static bool              GetWaterLevel(CClientWater* pWater, float& fLevel);
     static bool              GetWaterVertexPosition(CClientWater* pWater, int iVertexIndex, CVector& vecPosition);

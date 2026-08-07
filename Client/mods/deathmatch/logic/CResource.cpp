@@ -163,6 +163,9 @@ CResource::~CResource()
     // Undo all changes to water
     g_pGame->GetWaterManager()->UndoChanges(this);
 
+    // Re-enable any native occlusion zone this resource disabled
+    g_pGame->GetOcclusion()->UndoChanges(this);
+
     // Cancel all downloads started by this resource
     if (g_pClientGame->GetSingularFileDownloadManager())
         g_pClientGame->GetSingularFileDownloadManager()->CancelResourceDownloads(this);

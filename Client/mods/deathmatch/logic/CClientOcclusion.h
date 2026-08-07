@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <string>
 #include <game/COcclusion.h>
 
 class CClientOcclusionManager;
@@ -18,7 +19,7 @@ class CClientOcclusion final : public CClientEntity
 {
     DECLARE_CLASS(CClientOcclusion, CClientEntity)
 public:
-    CClientOcclusion(CClientManager* pManager, ElementID ID, std::size_t index, bool bInterior, bool bNative);
+    CClientOcclusion(CClientManager* pManager, ElementID ID, std::size_t index, bool bInterior);
     ~CClientOcclusion();
 
     eClientEntityType GetType() const { return CCLIENTOCCLUSION; }
@@ -26,27 +27,29 @@ public:
 
     std::size_t GetIndex() const noexcept { return m_index; }
     bool        IsInterior() const noexcept { return m_bInterior; }
-    bool        IsNative() const noexcept { return m_bNative; }
 
     void GetPosition(CVector& vecPosition) const override;
     void SetPosition(const CVector& vecPosition) override;
 
+    void GetRotationDegrees(CVector& vecOutDegrees) const override;
+    void SetRotationDegrees(const CVector& vecDegrees) override;
+
     bool GetSize(CVector& vecSize) const;
     bool SetSize(const CVector& vecSize);
-
-    bool GetRotation(CVector& vecRotation) const;
-    bool SetRotation(const CVector& vecRotation);
 
     bool IsEnabled() const noexcept { return m_bEnabled; }
     bool SetEnabled(bool bEnabled);
 
-    void DebugRender(const CVector& vecPosition, float fDrawRadius) override;
+    void DebugRender(const CVector& vecCameraPos, float fDrawRadius) override;
+
+    // Shared with CClientGame's rendering of native zones, which have no element to hang this off.
+    static void DebugRenderZone(const CVector& vecPosition, const CVector& vecSize, const CVector& vecRotation, bool bEnabled, const SColorARGB& baseColor,
+                                const std::string& strLabel, const CVector& vecCameraPos, float fDrawRadius);
 
 private:
     CClientOcclusionManager* m_pOcclusionManager;
     std::size_t              m_index;
     bool                     m_bInterior;
-    bool                     m_bNative;
     bool                     m_bEnabled;
     CVector                  m_vecLastEnabledSize;  // remembered so SetEnabled(true) can restore it
 };
