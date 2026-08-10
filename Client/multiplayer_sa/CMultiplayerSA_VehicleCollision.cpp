@@ -204,6 +204,51 @@ static void __declspec(naked) HOOK_CTrain_ProcessControl_VehicleDamage()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
+// CVehicle::CalculateLightingFromCollision
+//
+// Monster trucks bounce hard enough when pushed that their wheels keep landing on different
+// collision polys; the native function overwrites the surface brightness outright with no
+// smoothing, which reads as a lighting flicker. Blend it instead, monster trucks only.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+#define CALL_CVehicle_CalculateLightingFromCollision 0x6D648D
+#define FUNC_CVehicle_CalculateLightingFromCollision 0x6D0CF0
+
+static void _cdecl SmoothMonsterTruckLighting(CVehicleSAInterface* vehicle, float previousLighting)
+{
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(vehicle->m_nModelIndex);
+    if (!modelInfo || !modelInfo->IsMonsterTruck())
+        return;
+
+    const float blend = std::min(1.0f, pGameInterface->GetTimeStep() * 0.1f);
+    vehicle->m_fLighting = previousLighting + (vehicle->m_fLighting - previousLighting) * blend;
+}
+
+static void __declspec(naked) HOOK_CVehicle_CalculateLightingFromCollision()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push ecx
+        mov  eax, dword ptr [ecx+300]        // m_fLighting
+        push eax
+        mov  eax, FUNC_CVehicle_CalculateLightingFromCollision
+        call eax
+        pop  eax
+        pop  ecx
+        push eax
+        push ecx
+        call SmoothMonsterTruckLighting
+        add  esp, 8
+        ret
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
 // CMultiplayerSA::InitHooks_VehicleCollision
 //
 // Setup hooks
@@ -215,4 +260,5 @@ void CMultiplayerSA::InitHooks_VehicleCollision()
     EZHookInstall(CBike_ProcessControl_VehicleDamage);
     EZHookInstall(CBoat_ProcessControl_VehicleDamage);
     EZHookInstall(CTrain_ProcessControl_VehicleDamage);
+    HookInstallCall(CALL_CVehicle_CalculateLightingFromCollision, reinterpret_cast<DWORD>(HOOK_CVehicle_CalculateLightingFromCollision));
 }
