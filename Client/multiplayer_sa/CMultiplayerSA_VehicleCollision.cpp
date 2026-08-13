@@ -220,6 +220,11 @@ static void _cdecl SmoothMonsterTruckLighting(CVehicleSAInterface* vehicle, floa
     if (!modelInfo || !modelInfo->IsMonsterTruck())
         return;
 
+    // Still at CPhysical's construction default (1.0f); nothing has been computed for this
+    // vehicle yet, so let the first value stand instead of fading in from a stale spawn value.
+    if (previousLighting >= 0.99f)
+        return;
+
     const float blend = std::min(1.0f, pGameInterface->GetTimeStep() * 0.1f);
     vehicle->m_fLighting = previousLighting + (vehicle->m_fLighting - previousLighting) * blend;
 }
