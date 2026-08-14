@@ -1184,6 +1184,11 @@ void CKeyBinds::CallAllGTAControlBinds(eControlType controlType, bool bState)
 
         auto controlBind = static_cast<CGTAControlBind*>(bind.get());
 
+        // Releasing a bind that isn't actually held doesn't fix a stuck key; it just clobbers
+        // whatever the control's shared state was, e.g. one set directly through setControlState.
+        if (!bState && !controlBind->state)
+            continue;
+
         if (controlType == CONTROL_BOTH || controlBind->control->controlType == controlType)
             CallGTAControlBind(controlBind, bState);
     }
