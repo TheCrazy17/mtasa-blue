@@ -10,6 +10,7 @@
 
 #include "StdInc.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <enums/VehicleType.h>
@@ -3704,6 +3705,512 @@ static void __declspec(naked) HOOK_CPlane__PreRender_AndromRampBlock()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// Extra animated components that exist in several vanilla models but the game's own code never
+// wired up: the Sweeper's brushes and the Newsvan's antenna dish. Both spin the misc_a/misc_b nodes
+// incrementally, by a small delta each frame rather than to an absolute angle, so the turn lives in
+// the RW frame matrix itself and nothing needs to persist between frames. Inspired by SilentPatch
+// documenting these as dormant since release, not a copy of its implementation (which tracks an
+// absolute angle with its own wraparound instead).
+//////////////////////////////////////////////////////////////////////////////////////////
+static constexpr float        SWEEPER_BRUSH_SPEED = 0.3f;
+static constexpr float        NEWSVAN_ANTENNA_SPEED = 0.05f;
+static constexpr std::int32_t ROT_AXIS_X = 0;
+static constexpr std::int32_t ROT_AXIS_Z = 2;
+
+static void RotateComponent(CVehicleSAInterface* vehicle, RwFrame* component, std::int32_t axis, float angle, bool setAbsolute = false)
+{
+    if (!component)
+        return;
+
+    const auto SetComponentRotation = reinterpret_cast<void(__thiscall*)(CVehicleSAInterface*, RwFrame*, std::int32_t, float, bool)>(0x6DBA30);
+    SetComponentRotation(vehicle, component, axis, angle, setAbsolute);
+}
+
+static bool __fastcall IsSweeperOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_SWEEPER))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_SWEEPER);
+}
+
+static bool __fastcall IsNewsvanOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_NEWSVAN))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_NEWSVAN);
+}
+
+static bool __fastcall IsPhoenixOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_PHOENIX))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_PHOENIX);
+}
+
+// The Phoenix's hood scoop, matching SilentPatch's own behavior: it eases open while the gas pedal
+// is held, flutters once fully open, and eases shut when released. That needs a float that persists
+// between frames, which a clone doesn't have anywhere of its own to keep it. m_fSpecialComponentAngle
+// (CAutomobile + 0x958) is exactly that kind of slot on real hardware: native code only ever reads or
+// writes it for a Combine Harvester's header tilt (see the Combine Harvester branch's PreRender hook
+// at this same offset), so it sits unused, and safely reusable, on every other vehicle including this
+// one. Resetting the node to its model-authored pose before every incremental rotate, rather than
+// setting the angle outright, is what SilentPatch does too — it's what lets the eased angle land
+// exactly rather than drifting, since the scoop's closed pose isn't necessarily axis-aligned.
+static constexpr float PHOENIX_FLUTTER_PERIOD = 70.0f;
+static constexpr float PHOENIX_FLUTTER_AMP = 0.13f;
+static constexpr float PHOENIX_OPEN_SPEED = 0.1f;
+static constexpr float PHOENIX_CLOSE_SPEED = 0.05f;
+static constexpr float PHOENIX_FULLY_OPEN_ANGLE = 1.3f;
+
+static float& GetSpecialComponentAngle(CVehicleSAInterface* vehicle)
+{
+    return *reinterpret_cast<float*>(reinterpret_cast<std::uint8_t*>(vehicle) + 0x958);
+}
+
+static void ResetComponentToModelPose(CAutomobileSAInterface* vehicle, std::size_t nodeIndex)
+{
+    RwFrame* liveNode = vehicle->m_aCarNodes[nodeIndex];
+    if (!liveNode)
+        return;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(vehicle->m_nModelIndex);
+    if (!modelInfo)
+        return;
+
+    RpClump* origClump = reinterpret_cast<RpClump*>(modelInfo->GetRwObject());
+    if (!origClump)
+        return;
+
+    std::array<RwFrame*, static_cast<std::size_t>(eCarNodes::NUM_NODES)> origNodes{};
+    const auto                                                           FillFrameArray = reinterpret_cast<void(__cdecl*)(RpClump*, RwFrame**)>(0x4C5440);
+    FillFrameArray(origClump, origNodes.data());
+
+    if (RwFrame* origNode = origNodes[nodeIndex])
+        *RwFrameGetMatrix(liveNode) = *RwFrameGetMatrix(origNode);
+}
+
+static void __fastcall ProcessPhoenixHoodScoop(CAutomobileSAInterface* vehicle)
+{
+    RwFrame* scoopNode = vehicle->m_aCarNodes[static_cast<std::size_t>(eCarNodes::MISC_A)];
+    if (!scoopNode || !vehicle->m_nVehicleFlags.bEngineOn)
+        return;
+
+    ResetComponentToModelPose(vehicle, static_cast<std::size_t>(eCarNodes::MISC_A));
+
+    float& angle = GetSpecialComponentAngle(vehicle);
+    float  finalAngle = 0.0f;
+
+    if (std::abs(vehicle->m_fGasPedal) > 0.0f)
+    {
+        if (angle < PHOENIX_FULLY_OPEN_ANGLE)
+        {
+            angle = std::min(angle + PHOENIX_OPEN_SPEED * pGameInterface->GetTimeStep(), PHOENIX_FULLY_OPEN_ANGLE);
+            finalAngle = angle;
+        }
+        else
+        {
+            const std::uint32_t timeMs = *reinterpret_cast<std::uint32_t*>(0xB7CB84);
+            finalAngle = angle + std::sin(static_cast<float>(timeMs % 10000) / PHOENIX_FLUTTER_PERIOD) * PHOENIX_FLUTTER_AMP;
+        }
+    }
+    else if (angle > 0.0f)
+    {
+        angle = std::max(angle - PHOENIX_CLOSE_SPEED * pGameInterface->GetTimeStep(), 0.0f);
+        finalAngle = angle;
+    }
+
+    RotateComponent(vehicle, scoopNode, ROT_AXIS_X, finalAngle);
+}
+
+// Only reached for automobiles already inside the giant per-model PreRender dispatch, matching the
+// STATUS_PLAYER/PHYSICS/SIMPLE gate SilentPatch applies before animating the Sweeper or the Newsvan
+// (the Phoenix's own bEngineOn check above covers it the same way).
+static void __fastcall ProcessExtraAnimatedComponents(CAutomobileSAInterface* vehicle)
+{
+    if (IsPhoenixOrClone(vehicle))
+    {
+        ProcessPhoenixHoodScoop(vehicle);
+        return;
+    }
+
+    if (vehicle->nStatus != STATUS_PLAYER && vehicle->nStatus != STATUS_PHYSICS && vehicle->nStatus != STATUS_SIMPLE)
+        return;
+
+    if (IsSweeperOrClone(vehicle))
+    {
+        if (!vehicle->m_nVehicleFlags.bEngineOn)
+            return;
+
+        const float angle = pGameInterface->GetTimeStep() * SWEEPER_BRUSH_SPEED;
+        RotateComponent(vehicle, vehicle->m_aCarNodes[static_cast<std::size_t>(eCarNodes::MISC_A)], ROT_AXIS_Z, angle);
+        RotateComponent(vehicle, vehicle->m_aCarNodes[static_cast<std::size_t>(eCarNodes::MISC_B)], ROT_AXIS_Z, -angle);
+    }
+    else if (IsNewsvanOrClone(vehicle))
+    {
+        const float angle = pGameInterface->GetTimeStep() * NEWSVAN_ANTENNA_SPEED;
+        RotateComponent(vehicle, vehicle->m_aCarNodes[static_cast<std::size_t>(eCarNodes::MISC_A)], ROT_AXIS_Z, angle);
+    }
+}
+
+// The convergence point of the whole per-model PreRender dispatch mapped for the Rhino/RCTiger/
+// Packer/BF Injection branches, right before it tail-jumps out. esi still holds the vehicle here,
+// and the destination reads [esi + 0x22] as its first instruction, so esi is the only thing that has
+// to survive, which a normal call already guarantees.
+// >>> 0x6ACBC8  jmp     0x0040649C
+#define HOOKPOS_CAutomobile__PreRender_ExtraAnimatedComponents  0x6ACBC8
+#define HOOKSIZE_CAutomobile__PreRender_ExtraAnimatedComponents 5
+static const DWORD CONTINUE_CAutomobile__PreRender_ExtraAnimatedComponents = 0x0040649C;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_ExtraAnimatedComponents()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    ProcessExtraAnimatedComponents
+        jmp     CONTINUE_CAutomobile__PreRender_ExtraAnimatedComponents
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// BF Injection, Bandito and Hotknife's animated engine components on custom vehicle models
+//
+// All three reach their PreRender component-rotation dispatch through a raw model index compare,
+// so a clone of any of them never animates its engine on custom vehicle models. BF Injection has
+// its own dedicated branch; Bandito and Hotknife share one destination and are handled together.
+//////////////////////////////////////////////////////////////////////////////////////////
+static bool __fastcall IsBFInjectionOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_BFINJECT))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_BFINJECT);
+}
+
+static bool __fastcall IsBanditoOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_BANDITO))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_BANDITO);
+}
+
+static bool __fastcall IsHotknifeOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_HOTKNIFE))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_HOTKNIFE);
+}
+
+// Native code animates these engine components regardless of whether the engine is actually running,
+// on the real vehicles just as much as on a clone. SilentPatch documents this as its own fix, so the
+// two hooks below that reach the animation dispatch require it, matching that behavior for both.
+static bool __fastcall IsBFInjectionEngineAnimating(CVehicleSAInterface* vehicle)
+{
+    return IsBFInjectionOrClone(vehicle) && vehicle->m_nVehicleFlags.bEngineOn;
+}
+
+static bool __fastcall IsBanditoEngineAnimating(CVehicleSAInterface* vehicle)
+{
+    return IsBanditoOrClone(vehicle) && vehicle->m_nVehicleFlags.bEngineOn;
+}
+
+static bool __fastcall IsHotknifeEngineAnimating(CVehicleSAInterface* vehicle)
+{
+    return IsHotknifeOrClone(vehicle) && vehicle->m_nVehicleFlags.bEngineOn;
+}
+
+// PreRender engine-component dispatch. ecx holds an unrelated output vector pointer here (not the
+// vehicle), so it has to survive the call; the interleaved store finishes writing that vector's Z
+// component regardless of which branch is taken.
+// >>> 0x6AC29F  cmp     ax, 0x1A8
+//     0x6AC2A3  mov     edx, dword ptr [esp + 0x34]
+//     0x6AC2A7  mov     dword ptr [ecx + 0x8], edx
+// >>> 0x6AC2AA  jnz     0x6AC40C
+//     0x6AC2B0  fld     dword ptr [esi + 0x49C]
+#define HOOKPOS_CAutomobile__PreRender_EngineDispatch_BFInjection  0x6AC29F
+#define HOOKSIZE_CAutomobile__PreRender_EngineDispatch_BFInjection 17
+static const DWORD CONTINUE_CAutomobile__PreRender_EngineDispatch_BFInjection = 0x6AC2B0;
+static const DWORD SKIP_CAutomobile__PreRender_EngineDispatch_BFInjection = 0x6AC40C;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_EngineDispatch_BFInjection()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        mov     ecx, esi
+        call    IsBFInjectionEngineAnimating
+        test    al, al
+        pop     ecx
+        mov     edx, dword ptr [esp + 0x34]
+        mov     dword ptr [ecx + 0x8], edx
+        jz      notMatch
+
+        jmp     CONTINUE_CAutomobile__PreRender_EngineDispatch_BFInjection
+
+        notMatch:
+        jmp     SKIP_CAutomobile__PreRender_EngineDispatch_BFInjection
+    }
+    // clang-format on
+}
+
+// Same PreRender function, Bandito and Hotknife's shared destination. Falls through into the
+// already-hooked Rhino turret-aim dispatch span on no-match, which re-derives everything it needs
+// from esi itself, so nothing has to be replayed for it here.
+// >>> 0x6ACA37  cmp     ax, 0x238
+// >>> 0x6ACA3B  jz      0x6ACADE
+// >>> 0x6ACA41  cmp     ax, 0x1B2
+// >>> 0x6ACA45  jz      0x6ACADE
+//     0x6ACA4B  cmp     ax, 0x1B0
+#define HOOKPOS_CAutomobile__PreRender_EngineDispatch_BanditoHotknife  0x6ACA37
+#define HOOKSIZE_CAutomobile__PreRender_EngineDispatch_BanditoHotknife 20
+static const DWORD CONTINUE_CAutomobile__PreRender_EngineDispatch_BanditoHotknife = 0x6ACA4B;
+static const DWORD SKIP_CAutomobile__PreRender_EngineDispatch_BanditoHotknife = 0x6ACADE;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_EngineDispatch_BanditoHotknife()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsBanditoEngineAnimating
+        test    al, al
+        jnz     isMatch
+
+        mov     ecx, esi
+        call    IsHotknifeEngineAnimating
+        test    al, al
+        jnz     isMatch
+
+        jmp     CONTINUE_CAutomobile__PreRender_EngineDispatch_BanditoHotknife
+
+        isMatch:
+        jmp     SKIP_CAutomobile__PreRender_EngineDispatch_BanditoHotknife
+    }
+    // clang-format on
+}
+
+// Second, unrelated BF Injection gate in a different function: exempts it (alongside two other
+// small vehicles) from a byte-flag OR'd in when some other state reaches 4
+// >>> 0x6B53B4  cmp     ax, 0x1A8
+// >>> 0x6B53B8  jz      0x6B5706
+//     0x6B53BE  mov     al, byte ptr [esi + 0x868]
+#define HOOKPOS_CAutomobile__FlagExempt_BFInjection  0x6B53B4
+#define HOOKSIZE_CAutomobile__FlagExempt_BFInjection 10
+static const DWORD CONTINUE_CAutomobile__FlagExempt_BFInjection = 0x6B53BE;
+static const DWORD SKIP_CAutomobile__FlagExempt_BFInjection = 0x6B5706;
+
+static void __declspec(naked) HOOK_CAutomobile__FlagExempt_BFInjection()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsBFInjectionOrClone
+        test    al, al
+        jnz     isMatch
+
+        jmp     CONTINUE_CAutomobile__FlagExempt_BFInjection
+
+        isMatch:
+        jmp     SKIP_CAutomobile__FlagExempt_BFInjection
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// The Predator/Reefer/Tropic's radar scan and the Marquis's rear flap on custom vehicle models
+//
+// A real native feature, not a dormant one like the Sweeper/Newsvan/Phoenix above: CBoat::PreRender
+// already rotates these, just gated on the raw model index like everything else this session, so a
+// clone reaches neither. The Marquis check sits right before the radar check in the native function
+// and falls through into it on no-match, so the two hooks below chain the same way.
+//////////////////////////////////////////////////////////////////////////////////////////
+static bool __fastcall IsMarquisOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_MARQUIS))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_MARQUIS);
+}
+
+static bool __fastcall IsPredatorOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_PREDATOR))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_PREDATOR);
+}
+
+static bool __fastcall IsReeferOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_REEFER))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_REEFER);
+}
+
+static bool __fastcall IsTropicOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_TROPIC))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_TROPIC);
+}
+
+// >>> 0x6F13A4  cmp     word ptr [esi + 0x22], 0x1E4
+// >>> 0x6F13AA  jnz     0x6F1487
+//     0x6F13B0  mov     eax, dword ptr [esi + 0x5C0]
+#define HOOKPOS_CBoat__PreRender_MarquisFlapDispatch  0x6F13A4
+#define HOOKSIZE_CBoat__PreRender_MarquisFlapDispatch 12
+static const DWORD CONTINUE_CBoat__PreRender_MarquisFlapDispatch = 0x6F13B0;
+static const DWORD SKIP_CBoat__PreRender_MarquisFlapDispatch = 0x6F1487;
+
+static void __declspec(naked) HOOK_CBoat__PreRender_MarquisFlapDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsMarquisOrClone
+        test    al, al
+        jz      notMatch
+
+        jmp     CONTINUE_CBoat__PreRender_MarquisFlapDispatch
+
+        notMatch:
+        jmp     SKIP_CBoat__PreRender_MarquisFlapDispatch
+    }
+    // clang-format on
+}
+
+// Falls in from the Marquis dispatch above on no-match; neither destination needs ax preserved
+// >>> 0x6F148B  cmp     ax, 0x1AE
+// >>> 0x6F148F  jz      0x6F149D
+// >>> 0x6F1491  cmp     ax, 0x1C5
+// >>> 0x6F1495  jz      0x6F149D
+// >>> 0x6F1497  cmp     ax, 0x1C6
+// >>> 0x6F149B  jnz     0x6F14FC
+//     0x6F149D  mov     eax, dword ptr [esi + 0x5B4]
+#define HOOKPOS_CBoat__PreRender_RadarScanDispatch  0x6F148B
+#define HOOKSIZE_CBoat__PreRender_RadarScanDispatch 18
+static const DWORD CONTINUE_CBoat__PreRender_RadarScanDispatch = 0x6F149D;
+static const DWORD SKIP_CBoat__PreRender_RadarScanDispatch = 0x6F14FC;
+
+static void __declspec(naked) HOOK_CBoat__PreRender_RadarScanDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsPredatorOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ecx, esi
+        call    IsReeferOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ecx, esi
+        call    IsTropicOrClone
+        test    al, al
+        jz      notMatch
+
+        isMatch:
+        jmp     CONTINUE_CBoat__PreRender_RadarScanDispatch
+
+        notMatch:
+        jmp     SKIP_CBoat__PreRender_RadarScanDispatch
+    }
+    // clang-format on
+}
+
+// Unreversed visibility/culling function (the same one the Rhino branch hooks for its own exemption
+// group, at a different span); both destinations here return 2 immediately, so neither needs ax
+// >>> 0x554362  cmp     ax, 0x1C5
+// >>> 0x554366  jz      0x55437A
+// >>> 0x554368  cmp     ax, 0x1C6
+// >>> 0x55436C  jz      0x55437A
+// >>> 0x55436E  cmp     ax, 0x1AE
+// >>> 0x554372  jz      0x55437A
+//     0x554374  cmp     ax, 0x1CC
+#define HOOKPOS_CVehicleVisibility_PredatorReeferTropicExempt  0x554362
+#define HOOKSIZE_CVehicleVisibility_PredatorReeferTropicExempt 18
+static const DWORD CONTINUE_CVehicleVisibility_PredatorReeferTropicExempt = 0x554374;
+static const DWORD SKIP_CVehicleVisibility_PredatorReeferTropicExempt = 0x55437A;
+
+static void __declspec(naked) HOOK_CVehicleVisibility_PredatorReeferTropicExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsReeferOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ecx, esi
+        call    IsTropicOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ecx, esi
+        call    IsPredatorOrClone
+        test    al, al
+        jz      notMatch
+
+        isMatch:
+        jmp     SKIP_CVehicleVisibility_PredatorReeferTropicExempt
+
+        notMatch:
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CVehicleVisibility_PredatorReeferTropicExempt
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 //
 // CMultiplayerSA::InitHooks_Vehicles
 //
@@ -3713,6 +4220,13 @@ static void __declspec(naked) HOOK_CPlane__PreRender_AndromRampBlock()
 void CMultiplayerSA::InitHooks_Vehicles()
 {
     EZHookInstall(CDamageManager__ProgressDoorDamage);
+    EZHookInstall(CAutomobile__PreRender_ExtraAnimatedComponents);
+    EZHookInstall(CAutomobile__PreRender_EngineDispatch_BFInjection);
+    EZHookInstall(CAutomobile__PreRender_EngineDispatch_BanditoHotknife);
+    EZHookInstall(CAutomobile__FlagExempt_BFInjection);
+    EZHookInstall(CBoat__PreRender_MarquisFlapDispatch);
+    EZHookInstall(CBoat__PreRender_RadarScanDispatch);
+    EZHookInstall(CVehicleVisibility_PredatorReeferTropicExempt);
     EZHookInstall(CAutomobile__HydraulicControl);
     EZHookInstall(CAutomobile__ProcessControl_CementAngleReset);
     EZHookInstall(CAutomobile__ProcessControl_CementMiscGate);
