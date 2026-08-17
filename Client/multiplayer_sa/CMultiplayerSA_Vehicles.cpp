@@ -3704,6 +3704,1404 @@ static void __declspec(naked) HOOK_CPlane__PreRender_AndromRampBlock()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// The water cannon on custom vehicle models
+//
+// CAutomobile::ProcessControl reaches FireTruckControl through a check for the fire truck or the
+// SWAT van specifically, both by raw model index, so a clone of either matches neither and the
+// cannon never fires. Both stock models land on the exact same call, so one patched span covers
+// both instead of two separate hooks.
+//////////////////////////////////////////////////////////////////////////////////////////
+static constexpr bool HasWaterCannon(VehicleType model)
+{
+    return model == VehicleType::VT_FIRETRUK || model == VehicleType::VT_SWATVAN;
+}
+
+static bool __fastcall HasWaterCannonOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (HasWaterCannon(static_cast<VehicleType>(modelId)))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && HasWaterCannon(static_cast<VehicleType>(modelInfo->GetParentID()));
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6B1F4B | 66 8B 46 22 | mov     ax, word ptr [esi + 0x22]
+// >>> 0x6B1F4F | 66 3D 97 01 | cmp     ax, 0x197
+// >>> 0x6B1F53 | 74 06       | je      0x6B1F5B
+// >>> 0x6B1F55 | 66 3D 59 02 | cmp     ax, 0x259
+// >>> 0x6B1F59 | 75 1C       | jne     0x6B1F77
+//     0x6B1F5B | 53          | push    ebx
+#define HOOKPOS_CAutomobile__ProcessControl_WaterCannonDispatch  0x6B1F4B
+#define HOOKSIZE_CAutomobile__ProcessControl_WaterCannonDispatch 16
+static const DWORD CONTINUE_CAutomobile__ProcessControl_WaterCannonDispatch = 0x6B1F5B;
+static const DWORD SKIP_CAutomobile__ProcessControl_WaterCannonDispatch = 0x6B1F77;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_WaterCannonDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // both targets reload their own model check fresh, neither reads ax from before the call
+        mov     ecx, esi
+        call    HasWaterCannonOrClone
+        test    al, al
+        jz      notWaterCannon
+
+        jmp     CONTINUE_CAutomobile__ProcessControl_WaterCannonDispatch
+
+        notWaterCannon:
+        jmp     SKIP_CAutomobile__ProcessControl_WaterCannonDispatch
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// The Rhino and RC Tiger's tank control on custom vehicle models
+//
+// Same shape as the water cannon above: both stock models reach TankControl through the same
+// raw model index check and land on the same call, so a clone of either is covered in one span.
+// The Packer's own compare sits right after this one and is left untouched.
+//////////////////////////////////////////////////////////////////////////////////////////
+static bool __fastcall IsRhinoOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_RHINO))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_RHINO);
+}
+
+static bool __fastcall IsRCTigerOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_RCTIGER))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_RCTIGER);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6B1F77 | 66 8B 46 22       | mov     ax, word ptr [esi + 0x22]
+// >>> 0x6B1F7B | 66 3D B0 01       | cmp     ax, 0x1B0
+// >>> 0x6B1F7F | 0F 84 A1 00 00 00 | je      0x6B2026
+// >>> 0x6B1F85 | 66 3D 34 02       | cmp     ax, 0x234
+// >>> 0x6B1F89 | 0F 84 97 00 00 00 | je      0x6B2026
+//     0x6B1F8F | 66 3D BB 01       | cmp     ax, 0x1BB
+#define HOOKPOS_CAutomobile__ProcessControl_TankDispatch  0x6B1F77
+#define HOOKSIZE_CAutomobile__ProcessControl_TankDispatch 24
+static const DWORD CONTINUE_CAutomobile__ProcessControl_TankDispatch = 0x6B2026;
+static const DWORD SKIP_CAutomobile__ProcessControl_TankDispatch = 0x6B1F8F;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TankDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // the continue target doesn't read ax; the skip target is the Packer's own untouched
+        // compare, which does, so ax is reloaded fresh right before falling through to it
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        test    al, al
+        jz      notMatch
+
+        isMatch:
+        jmp     CONTINUE_CAutomobile__ProcessControl_TankDispatch
+
+        notMatch:
+        mov     ax, word ptr [esi + 0x22]
+        jmp     SKIP_CAutomobile__ProcessControl_TankDispatch
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// The Rhino's tank tread, turret and collision behavior on custom vehicle models
+//
+// The tank dispatch fix above only gets FireTruckControl-style calls to run at all. PreRender,
+// the constructor and the collision response gate a further half-dozen unrelated behaviors
+// (tread animation, turret aim, dummy visibility, wrecked-panel exemption) on the Rhino's raw
+// model index directly, each an otherwise-unrelated compare. RC Tiger has no equivalent of any
+// of these (it has no visible treads or turret dummy), so it isn't part of this group.
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6A4BAA  mov     ax, word ptr [esi + 0x22]
+// >>> 0x6A4BAE  cmp     ax, 0x1B9
+// >>> 0x6A4BB2  jz      0x6A4D88
+// >>> 0x6A4BB8  cmp     ax, 0x1B0
+// >>> 0x6A4BBC  jz      0x6A4D88
+//     0x6A4BC2  mov     eax, dword ptr [esi + 0x14]
+#define HOOKPOS_CAutomobile__MovingCollisionForce_RhinoExempt  0x6A4BAA
+#define HOOKSIZE_CAutomobile__MovingCollisionForce_RhinoExempt 24
+static const DWORD CONTINUE_CAutomobile__MovingCollisionForce_RhinoExempt = 0x6A4BC2;
+static const DWORD SKIP_CAutomobile__MovingCollisionForce_RhinoExempt = 0x6A4D88;
+
+static void __declspec(naked) HOOK_CAutomobile__MovingCollisionForce_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        mov     ax, word ptr [esi + 0x22]
+        cmp     ax, 0x1B9
+        jz      isRhino
+        jmp     CONTINUE_CAutomobile__MovingCollisionForce_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CAutomobile__MovingCollisionForce_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Same exemption, reached from the wrecked-panel fallback branch of the same function
+// >>> 0x6A4DFE  mov     ax, word ptr [esi + 0x22]
+// >>> 0x6A4E02  cmp     ax, 0x1B9
+// >>> 0x6A4E06  jz      0x6A4EB1
+// >>> 0x6A4E0C  cmp     ax, 0x1B0
+// >>> 0x6A4E10  jz      0x6A4EB1
+//     0x6A4E16  mov     eax, dword ptr [esi + 0x14]
+#define HOOKPOS_CAutomobile__MovingCollisionForce_RhinoExemptWrecked  0x6A4DFE
+#define HOOKSIZE_CAutomobile__MovingCollisionForce_RhinoExemptWrecked 24
+static const DWORD CONTINUE_CAutomobile__MovingCollisionForce_RhinoExemptWrecked = 0x6A4E16;
+static const DWORD SKIP_CAutomobile__MovingCollisionForce_RhinoExemptWrecked = 0x6A4EB1;
+
+static void __declspec(naked) HOOK_CAutomobile__MovingCollisionForce_RhinoExemptWrecked()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        mov     ax, word ptr [esi + 0x22]
+        cmp     ax, 0x1B9
+        jz      isRhino
+        jmp     CONTINUE_CAutomobile__MovingCollisionForce_RhinoExemptWrecked
+
+        isRhino:
+        jmp     SKIP_CAutomobile__MovingCollisionForce_RhinoExemptWrecked
+    }
+    // clang-format on
+}
+
+// Tank tread rolling animation, gated on the same raw compare shape as the two hooks above
+// >>> 0x6A2E98  mov     ax, word ptr [esi + 0x22]
+//     0x6A2E9C  add     esp, 8
+// >>> 0x6A2E9F  cmp     ax, 0x1B9
+// >>> 0x6A2EA3  jz      0x6A2EF7
+// >>> 0x6A2EA5  cmp     ax, 0xFFFE
+// >>> 0x6A2EA9  jz      0x6A2EF7
+// >>> 0x6A2EAB  cmp     ax, 0x1B0
+// >>> 0x6A2EAF  jz      0x6A2EF7
+//     0x6A2EB1  mov     al, byte ptr [esi + 0x42C]
+#define HOOKPOS_CAutomobile__TankTreadAnim_RhinoExempt  0x6A2E98
+#define HOOKSIZE_CAutomobile__TankTreadAnim_RhinoExempt 25
+static const DWORD CONTINUE_CAutomobile__TankTreadAnim_RhinoExempt = 0x6A2EB1;
+static const DWORD SKIP_CAutomobile__TankTreadAnim_RhinoExempt = 0x6A2EF7;
+
+static void __declspec(naked) HOOK_CAutomobile__TankTreadAnim_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        add     esp, 8
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        mov     ax, word ptr [esi + 0x22]
+        cmp     ax, 0x1B9
+        jz      isRhino
+        cmp     ax, 0xFFFE
+        jz      isRhino
+        jmp     CONTINUE_CAutomobile__TankTreadAnim_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CAutomobile__TankTreadAnim_RhinoExempt
+    }
+    // clang-format on
+}
+
+// PreRender per-wheel dummy visibility loop; same exemption shape again
+// >>> 0x6ABC71  mov     ax, word ptr [esi + 0x22]
+// >>> 0x6ABC75  cmp     ax, 0x1B9
+// >>> 0x6ABC79  jz      0x6ABCBE
+// >>> 0x6ABC7B  cmp     ax, 0xFFFE
+// >>> 0x6ABC7F  jz      0x6ABCBE
+// >>> 0x6ABC81  cmp     ax, 0x1B0
+// >>> 0x6ABC85  jz      0x6ABCBE
+//     0x6ABC87  mov     al, byte ptr [esi + 0x42C]
+#define HOOKPOS_CAutomobile__PreRender_RhinoDummyVisibility  0x6ABC71
+#define HOOKSIZE_CAutomobile__PreRender_RhinoDummyVisibility 22
+static const DWORD CONTINUE_CAutomobile__PreRender_RhinoDummyVisibility = 0x6ABC87;
+static const DWORD SKIP_CAutomobile__PreRender_RhinoDummyVisibility = 0x6ABCBE;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_RhinoDummyVisibility()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        mov     ax, word ptr [esi + 0x22]
+        cmp     ax, 0x1B9
+        jz      isRhino
+        cmp     ax, 0xFFFE
+        jz      isRhino
+        jmp     CONTINUE_CAutomobile__PreRender_RhinoDummyVisibility
+
+        isRhino:
+        jmp     SKIP_CAutomobile__PreRender_RhinoDummyVisibility
+    }
+    // clang-format on
+}
+
+// PreRender turret dummy model-info lookup. Value substitution, not a branch redirect: the
+// array lookup right after this still has to use the clone's own real id (every other vehicle
+// reads its own entry here too), so ax is only forced to 0x1B0 for the compare itself.
+// >>> 0x6ABD0B  mov     ax, word ptr [esi + 0x22]
+// >>> 0x6ABD0F  cmp     ax, 0x1B0
+//     0x6ABD13  movsx   ecx, ax
+#define HOOKPOS_CAutomobile__PreRender_RhinoTurretDummyLookup  0x6ABD0B
+#define HOOKSIZE_CAutomobile__PreRender_RhinoTurretDummyLookup 8
+static const DWORD CONTINUE_CAutomobile__PreRender_RhinoTurretDummyLookup = 0x6ABD13;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_RhinoTurretDummyLookup()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        mov     ax, word ptr [esi + 0x22]
+        jz      notClone
+
+        mov     ax, 0x1B0
+
+        notClone:
+        cmp     ax, 0x1B0
+        jmp     CONTINUE_CAutomobile__PreRender_RhinoTurretDummyLookup
+    }
+    // clang-format on
+}
+
+// PreRender turret aim dispatch (also gates the tank-tread visual flag right before it)
+// >>> 0x6ACA4B  cmp     ax, 0x1B0
+// >>> 0x6ACA4F  jz      0x6ACAAE
+//     0x6ACA51  cmp     ax, 0x259
+#define HOOKPOS_CAutomobile__PreRender_RhinoTurretAimDispatch  0x6ACA4B
+#define HOOKSIZE_CAutomobile__PreRender_RhinoTurretAimDispatch 6
+static const DWORD CONTINUE_CAutomobile__PreRender_RhinoTurretAimDispatch = 0x6ACA51;
+static const DWORD SKIP_CAutomobile__PreRender_RhinoTurretAimDispatch = 0x6ACAAE;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_RhinoTurretAimDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CAutomobile__PreRender_RhinoTurretAimDispatch
+
+        isRhino:
+        jmp     SKIP_CAutomobile__PreRender_RhinoTurretAimDispatch
+    }
+    // clang-format on
+}
+
+// Tread-segment array setup that feeds the tread animation hooked above. Same value-substitution
+// shape as the turret dummy lookup: ax is forced to 0x1B0 only for the compare, since the array
+// read right after it isn't reached on this path (jnz skips straight past it for non-Rhino).
+// >>> 0x6ACEE1  mov     ax, word ptr [esi + 0x22]
+//     0x6ACEE5  xor     edx, edx
+// >>> 0x6ACEE7  cmp     ax, 0x1B0
+//     0x6ACEEB  mov     dword ptr [esp + 0x14], ebx
+#define HOOKPOS_CAutomobile__PreRender_RhinoTreadSetup  0x6ACEE1
+#define HOOKSIZE_CAutomobile__PreRender_RhinoTreadSetup 10
+static const DWORD CONTINUE_CAutomobile__PreRender_RhinoTreadSetup = 0x6ACEEB;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_RhinoTreadSetup()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        mov     ax, word ptr [esi + 0x22]
+        xor     edx, edx
+        jz      notClone
+
+        mov     ax, 0x1B0
+
+        notClone:
+        cmp     ax, 0x1B0
+        jmp     CONTINUE_CAutomobile__PreRender_RhinoTreadSetup
+    }
+    // clang-format on
+}
+
+// Visibility/culling check, unreversed function; exempts the Rhino (and an unrelated 0x1B5) from
+// the normal LOD-column test
+// >>> 0x55432A  mov     ax, word ptr [esi + 0x22]
+// >>> 0x55432E  cmp     ax, 0x1B0
+// >>> 0x554332  jz      0x554380
+// >>> 0x554334  cmp     ax, 0x1B5
+// >>> 0x554338  jz      0x554380
+//     0x55433A  mov     cl, byte ptr [0xB6F04A]
+#define HOOKPOS_CVehicleVisibility_RhinoExempt  0x55432A
+#define HOOKSIZE_CVehicleVisibility_RhinoExempt 16
+static const DWORD CONTINUE_CVehicleVisibility_RhinoExempt = 0x55433A;
+static const DWORD SKIP_CVehicleVisibility_RhinoExempt = 0x554380;
+
+static void __declspec(naked) HOOK_CVehicleVisibility_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        mov     ax, word ptr [esi + 0x22]
+        cmp     ax, 0x1B5
+        jz      isRhino
+        jmp     CONTINUE_CVehicleVisibility_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CVehicleVisibility_RhinoExempt
+    }
+    // clang-format on
+}
+
+// CAutomobile constructor: tread float init (8 slots set to 1.0) and an internal state flag.
+// Two separate compares in the same function.
+// >>> 0x6B0CF0  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6B0CF6  jnz     0x6B0D50
+//     0x6B0CF8  mov     eax, 0x3F800000
+#define HOOKPOS_CAutomobile__Constructor_RhinoTreadInit  0x6B0CF0
+#define HOOKSIZE_CAutomobile__Constructor_RhinoTreadInit 8
+static const DWORD CONTINUE_CAutomobile__Constructor_RhinoTreadInit = 0x6B0CF8;
+static const DWORD SKIP_CAutomobile__Constructor_RhinoTreadInit = 0x6B0D50;
+
+static void __declspec(naked) HOOK_CAutomobile__Constructor_RhinoTreadInit()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__Constructor_RhinoTreadInit
+
+        notRhino:
+        jmp     SKIP_CAutomobile__Constructor_RhinoTreadInit
+    }
+    // clang-format on
+}
+
+// >>> 0x6B12D6  cmp     ax, 0x1B0
+// >>> 0x6B12DA  jnz     0x6B12E3
+//     0x6B12DC  or      dword ptr [esi + 0x40], 0x840000
+#define HOOKPOS_CAutomobile__Constructor_RhinoInternalFlag  0x6B12D6
+#define HOOKSIZE_CAutomobile__Constructor_RhinoInternalFlag 6
+static const DWORD CONTINUE_CAutomobile__Constructor_RhinoInternalFlag = 0x6B12DC;
+static const DWORD SKIP_CAutomobile__Constructor_RhinoInternalFlag = 0x6B12E3;
+
+static void __declspec(naked) HOOK_CAutomobile__Constructor_RhinoInternalFlag()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__Constructor_RhinoInternalFlag
+
+        notRhino:
+        jmp     SKIP_CAutomobile__Constructor_RhinoInternalFlag
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// RC Tiger's remaining native hardcoded behavior on custom vehicle models
+//
+// These are bundled together with sibling RC-toy models (RC Bandit, RC Raider, RC Baron, etc.,
+// none of which are in MTA's clone scope) rather than with the Rhino, so they're kept separate
+// from the group above. Each one reuses the existing IsRCTigerOrClone helper.
+//////////////////////////////////////////////////////////////////////////////////////////
+// RC-vehicle physics exemption group (edi holds the vehicle here, not esi)
+// >>> 0x52463C  cmp     ax, 0x234
+// >>> 0x524640  jz      0x5246C1
+//     0x524642  cmp     ax, 0x252
+#define HOOKPOS_CPhysical__RCVehiclePhysicsExempt_RCTiger  0x52463C
+#define HOOKSIZE_CPhysical__RCVehiclePhysicsExempt_RCTiger 6
+static const DWORD CONTINUE_CPhysical__RCVehiclePhysicsExempt_RCTiger = 0x524642;
+static const DWORD SKIP_CPhysical__RCVehiclePhysicsExempt_RCTiger = 0x5246C1;
+
+static void __declspec(naked) HOOK_CPhysical__RCVehiclePhysicsExempt_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsRCTigerOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [edi + 0x22]
+        jmp     CONTINUE_CPhysical__RCVehiclePhysicsExempt_RCTiger
+
+        isMatch:
+        jmp     SKIP_CPhysical__RCVehiclePhysicsExempt_RCTiger
+    }
+    // clang-format on
+}
+
+// Heavy-machinery dispatch list; only the RC Tiger leg of this chain is in scope here (the
+// Dozer/Cement/TowTruck/Forklift/Tractor legs belong to their own branches and are left untouched)
+// >>> 0x5254F0  cmp     ax, 0x234
+// >>> 0x5254F4  jz      0x525516
+//     0x5254F6  mov     eax, dword ptr [edi + 0x590]
+#define HOOKPOS_CPhysical__HeavyMachineryDispatch_RCTiger  0x5254F0
+#define HOOKSIZE_CPhysical__HeavyMachineryDispatch_RCTiger 6
+static const DWORD CONTINUE_CPhysical__HeavyMachineryDispatch_RCTiger = 0x5254F6;
+static const DWORD SKIP_CPhysical__HeavyMachineryDispatch_RCTiger = 0x525516;
+
+static void __declspec(naked) HOOK_CPhysical__HeavyMachineryDispatch_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsRCTigerOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [edi + 0x22]
+        jmp     CONTINUE_CPhysical__HeavyMachineryDispatch_RCTiger
+
+        isMatch:
+        jmp     SKIP_CPhysical__HeavyMachineryDispatch_RCTiger
+    }
+    // clang-format on
+}
+
+// Collision-response category check. ecx holds the *other* entity in the collision pair (not
+// "this"), and the continue target reads [ecx + 0x1c] directly, so ecx must survive the call.
+// >>> 0x5E3DE1  mov     ax, word ptr [ecx + 0x22]
+// >>> 0x5E3DE5  cmp     ax, 0x1B9
+// >>> 0x5E3DE9  jz      0x5E3E0B
+// >>> 0x5E3DEB  cmp     ax, 0x234
+// >>> 0x5E3DEF  jz      0x5E3E0B
+// >>> 0x5E3DF1  cmp     ax, 0x252
+// >>> 0x5E3DF5  jz      0x5E3E0B
+//     0x5E3DF7  mov     ecx, dword ptr [ecx + 0x1c]
+#define HOOKPOS_CPhysical__CollisionResponseCategory_RCTiger  0x5E3DE1
+#define HOOKSIZE_CPhysical__CollisionResponseCategory_RCTiger 22
+static const DWORD CONTINUE_CPhysical__CollisionResponseCategory_RCTiger = 0x5E3DF7;
+static const DWORD SKIP_CPhysical__CollisionResponseCategory_RCTiger = 0x5E3E0B;
+
+static void __declspec(naked) HOOK_CPhysical__CollisionResponseCategory_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        call    IsRCTigerOrClone
+        test    al, al
+        pop     ecx
+        jnz     isMatch
+
+        mov     ax, word ptr [ecx + 0x22]
+        cmp     ax, 0x1B9
+        jz      isMatch
+        jmp     CONTINUE_CPhysical__CollisionResponseCategory_RCTiger
+
+        isMatch:
+        jmp     SKIP_CPhysical__CollisionResponseCategory_RCTiger
+    }
+    // clang-format on
+}
+
+// Fire-catching immunity flag setup, first use in this function
+// >>> 0x6A7229  cmp     ax, 0x234
+// >>> 0x6A722D  jnz     0x6A7231
+//     0x6A722F  mov     bl, 0x1
+#define HOOKPOS_CAutomobile__FireImmunityFlag_RCTiger  0x6A7229
+#define HOOKSIZE_CAutomobile__FireImmunityFlag_RCTiger 6
+static const DWORD CONTINUE_CAutomobile__FireImmunityFlag_RCTiger = 0x6A722F;
+static const DWORD SKIP_CAutomobile__FireImmunityFlag_RCTiger = 0x6A7231;
+
+static void __declspec(naked) HOOK_CAutomobile__FireImmunityFlag_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        test    al, al
+        jnz     isMatch
+
+        jmp     SKIP_CAutomobile__FireImmunityFlag_RCTiger
+
+        isMatch:
+        jmp     CONTINUE_CAutomobile__FireImmunityFlag_RCTiger
+    }
+    // clang-format on
+}
+
+// Same fire-catching group, second (independent) use later in the same function
+// >>> 0x6A748F  cmp     ax, 0x234
+// >>> 0x6A7493  jz      0x6A716C
+//     0x6A7499  push    0xFA
+#define HOOKPOS_CAutomobile__FireImmunityReroll_RCTiger  0x6A748F
+#define HOOKSIZE_CAutomobile__FireImmunityReroll_RCTiger 10
+static const DWORD CONTINUE_CAutomobile__FireImmunityReroll_RCTiger = 0x6A7499;
+static const DWORD SKIP_CAutomobile__FireImmunityReroll_RCTiger = 0x6A716C;
+
+static void __declspec(naked) HOOK_CAutomobile__FireImmunityReroll_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CAutomobile__FireImmunityReroll_RCTiger
+
+        isMatch:
+        jmp     SKIP_CAutomobile__FireImmunityReroll_RCTiger
+    }
+    // clang-format on
+}
+
+// PreRender wheel-position registration skip (RC vehicles use a different suspension model)
+// >>> 0x6B3861  cmp     ax, 0x234
+// >>> 0x6B3865  jz      0x6B38F7
+//     0x6B386B  cmp     ax, 0x1B9
+#define HOOKPOS_CAutomobile__PreRender_WheelPositionSkip_RCTiger  0x6B3861
+#define HOOKSIZE_CAutomobile__PreRender_WheelPositionSkip_RCTiger 10
+static const DWORD CONTINUE_CAutomobile__PreRender_WheelPositionSkip_RCTiger = 0x6B386B;
+static const DWORD SKIP_CAutomobile__PreRender_WheelPositionSkip_RCTiger = 0x6B38F7;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_WheelPositionSkip_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CAutomobile__PreRender_WheelPositionSkip_RCTiger
+
+        isMatch:
+        jmp     SKIP_CAutomobile__PreRender_WheelPositionSkip_RCTiger
+    }
+    // clang-format on
+}
+
+// Dust/particle count tuning; the fstp between the compare and the jz is an unrelated, unconditional
+// float store that must still run once regardless of which branch is taken
+// >>> 0x6B3B43  cmp     ax, 0x234
+// >>> 0x6B3B47  fstp    dword ptr [esp + 0x24]
+// >>> 0x6B3B4B  jz      0x6B3B69
+//     0x6B3B4D  cmp     ax, 0x1B9
+#define HOOKPOS_CAutomobile__PreRender_ParticleCount_RCTiger  0x6B3B43
+#define HOOKSIZE_CAutomobile__PreRender_ParticleCount_RCTiger 10
+static const DWORD CONTINUE_CAutomobile__PreRender_ParticleCount_RCTiger = 0x6B3B4D;
+static const DWORD SKIP_CAutomobile__PreRender_ParticleCount_RCTiger = 0x6B3B69;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_ParticleCount_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        fstp    dword ptr [esp + 0x24]
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CAutomobile__PreRender_ParticleCount_RCTiger
+
+        isMatch:
+        jmp     SKIP_CAutomobile__PreRender_ParticleCount_RCTiger
+    }
+    // clang-format on
+}
+
+// Second collision-damage-flag exemption function (a sibling gate at 0x6D6970 in the same
+// function checks an ax value whose provenance couldn't be traced back through this session's
+// PGO-split cold code, and was left alone rather than guessed at)
+// >>> 0x6D6986  cmp     ax, 0x234
+// >>> 0x6D698A  jz      0x6D6992
+//     0x6D698C  cmp     ax, 0x252
+#define HOOKPOS_CPhysical__CollisionDamageExempt_RCTiger  0x6D6986
+#define HOOKSIZE_CPhysical__CollisionDamageExempt_RCTiger 6
+static const DWORD CONTINUE_CPhysical__CollisionDamageExempt_RCTiger = 0x6D698C;
+static const DWORD SKIP_CPhysical__CollisionDamageExempt_RCTiger = 0x6D6992;
+
+static void __declspec(naked) HOOK_CPhysical__CollisionDamageExempt_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CPhysical__CollisionDamageExempt_RCTiger
+
+        isMatch:
+        jmp     SKIP_CPhysical__CollisionDamageExempt_RCTiger
+    }
+    // clang-format on
+}
+
+// Skidmark/particle size group (edi holds the vehicle here)
+// >>> 0x7408F3  cmp     ax, 0x234
+// >>> 0x7408F7  mov     dword ptr [esp + 0x1C], 0x3E99999A
+// >>> 0x7408FF  jnz     0x740909
+//     0x740901  mov     dword ptr [esp + 0x1C], 0x3DCCCCCD
+#define HOOKPOS_CPhysical__SkidmarkSize_RCTiger  0x7408F3
+#define HOOKSIZE_CPhysical__SkidmarkSize_RCTiger 14
+static const DWORD CONTINUE_CPhysical__SkidmarkSize_RCTiger = 0x740909;
+
+static void __declspec(naked) HOOK_CPhysical__SkidmarkSize_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsRCTigerOrClone
+        mov     dword ptr [esp + 0x1C], 0x3E99999A
+        test    al, al
+        jz      notMatch
+
+        mov     dword ptr [esp + 0x1C], 0x3DCCCCCD
+
+        notMatch:
+        jmp     CONTINUE_CPhysical__SkidmarkSize_RCTiger
+    }
+    // clang-format on
+}
+
+// Conditional collision-response lookup, only reached when a caller flag (al, tested just before
+// this span) is already set; the model-info array read after this still needs the clone's own
+// real id, same as the Rhino turret dummy lookup, but here it's a pure branch so no substitution
+// is needed at all
+// >>> 0x5583E9  cmp     word ptr [esi + 0x22], 0x234
+// >>> 0x5583EF  jnz     0x55848E
+//     0x5583F5  test    byte ptr [esi + 0x4A8], 0x60
+#define HOOKPOS_CEntity__CollisionResponseLookup_RCTiger  0x5583E9
+#define HOOKSIZE_CEntity__CollisionResponseLookup_RCTiger 12
+static const DWORD CONTINUE_CEntity__CollisionResponseLookup_RCTiger = 0x5583F5;
+static const DWORD SKIP_CEntity__CollisionResponseLookup_RCTiger = 0x55848E;
+
+static void __declspec(naked) HOOK_CEntity__CollisionResponseLookup_RCTiger()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRCTigerOrClone
+        test    al, al
+        jz      notMatch
+
+        jmp     CONTINUE_CEntity__CollisionResponseLookup_RCTiger
+
+        notMatch:
+        jmp     SKIP_CEntity__CollisionResponseLookup_RCTiger
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// The rest of the Rhino's native hardcoded behavior on custom vehicle models
+//
+// A second full sweep (register-cached AND memory-operand compare forms both included this time)
+// found these. All reuse the existing IsRhinoOrClone helper.
+//////////////////////////////////////////////////////////////////////////////////////////
+// Outer gate for the entire tread computation block hooked further up (MovingCollisionForce /
+// TankTreadAnim / PreRender*Rhino* above all live inside, or just after, this span) — without this
+// one a clone never enters the block at all, so those other hooks would only ever see a real Rhino
+// >>> 0x6A2C29  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6A2C2F  jnz     0x6A2E88
+//     0x6A2C35  push    ebx
+#define HOOKPOS_CAutomobile__TankTreadBlockGate_RhinoExempt  0x6A2C29
+#define HOOKSIZE_CAutomobile__TankTreadBlockGate_RhinoExempt 12
+static const DWORD CONTINUE_CAutomobile__TankTreadBlockGate_RhinoExempt = 0x6A2C35;
+static const DWORD SKIP_CAutomobile__TankTreadBlockGate_RhinoExempt = 0x6A2E88;
+
+static void __declspec(naked) HOOK_CAutomobile__TankTreadBlockGate_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__TankTreadBlockGate_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CAutomobile__TankTreadBlockGate_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Damage-decal threshold check: for the Rhino, an extra field (word [esi+0x20]) also has to clear
+// a threshold before the exemption applies; every other model skips straight past it. Two identical
+// copies of this span exist in two different functions.
+// >>> 0x41DEE1  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x41DEE7  jnz     0x41DEF1
+//     0x41DEE9  cmp     word ptr [esi + 0x20], 0x2710
+#define HOOKPOS_CEntity__DamageDecalThreshold_RhinoExempt  0x41DEE1
+#define HOOKSIZE_CEntity__DamageDecalThreshold_RhinoExempt 8
+static const DWORD CONTINUE_CEntity__DamageDecalThreshold_RhinoExempt = 0x41DEE9;
+static const DWORD SKIP_CEntity__DamageDecalThreshold_RhinoExempt = 0x41DEF1;
+
+static void __declspec(naked) HOOK_CEntity__DamageDecalThreshold_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CEntity__DamageDecalThreshold_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CEntity__DamageDecalThreshold_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Second copy of the same span, different enclosing function
+// >>> 0x41E24C  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x41E252  jnz     0x41E25C
+//     0x41E254  cmp     word ptr [esi + 0x20], 0x2710
+#define HOOKPOS_CEntity__DamageDecalThreshold2_RhinoExempt  0x41E24C
+#define HOOKSIZE_CEntity__DamageDecalThreshold2_RhinoExempt 8
+static const DWORD CONTINUE_CEntity__DamageDecalThreshold2_RhinoExempt = 0x41E254;
+static const DWORD SKIP_CEntity__DamageDecalThreshold2_RhinoExempt = 0x41E25C;
+
+static void __declspec(naked) HOOK_CEntity__DamageDecalThreshold2_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CEntity__DamageDecalThreshold2_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CEntity__DamageDecalThreshold2_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Special-sound dispatch: the Rhino plays a specific sound bank (0xD1) via a tail-jmp; every other
+// model falls through to a generic sound-check call instead
+// >>> 0x43DFAA  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x43DFB0  jnz     0x43DFC8
+//     0x43DFB2  pop     esi
+#define HOOKPOS_CAEVehicleAudioEntity__SpecialSound_RhinoExempt  0x43DFAA
+#define HOOKSIZE_CAEVehicleAudioEntity__SpecialSound_RhinoExempt 8
+static const DWORD CONTINUE_CAEVehicleAudioEntity__SpecialSound_RhinoExempt = 0x43DFC8;
+static const DWORD SKIP_CAEVehicleAudioEntity__SpecialSound_RhinoExempt = 0x43DFB2;
+
+static void __declspec(naked) HOOK_CAEVehicleAudioEntity__SpecialSound_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     CONTINUE_CAEVehicleAudioEntity__SpecialSound_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CAEVehicleAudioEntity__SpecialSound_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Turret-relative float source (edi holds the vehicle): the Rhino reads its own turret rotation
+// field instead of the generic heading field every other vehicle uses here
+// >>> 0x45B91A  cmp     word ptr [edi + 0x22], 0x1B0
+// >>> 0x45B920  jnz     0x45B930
+//     0x45B922  fld     dword ptr [edi + 0x94C]
+#define HOOKPOS_CPhysical__TurretRelativeFloat_RhinoExempt  0x45B91A
+#define HOOKSIZE_CPhysical__TurretRelativeFloat_RhinoExempt 8
+static const DWORD CONTINUE_CPhysical__TurretRelativeFloat_RhinoExempt = 0x45B930;
+static const DWORD SKIP_CPhysical__TurretRelativeFloat_RhinoExempt = 0x45B922;
+
+static void __declspec(naked) HOOK_CPhysical__TurretRelativeFloat_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     CONTINUE_CPhysical__TurretRelativeFloat_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CPhysical__TurretRelativeFloat_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Collision "other entity" check; the interleaved mov is an unrelated, unconditional store of the
+// caller's original ecx (not the vehicle pointer) that has to survive our call untouched
+// >>> 0x45BC34  cmp     word ptr [esi + 0x22], 0x1B0
+//     0x45BC3A  mov     dword ptr [esi + 0x1C], ecx
+// >>> 0x45BC3D  jnz     0x45BC5F
+//     0x45BC3F  movsx   eax, byte ptr [edi + 0x23]
+#define HOOKPOS_CPhysical__CollisionOtherEntity_RhinoExempt  0x45BC34
+#define HOOKSIZE_CPhysical__CollisionOtherEntity_RhinoExempt 11
+static const DWORD CONTINUE_CPhysical__CollisionOtherEntity_RhinoExempt = 0x45BC3F;
+static const DWORD SKIP_CPhysical__CollisionOtherEntity_RhinoExempt = 0x45BC5F;
+
+static void __declspec(naked) HOOK_CPhysical__CollisionOtherEntity_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        pop     ecx
+        mov     dword ptr [esi + 0x1C], ecx
+        jz      notRhino
+
+        jmp     CONTINUE_CPhysical__CollisionOtherEntity_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CPhysical__CollisionOtherEntity_RhinoExempt
+    }
+    // clang-format on
+}
+
+// eax holds the vehicle here, alongside an unrelated parallel check on a different entity ([esi+0x958])
+// >>> 0x51D870  cmp     word ptr [eax + 0x22], 0x1B0
+// >>> 0x51D876  jz      0x51E4D8
+//     0x51D87C  mov     eax, dword ptr [esi + 0x958]
+#define HOOKPOS_CTrainCrossing__Unknown_RhinoExempt  0x51D870
+#define HOOKSIZE_CTrainCrossing__Unknown_RhinoExempt 12
+static const DWORD CONTINUE_CTrainCrossing__Unknown_RhinoExempt = 0x51D87C;
+static const DWORD SKIP_CTrainCrossing__Unknown_RhinoExempt = 0x51E4D8;
+
+static void __declspec(naked) HOOK_CTrainCrossing__Unknown_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, eax
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     CONTINUE_CTrainCrossing__Unknown_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CTrainCrossing__Unknown_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Function-entry gate; the push edi right after the compare is this function's own prologue and
+// has to run unconditionally either way
+// >>> 0x6A32B7  cmp     word ptr [esi + 0x22], 0x1B0
+//     0x6A32BD  push    edi
+// >>> 0x6A32BE  jz      0x6A3425
+//     0x6A32C4  mov     al, byte ptr [esi + 0x42B]
+#define HOOKPOS_CAutomobile__FunctionGate_RhinoExempt  0x6A32B7
+#define HOOKSIZE_CAutomobile__FunctionGate_RhinoExempt 13
+static const DWORD CONTINUE_CAutomobile__FunctionGate_RhinoExempt = 0x6A32C4;
+static const DWORD SKIP_CAutomobile__FunctionGate_RhinoExempt = 0x6A3425;
+
+static void __declspec(naked) HOOK_CAutomobile__FunctionGate_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        push    edi
+        test    al, al
+        jnz     isRhino
+
+        jmp     CONTINUE_CAutomobile__FunctionGate_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_CAutomobile__FunctionGate_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Same gamepad-input-gated exemption pattern as the collision-force hooks further up, different function
+// >>> 0x6A4913  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6A4919  jz      0x6A49BB
+//     0x6A491F  mov     eax, dword ptr [esi + 0x38C]
+#define HOOKPOS_CAutomobile__PadGatedExempt_Rhino  0x6A4913
+#define HOOKSIZE_CAutomobile__PadGatedExempt_Rhino 12
+static const DWORD CONTINUE_CAutomobile__PadGatedExempt_Rhino = 0x6A491F;
+static const DWORD SKIP_CAutomobile__PadGatedExempt_Rhino = 0x6A49BB;
+
+static void __declspec(naked) HOOK_CAutomobile__PadGatedExempt_Rhino()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     CONTINUE_CAutomobile__PadGatedExempt_Rhino
+
+        isRhino:
+        jmp     SKIP_CAutomobile__PadGatedExempt_Rhino
+    }
+    // clang-format on
+}
+
+// Impact category index selection (edi holds the vehicle): picks a wider table entry (0xC vs 0x4)
+// used to size an effect right after. First of two independent uses in the same function.
+// >>> 0x6A6602  cmp     word ptr [edi + 0x22], 0x1B0
+// >>> 0x6A6608  jnz     0x6A6610
+//     0x6A660A  mov     byte ptr [esi + 0x6], 0xC
+#define HOOKPOS_CAutomobile__ImpactCategory_RhinoExempt  0x6A6602
+#define HOOKSIZE_CAutomobile__ImpactCategory_RhinoExempt 8
+static const DWORD CONTINUE_CAutomobile__ImpactCategory_RhinoExempt = 0x6A660A;
+static const DWORD SKIP_CAutomobile__ImpactCategory_RhinoExempt = 0x6A6610;
+
+static void __declspec(naked) HOOK_CAutomobile__ImpactCategory_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     SKIP_CAutomobile__ImpactCategory_RhinoExempt
+
+        isRhino:
+        jmp     CONTINUE_CAutomobile__ImpactCategory_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Second, independent use of the same category gate later in the same function
+// >>> 0x6A6995  cmp     word ptr [edi + 0x22], 0x1B0
+// >>> 0x6A699B  jnz     0x6A6AD4
+//     0x6A69A1  xor     edx, edx
+#define HOOKPOS_CAutomobile__ImpactCategory2_RhinoExempt  0x6A6995
+#define HOOKSIZE_CAutomobile__ImpactCategory2_RhinoExempt 12
+static const DWORD CONTINUE_CAutomobile__ImpactCategory2_RhinoExempt = 0x6A69A1;
+static const DWORD SKIP_CAutomobile__ImpactCategory2_RhinoExempt = 0x6A6AD4;
+
+static void __declspec(naked) HOOK_CAutomobile__ImpactCategory2_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__ImpactCategory2_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CAutomobile__ImpactCategory2_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Being towed by a Rhino applies a different drag multiplier (ebp holds the towing vehicle, read
+// from [esi + 0xDC] just before this)
+// >>> 0x6A80BC  cmp     word ptr [ebp + 0x22], 0x1B0
+// >>> 0x6A80C2  jnz     0x6A80D2
+//     0x6A80C4  fld     dword ptr [esp + 0x74]
+#define HOOKPOS_CPhysical__TowedByRhino_DragMultiplier  0x6A80BC
+#define HOOKSIZE_CPhysical__TowedByRhino_DragMultiplier 8
+static const DWORD CONTINUE_CPhysical__TowedByRhino_DragMultiplier = 0x6A80C4;
+static const DWORD SKIP_CPhysical__TowedByRhino_DragMultiplier = 0x6A80D2;
+
+static void __declspec(naked) HOOK_CPhysical__TowedByRhino_DragMultiplier()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, ebp
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CPhysical__TowedByRhino_DragMultiplier
+
+        notRhino:
+        jmp     SKIP_CPhysical__TowedByRhino_DragMultiplier
+    }
+    // clang-format on
+}
+
+// Same towed-by-Rhino check, a second call site later in the same function (eax holds the towing
+// vehicle here instead of ebp)
+// >>> 0x6A8380  cmp     word ptr [eax + 0x22], 0x1B0
+// >>> 0x6A8386  jnz     0x6A83AB
+//     0x6A8388  push    0x0
+#define HOOKPOS_CPhysical__TowedByRhino_DragMultiplier2  0x6A8380
+#define HOOKSIZE_CPhysical__TowedByRhino_DragMultiplier2 8
+static const DWORD CONTINUE_CPhysical__TowedByRhino_DragMultiplier2 = 0x6A8388;
+static const DWORD SKIP_CPhysical__TowedByRhino_DragMultiplier2 = 0x6A83AB;
+
+static void __declspec(naked) HOOK_CPhysical__TowedByRhino_DragMultiplier2()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, eax
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CPhysical__TowedByRhino_DragMultiplier2
+
+        notRhino:
+        jmp     SKIP_CPhysical__TowedByRhino_DragMultiplier2
+    }
+    // clang-format on
+}
+
+// >>> 0x6AD23E  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6AD244  jnz     0x6AD378
+//     0x6AD24A  fld     dword ptr [esp + 0x38]
+#define HOOKPOS_CPhysical__FloatGate_RhinoExempt  0x6AD23E
+#define HOOKSIZE_CPhysical__FloatGate_RhinoExempt 12
+static const DWORD CONTINUE_CPhysical__FloatGate_RhinoExempt = 0x6AD24A;
+static const DWORD SKIP_CPhysical__FloatGate_RhinoExempt = 0x6AD378;
+
+static void __declspec(naked) HOOK_CPhysical__FloatGate_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CPhysical__FloatGate_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CPhysical__FloatGate_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Automobile::BlowUpCarsInPath: eax holds a nearby vehicle found while clearing the path ahead;
+// eax has to survive the call since the continue target reads [eax + 0x40] right after
+// >>> 0x6AF173  cmp     word ptr [eax + 0x22], 0x1B0
+// >>> 0x6AF179  jz      0x6AF1B6
+//     0x6AF17B  test    dword ptr [eax + 0x40], 0x20000000
+#define HOOKPOS_Automobile__BlowUpCarsInPath_RhinoExempt  0x6AF173
+#define HOOKSIZE_Automobile__BlowUpCarsInPath_RhinoExempt 8
+static const DWORD CONTINUE_Automobile__BlowUpCarsInPath_RhinoExempt = 0x6AF17B;
+static const DWORD SKIP_Automobile__BlowUpCarsInPath_RhinoExempt = 0x6AF1B6;
+
+static void __declspec(naked) HOOK_Automobile__BlowUpCarsInPath_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    eax
+        mov     ecx, eax
+        call    IsRhinoOrClone
+        test    al, al
+        pop     eax
+        jnz     isRhino
+
+        jmp     CONTINUE_Automobile__BlowUpCarsInPath_RhinoExempt
+
+        isRhino:
+        jmp     SKIP_Automobile__BlowUpCarsInPath_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Flag-passthrough style: the real jnz that reads this compare's flags sits ~90 bytes further down
+// this function, past a long unconditional stretch of float math that never touches integer eflags,
+// so this hook only has to leave the correct zero flag behind before falling through — no branch of
+// its own is needed. cmp al, 1 mirrors "is rhino" into zf the same way the original cmp did.
+// >>> 0x6AFB44  cmp     word ptr [esi + 0x22], 0x1B0
+//     0x6AFB4A  mov     dword ptr [esp + 0xB8], 0x0
+#define HOOKPOS_CAutomobile__FarJnzFlagPassthrough_Rhino  0x6AFB44
+#define HOOKSIZE_CAutomobile__FarJnzFlagPassthrough_Rhino 6
+static const DWORD CONTINUE_CAutomobile__FarJnzFlagPassthrough_Rhino = 0x6AFB4A;
+
+static void __declspec(naked) HOOK_CAutomobile__FarJnzFlagPassthrough_Rhino()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        cmp     al, 1
+        jmp     CONTINUE_CAutomobile__FarJnzFlagPassthrough_Rhino
+    }
+    // clang-format on
+}
+
+// Same function as the flag-passthrough hook above, a second and ordinary (nearby jnz) site
+// >>> 0x6B0298  cmp     word ptr [esi + 0x22], 0x1B0
+//     0x6B029E  mov     dword ptr [esp + 0x14], edi
+// >>> 0x6B02A2  jnz     0x6B0423
+//     0x6B02A8  test    edi, edi
+#define HOOKPOS_CAutomobile__ImpactCount_RhinoExempt  0x6B0298
+#define HOOKSIZE_CAutomobile__ImpactCount_RhinoExempt 16
+static const DWORD CONTINUE_CAutomobile__ImpactCount_RhinoExempt = 0x6B02A8;
+static const DWORD SKIP_CAutomobile__ImpactCount_RhinoExempt = 0x6B0423;
+
+static void __declspec(naked) HOOK_CAutomobile__ImpactCount_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        mov     dword ptr [esp + 0x14], edi
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__ImpactCount_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CAutomobile__ImpactCount_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Same gamepad-input-gated exemption pattern once more, a third independent function
+// >>> 0x6B6C86  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6B6C8C  jz      0x6B6D23
+//     0x6B6C92  mov     eax, dword ptr [esi + 0x38C]
+#define HOOKPOS_CAutomobile__PadGatedExempt2_Rhino  0x6B6C86
+#define HOOKSIZE_CAutomobile__PadGatedExempt2_Rhino 12
+static const DWORD CONTINUE_CAutomobile__PadGatedExempt2_Rhino = 0x6B6C92;
+static const DWORD SKIP_CAutomobile__PadGatedExempt2_Rhino = 0x6B6D23;
+
+static void __declspec(naked) HOOK_CAutomobile__PadGatedExempt2_Rhino()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     CONTINUE_CAutomobile__PadGatedExempt2_Rhino
+
+        isRhino:
+        jmp     SKIP_CAutomobile__PadGatedExempt2_Rhino
+    }
+    // clang-format on
+}
+
+// PreRender effect-intensity parameter (same giant function as the turret hooks further up)
+// >>> 0x6ABFC8  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6ABFCE  jnz     0x6ABFD5
+//     0x6ABFD0  mov     edi, 0x7
+#define HOOKPOS_CAutomobile__PreRender_EffectIntensity_RhinoExempt  0x6ABFC8
+#define HOOKSIZE_CAutomobile__PreRender_EffectIntensity_RhinoExempt 8
+static const DWORD CONTINUE_CAutomobile__PreRender_EffectIntensity_RhinoExempt = 0x6ABFD0;
+static const DWORD SKIP_CAutomobile__PreRender_EffectIntensity_RhinoExempt = 0x6ABFD5;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_EffectIntensity_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jnz     isRhino
+
+        jmp     SKIP_CAutomobile__PreRender_EffectIntensity_RhinoExempt
+
+        isRhino:
+        jmp     CONTINUE_CAutomobile__PreRender_EffectIntensity_RhinoExempt
+    }
+    // clang-format on
+}
+
+// Same function, a second effect-related dispatch further along
+// >>> 0x6AC025  cmp     word ptr [esi + 0x22], 0x1B0
+// >>> 0x6AC02B  jz      0x6AC232
+//     0x6AC031  push    0x2
+#define HOOKPOS_CAutomobile__PreRender_EffectDispatch_RhinoExempt  0x6AC025
+#define HOOKSIZE_CAutomobile__PreRender_EffectDispatch_RhinoExempt 12
+static const DWORD CONTINUE_CAutomobile__PreRender_EffectDispatch_RhinoExempt = 0x6AC031;
+static const DWORD SKIP_CAutomobile__PreRender_EffectDispatch_RhinoExempt = 0x6AC232;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_EffectDispatch_RhinoExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsRhinoOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__PreRender_EffectDispatch_RhinoExempt
+
+        notRhino:
+        jmp     SKIP_CAutomobile__PreRender_EffectDispatch_RhinoExempt
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 //
 // CMultiplayerSA::InitHooks_Vehicles
 //
@@ -3713,6 +5111,48 @@ static void __declspec(naked) HOOK_CPlane__PreRender_AndromRampBlock()
 void CMultiplayerSA::InitHooks_Vehicles()
 {
     EZHookInstall(CDamageManager__ProgressDoorDamage);
+    EZHookInstall(CAutomobile__ProcessControl_WaterCannonDispatch);
+    EZHookInstall(CAutomobile__ProcessControl_TankDispatch);
+    EZHookInstall(CAutomobile__MovingCollisionForce_RhinoExempt);
+    EZHookInstall(CAutomobile__MovingCollisionForce_RhinoExemptWrecked);
+    EZHookInstall(CAutomobile__TankTreadAnim_RhinoExempt);
+    EZHookInstall(CAutomobile__PreRender_RhinoDummyVisibility);
+    EZHookInstall(CAutomobile__PreRender_RhinoTurretDummyLookup);
+    EZHookInstall(CAutomobile__PreRender_RhinoTurretAimDispatch);
+    EZHookInstall(CAutomobile__PreRender_RhinoTreadSetup);
+    EZHookInstall(CVehicleVisibility_RhinoExempt);
+    EZHookInstall(CAutomobile__Constructor_RhinoTreadInit);
+    EZHookInstall(CAutomobile__Constructor_RhinoInternalFlag);
+    EZHookInstall(CPhysical__RCVehiclePhysicsExempt_RCTiger);
+    EZHookInstall(CPhysical__HeavyMachineryDispatch_RCTiger);
+    EZHookInstall(CPhysical__CollisionResponseCategory_RCTiger);
+    EZHookInstall(CAutomobile__FireImmunityFlag_RCTiger);
+    EZHookInstall(CAutomobile__FireImmunityReroll_RCTiger);
+    EZHookInstall(CAutomobile__PreRender_WheelPositionSkip_RCTiger);
+    EZHookInstall(CAutomobile__PreRender_ParticleCount_RCTiger);
+    EZHookInstall(CPhysical__CollisionDamageExempt_RCTiger);
+    EZHookInstall(CPhysical__SkidmarkSize_RCTiger);
+    EZHookInstall(CEntity__CollisionResponseLookup_RCTiger);
+    EZHookInstall(CAutomobile__TankTreadBlockGate_RhinoExempt);
+    EZHookInstall(CEntity__DamageDecalThreshold_RhinoExempt);
+    EZHookInstall(CEntity__DamageDecalThreshold2_RhinoExempt);
+    EZHookInstall(CAEVehicleAudioEntity__SpecialSound_RhinoExempt);
+    EZHookInstall(CPhysical__TurretRelativeFloat_RhinoExempt);
+    EZHookInstall(CPhysical__CollisionOtherEntity_RhinoExempt);
+    EZHookInstall(CTrainCrossing__Unknown_RhinoExempt);
+    EZHookInstall(CAutomobile__FunctionGate_RhinoExempt);
+    EZHookInstall(CAutomobile__PadGatedExempt_Rhino);
+    EZHookInstall(CAutomobile__ImpactCategory_RhinoExempt);
+    EZHookInstall(CAutomobile__ImpactCategory2_RhinoExempt);
+    EZHookInstall(CPhysical__TowedByRhino_DragMultiplier);
+    EZHookInstall(CPhysical__TowedByRhino_DragMultiplier2);
+    EZHookInstall(CPhysical__FloatGate_RhinoExempt);
+    EZHookInstall(Automobile__BlowUpCarsInPath_RhinoExempt);
+    EZHookInstall(CAutomobile__FarJnzFlagPassthrough_Rhino);
+    EZHookInstall(CAutomobile__ImpactCount_RhinoExempt);
+    EZHookInstall(CAutomobile__PadGatedExempt2_Rhino);
+    EZHookInstall(CAutomobile__PreRender_EffectIntensity_RhinoExempt);
+    EZHookInstall(CAutomobile__PreRender_EffectDispatch_RhinoExempt);
     EZHookInstall(CAutomobile__HydraulicControl);
     EZHookInstall(CAutomobile__ProcessControl_CementAngleReset);
     EZHookInstall(CAutomobile__ProcessControl_CementMiscGate);
