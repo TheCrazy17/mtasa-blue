@@ -3704,6 +3704,269 @@ static void __declspec(naked) HOOK_CPlane__PreRender_AndromRampBlock()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// The Combine Harvester's header on custom vehicle models
+//
+// The header's tilt, its crop/ped-clearing pass, its own idle vibration and several smaller
+// dispatches all gate on the raw model index separately, spread across seven different native
+// functions. A prior pass only found the ped/object-clearing dispatch (the ProcessControl one
+// below); this one covers the rest too.
+//////////////////////////////////////////////////////////////////////////////////////////
+static bool __fastcall IsCombineHarvesterOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_COMBINE))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_COMBINE);
+}
+
+// Idle vibration trigger; shares its destination with the Tractor's own leg of this same compare
+// (out of scope here, the Tractor already has its own branch) and with a third, model-independent
+// condition on the vehicle's control state
+// >>> 0x431BF8  cmp     ax, 0x214
+// >>> 0x431BFC  jz      0x431C07
+//     0x431BFE  cmp     dword ptr [esi + 0x594], 0xA
+#define HOOKPOS_CAutomobile__IdleVibration_CombineExempt  0x431BF8
+#define HOOKSIZE_CAutomobile__IdleVibration_CombineExempt 6
+static const DWORD CONTINUE_CAutomobile__IdleVibration_CombineExempt = 0x431BFE;
+static const DWORD SKIP_CAutomobile__IdleVibration_CombineExempt = 0x431C07;
+
+static void __declspec(naked) HOOK_CAutomobile__IdleVibration_CombineExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        jnz     isMatch
+
+        jmp     CONTINUE_CAutomobile__IdleVibration_CombineExempt
+
+        isMatch:
+        jmp     SKIP_CAutomobile__IdleVibration_CombineExempt
+    }
+    // clang-format on
+}
+
+// PreRender header tilt entry (the giant per-model dispatch mapped across the Rhino/RCTiger/Packer/
+// BF Injection branches); the skip target lands on that same chain's Bandito/Hotknife leg, so ax has
+// to be reloaded fresh for it to keep working for every other model
+// >>> 0x6AC7AB  cmp     ax, 0x214
+// >>> 0x6AC7AF  jnz     0x6ACA37
+//     0x6AC7B5  fld     dword ptr [esi + 0x958]
+#define HOOKPOS_CAutomobile__PreRender_HeaderTilt_Combine  0x6AC7AB
+#define HOOKSIZE_CAutomobile__PreRender_HeaderTilt_Combine 10
+static const DWORD CONTINUE_CAutomobile__PreRender_HeaderTilt_Combine = 0x6AC7B5;
+static const DWORD SKIP_CAutomobile__PreRender_HeaderTilt_Combine = 0x6ACA37;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_HeaderTilt_Combine()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        jz      notMatch
+
+        jmp     CONTINUE_CAutomobile__PreRender_HeaderTilt_Combine
+
+        notMatch:
+        mov     ax, word ptr [esi + 0x22]
+        jmp     SKIP_CAutomobile__PreRender_HeaderTilt_Combine
+    }
+    // clang-format on
+}
+
+// Same giant dispatch function, a visibility/LOD push value; the continue target chains into the
+// native compare for a second, unrelated model (0x1D7), so ax is reloaded fresh for it
+// >>> 0x6ABCA1  cmp     ax, 0x214
+// >>> 0x6ABCA5  jz      0x6ABCB1
+//     0x6ABCA7  cmp     ax, 0x1D7
+#define HOOKPOS_CAutomobile__PreRender_VisibilityLOD_Combine  0x6ABCA1
+#define HOOKSIZE_CAutomobile__PreRender_VisibilityLOD_Combine 6
+static const DWORD CONTINUE_CAutomobile__PreRender_VisibilityLOD_Combine = 0x6ABCA7;
+static const DWORD SKIP_CAutomobile__PreRender_VisibilityLOD_Combine = 0x6ABCB1;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_VisibilityLOD_Combine()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        jnz     isMatch
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     CONTINUE_CAutomobile__PreRender_VisibilityLOD_Combine
+
+        isMatch:
+        jmp     SKIP_CAutomobile__PreRender_VisibilityLOD_Combine
+    }
+    // clang-format on
+}
+
+// Shared setup call, same shape as the idle vibration site: shares its destination with the
+// Tractor's own leg (out of scope, has its own branch)
+// >>> 0x6F3B9E  cmp     ax, 0x214
+// >>> 0x6F3BA2  jnz     0x6F3C8B
+//     0x6F3BA8  mov     eax, dword ptr [esi + 0x14]
+#define HOOKPOS_CAutomobile__SharedSetup_CombineExempt  0x6F3B9E
+#define HOOKSIZE_CAutomobile__SharedSetup_CombineExempt 10
+static const DWORD CONTINUE_CAutomobile__SharedSetup_CombineExempt = 0x6F3BA8;
+static const DWORD SKIP_CAutomobile__SharedSetup_CombineExempt = 0x6F3C8B;
+
+static void __declspec(naked) HOOK_CAutomobile__SharedSetup_CombineExempt()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        jz      notMatch
+
+        jmp     CONTINUE_CAutomobile__SharedSetup_CombineExempt
+
+        notMatch:
+        jmp     SKIP_CAutomobile__SharedSetup_CombineExempt
+    }
+    // clang-format on
+}
+
+// eax (not esi) holds the vehicle here
+// >>> 0x502222  cmp     word ptr [eax + 0x22], 0x214
+// >>> 0x502228  jnz     0x502236
+//     0x50222A  lea     ecx, [esp + 0xC]
+#define HOOKPOS_CAutomobile__UnknownDispatch_Combine  0x502222
+#define HOOKSIZE_CAutomobile__UnknownDispatch_Combine 8
+static const DWORD CONTINUE_CAutomobile__UnknownDispatch_Combine = 0x50222A;
+static const DWORD SKIP_CAutomobile__UnknownDispatch_Combine = 0x502236;
+
+static void __declspec(naked) HOOK_CAutomobile__UnknownDispatch_Combine()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, eax
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        jz      notMatch
+
+        jmp     CONTINUE_CAutomobile__UnknownDispatch_Combine
+
+        notMatch:
+        jmp     SKIP_CAutomobile__UnknownDispatch_Combine
+    }
+    // clang-format on
+}
+
+// Collision response category check; ecx holds the *other* entity in the collision pair here (same
+// shape as the RC Tiger equivalent hooked in a different branch), and the continue target
+// dereferences it again right after, so it has to survive the call
+// >>> 0x5DFA9C  cmp     word ptr [ecx + 0x22], 0x214
+// >>> 0x5DFAA2  jnz     0x5DFB1D
+//     0x5DFAA4  mov     ecx, dword ptr [ecx + 0x64C]
+#define HOOKPOS_CPhysical__CollisionResponseCategory_Combine  0x5DFA9C
+#define HOOKSIZE_CPhysical__CollisionResponseCategory_Combine 12
+static const DWORD CONTINUE_CPhysical__CollisionResponseCategory_Combine = 0x5DFAA4;
+static const DWORD SKIP_CPhysical__CollisionResponseCategory_Combine = 0x5DFB1D;
+
+static void __declspec(naked) HOOK_CPhysical__CollisionResponseCategory_Combine()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        pop     ecx
+        jz      notMatch
+
+        jmp     CONTINUE_CPhysical__CollisionResponseCategory_Combine
+
+        notMatch:
+        jmp     SKIP_CPhysical__CollisionResponseCategory_Combine
+    }
+    // clang-format on
+}
+
+// CAutomobile::ProcessControl, reaching ProcessHarvester (the crop/ped/object-clearing pass) at all
+// >>> 0x6B36C5  cmp     word ptr [esi + 0x22], 0x214
+// >>> 0x6B36CB  jnz     0x6B36D4
+//     0x6B36CD  mov     ecx, esi
+#define HOOKPOS_CAutomobile__ProcessControl_HarvesterDispatch  0x6B36C5
+#define HOOKSIZE_CAutomobile__ProcessControl_HarvesterDispatch 8
+static const DWORD CONTINUE_CAutomobile__ProcessControl_HarvesterDispatch = 0x6B36CD;
+static const DWORD SKIP_CAutomobile__ProcessControl_HarvesterDispatch = 0x6B36D4;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_HarvesterDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        jz      notMatch
+
+        jmp     CONTINUE_CAutomobile__ProcessControl_HarvesterDispatch
+
+        notMatch:
+        jmp     SKIP_CAutomobile__ProcessControl_HarvesterDispatch
+    }
+    // clang-format on
+}
+
+// Small dispatcher, thiscall on ecx; neither destination sets ecx up again before its own call, so
+// it's preserved across ours rather than assumed dead
+// >>> 0x6E1766  cmp     word ptr [ecx + 0x22], 0x214
+// >>> 0x6E176C  jnz     0x6E1757
+//     0x6E176E  mov     edx, dword ptr [esp + 0x4]
+#define HOOKPOS_CAutomobile__SmallDispatch_Combine  0x6E1766
+#define HOOKSIZE_CAutomobile__SmallDispatch_Combine 8
+static const DWORD CONTINUE_CAutomobile__SmallDispatch_Combine = 0x6E176E;
+static const DWORD SKIP_CAutomobile__SmallDispatch_Combine = 0x6E1757;
+
+static void __declspec(naked) HOOK_CAutomobile__SmallDispatch_Combine()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        call    IsCombineHarvesterOrClone
+        test    al, al
+        pop     ecx
+        jz      notMatch
+
+        jmp     CONTINUE_CAutomobile__SmallDispatch_Combine
+
+        notMatch:
+        jmp     SKIP_CAutomobile__SmallDispatch_Combine
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 //
 // CMultiplayerSA::InitHooks_Vehicles
 //
@@ -3713,6 +3976,14 @@ static void __declspec(naked) HOOK_CPlane__PreRender_AndromRampBlock()
 void CMultiplayerSA::InitHooks_Vehicles()
 {
     EZHookInstall(CDamageManager__ProgressDoorDamage);
+    EZHookInstall(CAutomobile__IdleVibration_CombineExempt);
+    EZHookInstall(CAutomobile__PreRender_HeaderTilt_Combine);
+    EZHookInstall(CAutomobile__PreRender_VisibilityLOD_Combine);
+    EZHookInstall(CAutomobile__SharedSetup_CombineExempt);
+    EZHookInstall(CAutomobile__UnknownDispatch_Combine);
+    EZHookInstall(CPhysical__CollisionResponseCategory_Combine);
+    EZHookInstall(CAutomobile__ProcessControl_HarvesterDispatch);
+    EZHookInstall(CAutomobile__SmallDispatch_Combine);
     EZHookInstall(CAutomobile__HydraulicControl);
     EZHookInstall(CAutomobile__ProcessControl_CementAngleReset);
     EZHookInstall(CAutomobile__ProcessControl_CementMiscGate);
