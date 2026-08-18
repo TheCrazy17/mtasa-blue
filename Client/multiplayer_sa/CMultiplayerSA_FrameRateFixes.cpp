@@ -839,8 +839,246 @@ void CMultiplayerSA::SetRapidVehicleStopFixEnabled(bool enabled)
     m_isRapidVehicleStopFixEnabled = enabled;
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// CBike::ProcessControl - stationary lean-target noise suppression
+//
+// Fix for #4658: bicycles wobble side to side at very high FPS while stationary with a
+// rider, but only bicycles, only standing still, and only with someone on board.
+//
+// The rider-balanced lean target divides this frame's lateral velocity delta ("raw", on
+// ST(1) at this point) by max(CTimer::ms_fTimeStep, epsilon) * a small constant, then
+// asin()'s and clamps the result. While actually moving, that delta is real acceleration
+// times the frame time, so dividing by the frame time cancels out and the result is
+// frame-rate independent, same as every other pow(k, ms_fTimeStep) blend in this function.
+// While stationary, the delta is instead contact-solver impulse noise from the wheels,
+// which does not shrink proportionally with the timestep - dividing constant-sized noise
+// by an ever-smaller frame time amplifies it by roughly 1/dt. At high FPS that amplified,
+// sign-alternating value saturates the lean clamp every frame and is copied straight into
+// CBike::CalculateLeanMatrix's LeanAngle, which is what actually renders the wobble.
+// Bicycles show it and motorcycles don't because bicycles' much lower handling mass makes
+// the same solver noise produce a proportionally larger velocity delta; there is no
+// bicycle-specific branch anywhere in this code path.
+//
+// An earlier version of this fix floored the divisor instead of zeroing the numerator.
+// That only reduces the gain on the noise - if the noise was already big enough to
+// saturate the +-fMaxLean clamp before the floor, dividing it by a bigger number still
+// leaves it clamped to the same value, so nothing changes. Zeroing the velocity delta
+// itself removes the noise at the source instead of just turning its gain down, so the
+// lean target relaxes toward the same rest pose the un-ridden/parked bike already decays
+// to elsewhere in this function, through the same frame-rate-independent pow(fDesLean, dt)
+// blend - no snapping, no clamp to fight.
+//
+// Gated on the same stationary velocity threshold the game itself already uses a few
+// instructions earlier in this function, so moving, motorcycles, wheelies and AI riders
+// are unaffected. Unlike that gate, the steer check here uses the same small epsilon as
+// the velocity checks instead of exact-zero equality: m_fSteerAngle relaxes to 0 through
+// its own per-frame decay (see the BarSteerAngle branch above) and can sit at a tiny but
+// not bit-exact-zero value for a noticeable stretch of real time while doing so - an
+// exact-equality gate leaves that whole stretch fully unmitigated, which traced logging
+// confirmed is exactly where the wobble was still showing up right after braking to a
+// stop, before the steer angle finished decaying to bit-exact zero.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6BBAF7 | D8 0D 84 39 86 00 | fmul dword ptr ds:[00863984h]  ; * small scale constant
+#define HOOKPOS_CBike__ProcessControl_StationaryLeanNoiseSuppress  0x6BBAF7
+#define HOOKSIZE_CBike__ProcessControl_StationaryLeanNoiseSuppress 6
+static const unsigned int RETURN_CBike__ProcessControl_StationaryLeanNoiseSuppress = 0x6BBAFD;
+
+static const float fStationaryLeanVelocityThreshold = 0.01f;
+
+// TEMP TRACE for #4658 - remove before commit
+static void*        g_bike4658Esi;
+static float         g_bike4658VelX;
+static float         g_bike4658VelY;
+static float         g_bike4658SteerAngle;
+static float         g_bike4658Raw;
+static float         g_bike4658Divisor;
+static int            g_bike4658Stationary;
+
+// TEMP TRACE for #4658 - remove before commit
+static void LogBike4658Frame()
+{
+    if (FILE* f = fopen("C:\\bike4658_trace.log", "a"))
+    {
+        fprintf(f, "[%lu] bike=%p velX=%.6f velY=%.6f steer=%.6f dt=%.6f raw=%.6f divisor=%.6f stationary=%d\n", GetTickCount32(), g_bike4658Esi,
+                g_bike4658VelX, g_bike4658VelY, g_bike4658SteerAngle, *(float*)0x00B7CB5C, g_bike4658Raw, g_bike4658Divisor, g_bike4658Stationary);
+        fclose(f);
+    }
+}
+
+static void __declspec(naked) HOOK_CBike__ProcessControl_StationaryLeanNoiseSuppress()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // esi = CBike*. ST(0) = max(ms_fTimeStep, epsilon) as computed by the unmodified
+        // code above; ST(1) = this frame's raw lateral velocity delta. Flush both to
+        // memory immediately so the FPU stack is empty (needed for the temporary trace
+        // call below - remove this flush/reload dance along with the trace when done).
+        fstp    dword ptr [g_bike4658Divisor]
+        fstp    dword ptr [g_bike4658Raw]
+
+        mov     g_bike4658Esi, esi
+        mov     eax, dword ptr [esi+0x44]
+        mov     g_bike4658VelX, eax
+        mov     eax, dword ptr [esi+0x48]
+        mov     g_bike4658VelY, eax
+        mov     eax, dword ptr [esi+0x494]
+        mov     g_bike4658SteerAngle, eax
+        mov     g_bike4658Stationary, 0
+
+        // Every check below is FPU-stack neutral (one push, one popping compare).
+        fld     dword ptr [esi+0x44]           // m_vecMoveSpeed.x
+        fabs
+        fcomp   fStationaryLeanVelocityThreshold
+        fnstsw  ax
+        sahf
+        jae     notStationary                  // |velX| >= threshold -> not stationary
+
+        fld     dword ptr [esi+0x48]           // m_vecMoveSpeed.y
+        fabs
+        fcomp   fStationaryLeanVelocityThreshold
+        fnstsw  ax
+        sahf
+        jae     notStationary                  // |velY| >= threshold -> not stationary
+
+        fld     dword ptr [esi+0x494]          // m_fSteerAngle
+        fabs
+        fcomp   fStationaryLeanVelocityThreshold
+        fnstsw  ax
+        sahf
+        jae     notStationary                  // |steerAngle| >= threshold -> not stationary
+
+        mov     g_bike4658Stationary, 1
+
+        notStationary:
+        pushad
+        call    LogBike4658Frame
+        popad
+
+        // Reconstruct ST(1) (raw: 0 if stationary, else the original) and ST(0) (the
+        // divisor, unchanged) - the division result will be 0 regardless of the divisor's
+        // value when stationary, since the divisor is never 0 (it is itself an epsilon-
+        // floored max()).
+        cmp     g_bike4658Stationary, 0
+        jz      useOriginalRaw
+        fldz
+        jmp     pushDivisor
+        useOriginalRaw:
+        fld     dword ptr [g_bike4658Raw]
+        pushDivisor:
+        fld     dword ptr [g_bike4658Divisor]
+
+        fmul    dword ptr ds:[00863984h]
+        jmp     RETURN_CBike__ProcessControl_StationaryLeanNoiseSuppress
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// CBmx::ProcessControl - stationary pedal-lean suppression
+//
+// Second part of the #4658 fix: bicycles (CBmx only - BMX/mountain bike/etc, not
+// motorcycles) run this on top of CBike::ProcessControl every frame. Whenever the pedal
+// animation still has more than 1% blend weight (i.e. for a little while after the rider
+// stops pedaling, while that animation is fading out), it unconditionally does
+// LeanAngle += sin(pedalPhase) * blendAmount * a small constant - with no check at all for
+// whether the bike is actually moving. CBike::ProcessControl (patched above) runs first
+// each frame and, while stationary, now settles LeanAngle back to ~0; this addition then
+// perturbs it again on top of that, every single frame, for as long as the pedal
+// animation's blend weight takes to fade out - which is why a little wobble remained at
+// specific points in the pedal cycle even after the main fix, most noticeably right after
+// stopping.
+//
+// Suppressed under the same stationary condition as the main fix, so the pedalling lean
+// while actually riding is untouched.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6BFB29 | D8 86 48 06 00 00 | fadd dword ptr [esi+648h]  ; LeanAngle += pedal lean
+#define HOOKPOS_CBmx__ProcessControl_StationaryPedalLeanSuppress  0x6BFB29
+#define HOOKSIZE_CBmx__ProcessControl_StationaryPedalLeanSuppress 6
+static const unsigned int RETURN_CBmx__ProcessControl_StationaryPedalLeanSuppress = 0x6BFB2F;
+
+// TEMP TRACE for #4658 - remove before commit
+static void*  g_bmx4658Esi;
+static float  g_bmx4658Addend;
+static float  g_bmx4658LeanAngleBefore;
+static int    g_bmx4658Stationary;
+
+// TEMP TRACE for #4658 - remove before commit
+static void LogBmx4658Frame()
+{
+    if (FILE* f = fopen("C:\\bike4658_trace.log", "a"))
+    {
+        fprintf(f, "[%lu] BMX bike=%p addend=%.6f leanBefore=%.6f stationary=%d\n", GetTickCount32(), g_bmx4658Esi, g_bmx4658Addend,
+                g_bmx4658LeanAngleBefore, g_bmx4658Stationary);
+        fclose(f);
+    }
+}
+
+static void __declspec(naked) HOOK_CBmx__ProcessControl_StationaryPedalLeanSuppress()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // esi = CBmx* (same base CBike layout). ST(0) = the pedal-lean addend about to be
+        // added to LeanAngle at [esi+0x648]. Flush it to memory so the FPU stack is empty
+        // for the temporary trace call below.
+        fstp    dword ptr [g_bmx4658Addend]
+
+        mov     g_bmx4658Esi, esi
+        mov     eax, dword ptr [esi+0x648]
+        mov     g_bmx4658LeanAngleBefore, eax
+        mov     g_bmx4658Stationary, 0
+
+        fld     dword ptr [esi+0x44]           // m_vecMoveSpeed.x
+        fabs
+        fcomp   fStationaryLeanVelocityThreshold
+        fnstsw  ax
+        sahf
+        jae     bmxNotStationary
+
+        fld     dword ptr [esi+0x48]           // m_vecMoveSpeed.y
+        fabs
+        fcomp   fStationaryLeanVelocityThreshold
+        fnstsw  ax
+        sahf
+        jae     bmxNotStationary
+
+        fld     dword ptr [esi+0x494]          // m_fSteerAngle
+        fabs
+        fcomp   fStationaryLeanVelocityThreshold
+        fnstsw  ax
+        sahf
+        jae     bmxNotStationary
+
+        mov     g_bmx4658Stationary, 1
+        fldz
+        fstp    dword ptr [g_bmx4658Addend]    // stationary: suppress the addend
+
+        bmxNotStationary:
+        pushad
+        call    LogBmx4658Frame
+        popad
+
+        fld     dword ptr [g_bmx4658Addend]
+        fadd    dword ptr [esi+0x648]
+        jmp     RETURN_CBmx__ProcessControl_StationaryPedalLeanSuppress
+    }
+    // clang-format on
+}
+
 void CMultiplayerSA::InitHooks_FrameRateFixes()
 {
+    EZHookInstall(CBike__ProcessControl_StationaryLeanNoiseSuppress);
+    EZHookInstall(CBmx__ProcessControl_StationaryPedalLeanSuppress);
+
     EZHookInstall(CTaskSimpleUseGun__SetMoveAnim);
     EZHookInstall(CCamera__Process);
     EZHookInstall(CHeli__ProcessFlyingCarStuff);
