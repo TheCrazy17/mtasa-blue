@@ -10,6 +10,7 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <cmath>
 #include <optional>
 #include <CMatrix.h>
 #include <game/CVehicle.h>
@@ -49,11 +50,30 @@ struct SNitroEmitterBlend
 // so id 5 = rwBLENDINVSRCALPHA
 static constexpr uint8_t FX_BLEND_ID_INVSRCALPHA = 5;
 
+// Below this brightness (0-255 luma), the additive blending's contribution is too faint to read
+// (pure black adds nothing to what's already on screen, so it's invisible rather than "black"),
+// so alpha blending is used instead to keep dark colours visible. Brighter colours keep the
+// effect's original additive blending, which is what gives the flame its glow - alpha blending
+// makes overlapping particles occlude each other instead of add, so it reads as flat smoke.
+static constexpr uint32_t FX_NITRO_DARK_LUMA_THRESHOLD = 40;
+
+// How strongly a keyframe's original brightness pushes the recoloured value towards white
+// (see ApplyNitroColor). 1.0 is a linear screen blend; higher values keep more of the flame in
+// the requested hue and only wash the brightest (hottest) keyframes towards white.
+static constexpr float FX_NITRO_HIGHLIGHT_GAMMA = 2.5f;
+
 static std::vector<SNitroColorBlock>   ms_NitroColorBlocks;
 static std::vector<SNitroEmitterBlend> ms_NitroEmitterBlends;
 static bool                            ms_bNitroColorChannelsCached = false;
 static CFxSystemSAInterface*           ms_pLastNitroFxSystem = nullptr;
 static std::optional<SColor>           ms_LastAppliedNitroColor;
+
+// Rec. 601 luma. Used only to decide whether a requested nitro colour is dark enough to need
+// alpha blending, not for the recolouring itself.
+static uint32_t GetNitroColorLuma(const SColor& color)
+{
+    return (77 * color.R + 151 * color.G + 28 * color.B) >> 8;
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -122,18 +142,21 @@ static void CacheNitroColorChannels(CFxSystemBPSAInterface* pBlueprint)
 // If `color` has no value, restores every cached "nitro" colour channel and the emitters'
 // blend modes to their original values (i.e. the game's default additive cyan effect).
 //
-// Otherwise, re-tints every cached channel using `color` and switches the emitters to
-// standard alpha blending, so dark colours (including black) remain visible instead of
-// fading out as the additive blending's contribution approaches zero. For R/G/B, rather
-// than multiplying the original (cyan) values by the requested colour - which would mix the
-// two hues together - the brightest of a block's original R/G/B values at each keyframe is
-// used as a brightness envelope, and every channel is recoloured from scratch using that
-// envelope. This allows any colour, including white, to fully replace the original hue.
-// Alpha and the randomisation ranges instead scale the original keyframes, preserving the
-// flame's fade animation.
+// Otherwise, re-tints every cached channel using `color`. For R/G/B, rather than multiplying
+// the original (cyan) values by the requested colour - which would mix the two hues together -
+// the brightest of a block's original R/G/B values at each keyframe is used as a brightness
+// envelope. Each keyframe is then screened towards white by that envelope instead of being
+// multiplied towards the requested colour, so the brightest (hottest) keyframes keep a white
+// core - like a real flame - instead of being flattened to a solid tint. Alpha and the
+// randomisation ranges instead scale the original keyframes, preserving the flame's fade
+// animation.
 //
-// The blend mode is shared by every nitro particle rendered in a frame, so vehicles using
-// the original colours share it whenever both kinds are on screen at once.
+// Only colours dark enough that additive blending would render them invisible switch the
+// emitters to standard alpha blending; every other colour keeps the effect's original additive
+// blending; so the flame keeps its glow instead of reading as flat smoke. The blend mode is
+// shared by every nitro particle rendered in a frame, so vehicles using the original colours
+// (or another colour on the other side of the threshold) share it whenever both are on screen
+// at once.
 //
 // Always derived from the cached originals, so it can be called repeatedly for different
 // vehicles without ever needing to restore the blueprint first.
@@ -141,8 +164,10 @@ static void CacheNitroColorChannels(CFxSystemBPSAInterface* pBlueprint)
 //////////////////////////////////////////////////////////////////////////////////////////
 static void ApplyNitroColor(const std::optional<SColor>& color)
 {
+    const bool bUseAlphaBlend = color.has_value() && GetNitroColorLuma(*color) < FX_NITRO_DARK_LUMA_THRESHOLD;
+
     for (auto& blend : ms_NitroEmitterBlends)
-        blend.pEmitterBP->m_nDstBlendId = color.has_value() ? FX_BLEND_ID_INVSRCALPHA : blend.nOriginalDstBlendId;
+        blend.pEmitterBP->m_nDstBlendId = bUseAlphaBlend ? FX_BLEND_ID_INVSRCALPHA : blend.nOriginalDstBlendId;
 
     for (auto& block : ms_NitroColorBlocks)
     {
@@ -167,6 +192,10 @@ static void ApplyNitroColor(const std::optional<SColor>& color)
             for (int component = 0; component < 3; ++component)
                 brightness = std::max(brightness, block.originalValues[component][0][keyframe]);
 
+            // How far this keyframe's recoloured R/G/B is screened towards white, 0 (stays at
+            // the requested hue) to 1 (goes fully white), driven by the original brightness.
+            const float screenAmount = std::pow(brightness / 255.0f, FX_NITRO_HIGHLIGHT_GAMMA);
+
             for (int component = 0; component < 4; ++component)
             {
                 for (int s = 0; s < block.nStride; ++s)
@@ -175,8 +204,13 @@ static void ApplyNitroColor(const std::optional<SColor>& color)
                     if (!pValues)
                         continue;
 
-                    const uint16_t source = (component < 3 && s == 0) ? brightness : block.originalValues[component][s][keyframe];
-                    pValues[keyframe] = (uint16_t)(source * components[component] / 255);
+                    if (component < 3 && s == 0)
+                        pValues[keyframe] = (uint16_t)(components[component] + (255 - components[component]) * screenAmount);
+                    else
+                    {
+                        const uint16_t source = block.originalValues[component][s][keyframe];
+                        pValues[keyframe] = (uint16_t)(source * components[component] / 255);
+                    }
                 }
             }
         }
