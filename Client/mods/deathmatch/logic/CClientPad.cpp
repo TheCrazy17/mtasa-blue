@@ -252,6 +252,17 @@ void CClientPad::DoPulse(CClientPed* pPed)
                 cs.m_bPedWalk = (m_fStates[16]) ? 255 : 0;  // Walk
 
                 cs.RightShoulder1 = (m_fStates[39]) ? 255 : 0;  // Aim Weapon
+
+                // Scoped weapons force the ped to a standstill while aiming, but the sprint
+                // control isn't cancelled alongside it, letting the player sprint at full speed
+                // while locked into the aim camera. Cancel sprint here so it matches the intended
+                // "aiming slows you down" tradeoff for these weapons.
+                if (cs.RightShoulder1 && cs.ButtonCross)
+                {
+                    const eWeaponType weaponType = pPed->GetCurrentWeaponType();
+                    if (weaponType == WEAPONTYPE_SNIPERRIFLE || weaponType == WEAPONTYPE_CAMERA)
+                        cs.ButtonCross = 0;
+                }
             }
             else
             {
