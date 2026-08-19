@@ -106,8 +106,12 @@ public:
     virtual void CalcScreenCoors(CVector* vecWorld, CVector* vecScreen) = 0;
 
     virtual void DrawString(int iLeft, int iTop, int iRight, int iBottom, unsigned long dwColor, const char* wszText, float fScaleX, float fScaleY,
-                            unsigned long ulFormat, ID3DXFont* pDXFont = NULL, bool bOutline = false) = 0;
+                            unsigned long ulFormat, ID3DXFont* pDXFont = NULL, bool bOutline = false, bool bAllowEmoji = true) = 0;
     virtual void DrawString(int iX, int iY, unsigned long dwColor, float fScale, const char* szText, ...) = 0;
+
+    // Returns the UTF-8 byte length of the emoji token (:shortcode: or a raw code point) at the end of
+    // szUtf8Text, or 0 if it doesn't end in one. Lets a text input delete a whole emoji in one backspace.
+    virtual unsigned int GetTrailingEmojiTokenLength(const char* szUtf8Text) = 0;
 
     virtual void DrawLine3D(const CVector& vecBegin, const CVector& vecEnd, unsigned long ulColor, float fWidth = 1.0f) = 0;
     virtual void DrawRectangle(float fX, float fY, float fWidth, float fHeight, unsigned long ulColor, bool bSubPixelPositioning = false) = 0;

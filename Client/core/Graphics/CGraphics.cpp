@@ -167,6 +167,7 @@ CGraphics::~CGraphics()
 
     SAFE_RELEASE(m_ProgressSpinnerTexture);
     SAFE_RELEASE(m_RectangleEdgeTexture);
+    m_EmojiManager.ReleaseTextures();
     SAFE_DELETE(m_pRenderItemManager);
     SAFE_DELETE(m_pTileBatcher);
     SAFE_DELETE(m_pLine3DBatcherPreGUI);
@@ -189,7 +190,7 @@ CGraphics::~CGraphics()
 }
 
 void CGraphics::DrawString(int uiLeft, int uiTop, int uiRight, int uiBottom, unsigned long ulColor, const char* szText, float fScaleX, float fScaleY,
-                           unsigned long ulFormat, LPD3DXFONT pDXFont, bool bOutline)
+                           unsigned long ulFormat, LPD3DXFONT pDXFont, bool bOutline, bool bAllowEmoji)
 {
     if (g_pCore->IsWindowMinimized())
         return;
@@ -208,6 +209,11 @@ void CGraphics::DrawString(int uiLeft, int uiTop, int uiRight, int uiBottom, uns
     // Check for a valid font
     if (pDXFont)
     {
+        // The emoji path manages its own per-run transforms, so it needs the rect in absolute
+        // (not pre-scale-divided) coordinates, unlike the plain DrawTextW path below.
+        RECT absoluteRect;
+        SetRect(&absoluteRect, uiLeft, uiTop, uiRight, uiBottom);
+
         // Prevent the rect from getting scaled along with the size
         uiLeft = unsigned int((float)uiLeft * (1.0f / fScaleX));
         uiTop = unsigned int((float)uiTop * (1.0f / fScaleY));
@@ -229,9 +235,16 @@ void CGraphics::DrawString(int uiLeft, int uiTop, int uiRight, int uiBottom, uns
         // Convert to UTF16
         std::wstring strText = MbUTF8ToUTF16(szText);
 
-        if (bOutline)
-            DrawStringOutline(rect, ulColor, strText.c_str(), ulFormat, pDXFont);
-        pDXFont->DrawTextW(m_pDXSprite, strText.c_str(), -1, &rect, ulFormat, ulColor);
+        if (bAllowEmoji && !(ulFormat & DT_WORDBREAK) && m_EmojiManager.ContainsTrigger(strText))
+        {
+            DrawStringWithEmoji(absoluteRect, ulColor, strText, fScaleX, fScaleY, ulFormat, pDXFont, bOutline);
+        }
+        else
+        {
+            if (bOutline)
+                DrawStringOutline(rect, ulColor, strText.c_str(), ulFormat, pDXFont);
+            pDXFont->DrawTextW(m_pDXSprite, strText.c_str(), -1, &rect, ulFormat, ulColor);
+        }
         EndDrawBatch();
     }
 }
@@ -245,6 +258,22 @@ void CGraphics::DrawString(int iX, int iY, unsigned long dwColor, float fScale, 
     va_end(ap);
 
     DrawString(iX, iY, iX, iY, dwColor, szBuffer, fScale, fScale, DT_NOCLIP);
+}
+
+unsigned int CGraphics::GetTrailingEmojiTokenLength(const char* szUtf8Text)
+{
+    if (!szUtf8Text)
+        return 0;
+
+    std::wstring wstrText = MbUTF8ToUTF16(szUtf8Text);
+
+    uint uiUnitLength = 0;
+    if (!m_EmojiManager.TryMatchAtEnd(wstrText, uiUnitLength))
+        return 0;
+
+    // Round-trip just the token back to UTF-8 to get its exact byte length in the original string
+    std::wstring wstrToken = wstrText.substr(wstrText.size() - uiUnitLength);
+    return (unsigned int)UTF16ToMbUTF8(wstrToken).size();
 }
 
 // Slow
@@ -292,6 +321,96 @@ void CGraphics::DrawStringOutline(const RECT& rect, unsigned long ulColor, const
             int  iOffsetY = y - (uiKernelSizeY - 1) / 2;
             RECT useRect = {rect.left + iOffsetX, rect.top + iOffsetY, rect.right + iOffsetX, rect.bottom + iOffsetY};
             pDXFont->DrawTextW(m_pDXSprite, szText, -1, &useRect, ulFormat, uiUseColor);
+        }
+    }
+}
+
+// Immediate-mode equivalent of DrawColorCodedTextLine's emoji handling, used by the single line DrawString path
+// (e.g. chatbox and nametags), which draws directly instead of going through the deferred queue.
+void CGraphics::DrawStringWithEmoji(const RECT& rect, unsigned long ulColor, const std::wstring& wstrText, float fScaleX, float fScaleY,
+                                    unsigned long ulFormat, ID3DXFont* pDXFont, bool bOutline)
+{
+    struct SRun
+    {
+        std::wstring  wstrText;
+        CTextureItem* pEmojiTexture;
+    };
+
+    std::vector<SRun> runList;
+
+    const wchar_t* wszPos = wstrText.c_str();
+    const wchar_t* wszRunStart = wszPos;
+    while (*wszPos != L'\0')
+    {
+        uint          uiEmojiLength = 0;
+        CTextureItem* pEmojiTexture = m_EmojiManager.TryMatch(wszPos, uiEmojiLength);
+        if (pEmojiTexture)
+        {
+            if (wszPos != wszRunStart)
+                runList.push_back({std::wstring(wszRunStart, wszPos - wszRunStart), nullptr});
+            runList.push_back({L"", pEmojiTexture});
+            wszPos += uiEmojiLength;
+            wszRunStart = wszPos;
+        }
+        else
+        {
+            wszPos++;
+        }
+    }
+    if (wszPos != wszRunStart)
+        runList.push_back({std::wstring(wszRunStart, wszPos - wszRunStart), nullptr});
+
+    const float fEmojiSize = GetDXFontHeight(fScaleY, pDXFont);
+
+    // Measure to resolve DT_RIGHT/DT_CENTER/DT_BOTTOM/DT_VCENTER, same as a single DT_SINGLELINE run
+    float fTotalWidth = 0;
+    for (const SRun& run : runList)
+        fTotalWidth += run.pEmojiTexture ? fEmojiSize : GetDXTextExtentW(run.wstrText.c_str(), fScaleX, pDXFont);
+
+    float fX;
+    if (ulFormat & DT_RIGHT)
+        fX = (float)rect.right - fTotalWidth;
+    else if (ulFormat & DT_CENTER)
+        fX = ((float)rect.right + (float)rect.left - fTotalWidth) * 0.5f;
+    else
+        fX = (float)rect.left;
+
+    float fY;
+    if (ulFormat & DT_BOTTOM)
+        fY = (float)rect.bottom - fEmojiSize;
+    else if (ulFormat & DT_VCENTER)
+        fY = ((float)rect.bottom + (float)rect.top - fEmojiSize) * 0.5f;
+    else
+        fY = (float)rect.top;
+
+    D3DXVECTOR2 textScaling(fScaleX, fScaleY);
+
+    for (const SRun& run : runList)
+    {
+        if (run.pEmojiTexture)
+        {
+            const D3DXVECTOR2 scaling(fEmojiSize / run.pEmojiTexture->m_uiSurfaceSizeX, fEmojiSize / run.pEmojiTexture->m_uiSurfaceSizeY);
+            const D3DXVECTOR2 position(fX, fY);
+            D3DXMATRIX         matrix;
+            D3DXMatrixTransformation2D(&matrix, NULL, 0.0f, &scaling, NULL, 0.0f, &position);
+            m_pDXSprite->SetTransform(&matrix);
+            m_pDXSprite->Draw((IDirect3DTexture9*)run.pEmojiTexture->m_pD3DTexture, NULL, NULL, NULL, SColorARGB(SColor(ulColor).A, 255, 255, 255));
+
+            fX += fEmojiSize;
+        }
+        else
+        {
+            RECT runRect = {(LONG)(fX / fScaleX), (LONG)(fY / fScaleY), (LONG)(fX / fScaleX), (LONG)(fY / fScaleY)};
+
+            D3DXMATRIX matrix;
+            D3DXMatrixTransformation2D(&matrix, NULL, 0.0f, &textScaling, NULL, 0.0f, NULL);
+            m_pDXSprite->SetTransform(&matrix);
+
+            if (bOutline)
+                DrawStringOutline(runRect, ulColor, run.wstrText.c_str(), DT_NOCLIP, pDXFont);
+            pDXFont->DrawTextW(m_pDXSprite, run.wstrText.c_str(), -1, &runRect, DT_NOCLIP, ulColor);
+
+            fX += GetDXTextExtentW(run.wstrText.c_str(), fScaleX, pDXFont);
         }
     }
 }
@@ -1245,10 +1364,17 @@ void CGraphics::DrawStringQueued(float fLeft, float fTop, float fRight, float fB
     fTop = m_pAspectRatioConverter->ConvertPositionForAspectRatio(fTop);
     fBottom = m_pAspectRatioConverter->ConvertPositionForAspectRatio(fBottom);
 
-    if (!bColorCoded)
+    // Convert once; used by both the simple path and the per-line path below
+    std::wstring wstrText = MbUTF8ToUTF16(szText);
+
+    // Emoji sections need the same per-line splitting as color codes. Word-wrapped text keeps the
+    // native GDI layout instead, since manual line splitting only understands explicit '\n' breaks.
+    bool bHasEmoji = !(ulFormat & DT_WORDBREAK) && m_EmojiManager.ContainsTrigger(wstrText);
+
+    if (!bColorCoded && !bHasEmoji)
     {
         //
-        // Simple case without color coding
+        // Simple case without color coding or emoji
         //
 
         if (fScaleX != 1.0f || fScaleY != 1.0f)
@@ -1286,8 +1412,7 @@ void CGraphics::DrawStringQueued(float fLeft, float fTop, float fRight, float fB
         Item.Text.fRotationCenterX = fRotationCenterX;
         Item.Text.fRotationCenterY = fRotationCenterY;
 
-        // Convert to wstring
-        Item.wstrText = MbUTF8ToUTF16(szText);
+        Item.wstrText = std::move(wstrText);
 
         // Keep font valid while in the queue incase it's a custom font
         AddQueueRef(Item.Text.pDXFont);
@@ -1299,11 +1424,8 @@ void CGraphics::DrawStringQueued(float fLeft, float fTop, float fRight, float fB
     else
     {
         //
-        // Complex case with color coding
+        // Complex case: color coding and/or inline emoji, split per line
         //
-
-        // Do everything as a wide string from this point
-        std::wstring wstrText = MbUTF8ToUTF16(szText);
 
         // Break into lines
         CSplitStringW splitLines(wstrText, L"\n");
@@ -1327,7 +1449,7 @@ void CGraphics::DrawStringQueued(float fLeft, float fTop, float fRight, float fB
         for (uint i = 0; i < splitLines.size(); i++)
         {
             DrawColorCodedTextLine(fLeft, fRight, fY, currentColor, splitLines[i], fScaleX, fScaleY, ulFormat, pDXFont, bPostGUI, bSubPixelPositioning,
-                                   fRotation, fRotationCenterX, fRotationCenterY);
+                                   fRotation, fRotationCenterX, fRotationCenterY, bColorCoded);
             fY += fLineHeight;
         }
     }
@@ -1335,20 +1457,56 @@ void CGraphics::DrawStringQueued(float fLeft, float fTop, float fRight, float fB
 
 void CGraphics::DrawColorCodedTextLine(float fLeft, float fRight, float fY, SColor& currentColor, const wchar_t* wszText, float fScaleX, float fScaleY,
                                        unsigned long ulFormat, ID3DXFont* pDXFont, bool bPostGUI, bool bSubPixelPositioning, float fRotation,
-                                       float fRotationCenterX, float fRotationCenterY)
+                                       float fRotationCenterX, float fRotationCenterY, bool bColorCoded)
 {
     struct STextSection
     {
-        std::wstring wstrText;
-        float        fWidth;
-        SColor       color;
+        std::wstring  wstrText;
+        float         fWidth;
+        SColor        color;
+        CTextureItem* pEmojiTexture;            // Set for an inline emoji icon instead of a text run
     };
 
     std::list<STextSection> sectionList;
 
-    // Break line into color sections
+    // Inline emoji icons are drawn as a square matching the font's line height
+    const float fEmojiSize = GetDXFontHeight(fScaleY, pDXFont);
+
+    // Break line into color and emoji sections
     float          fTotalWidth = 0;
     const wchar_t* wszSectionPos = wszText;
+
+    auto AddTextSection = [&](const wchar_t* wszStart, unsigned int uiLength, SColor color)
+    {
+        if (uiLength == 0)
+            return;
+
+        if (!sectionList.empty() && !sectionList.back().pEmojiTexture && sectionList.back().color == color)
+        {
+            // Append to last section if it is text and the color has not changed
+            std::wstring strExtraText = std::wstring(wszStart, uiLength);
+            float        fExtraWidth = GetDXTextExtentW(strExtraText.c_str(), fScaleX, pDXFont);
+
+            STextSection& section = sectionList.back();
+            section.wstrText += strExtraText;
+            section.fWidth += fExtraWidth;
+            dassert(section.color == color);
+
+            fTotalWidth += fExtraWidth;
+        }
+        else
+        {
+            sectionList.push_back(STextSection());
+            STextSection& section = sectionList.back();
+            section.wstrText = std::wstring(wszStart, uiLength);
+            section.fWidth = GetDXTextExtentW(section.wstrText.c_str(), fScaleX, pDXFont);
+            section.color = color;
+            section.pEmojiTexture = nullptr;
+
+            fTotalWidth += section.fWidth;
+        }
+    };
+
     do
     {
         unsigned int   uiSeekPos = 0;
@@ -1356,7 +1514,7 @@ void CGraphics::DrawColorCodedTextLine(float fLeft, float fRight, float fY, SCol
         SColor         nextColor = currentColor;
         while (*wszSectionPos != '\0')  // find end of this section
         {
-            if (IsColorCodeW(wszSectionPos))
+            if (bColorCoded && IsColorCodeW(wszSectionPos))
             {
                 unsigned long ulColor = 0;
                 swscanf(wszSectionPos + 1, L"%06x", &ulColor);
@@ -1364,38 +1522,31 @@ void CGraphics::DrawColorCodedTextLine(float fLeft, float fRight, float fY, SCol
                 wszSectionPos += 7;
                 break;
             }
+
+            uint          uiEmojiLength = 0;
+            CTextureItem* pEmojiTexture = m_EmojiManager.TryMatch(wszSectionPos, uiEmojiLength);
+            if (pEmojiTexture)
+            {
+                AddTextSection(wszSectionStart, uiSeekPos, currentColor);
+
+                sectionList.push_back(STextSection());
+                STextSection& section = sectionList.back();
+                section.fWidth = fEmojiSize;
+                section.color = currentColor;
+                section.pEmojiTexture = pEmojiTexture;
+                fTotalWidth += fEmojiSize;
+
+                wszSectionPos += uiEmojiLength;
+                wszSectionStart = wszSectionPos;
+                uiSeekPos = 0;
+                continue;
+            }
+
             wszSectionPos++;
             uiSeekPos++;
         }
 
-        if (uiSeekPos > 0)
-        {
-            // Add section
-            if (!sectionList.empty() && sectionList.back().color == currentColor)
-            {
-                // Append to last section if color has not changed
-                std::wstring strExtraText = std::wstring(wszSectionStart, uiSeekPos);
-                float        fExtraWidth = GetDXTextExtentW(strExtraText.c_str(), fScaleX, pDXFont);
-
-                STextSection& section = sectionList.back();
-                section.wstrText += strExtraText;
-                section.fWidth += fExtraWidth;
-                dassert(section.color == currentColor);
-
-                fTotalWidth += fExtraWidth;
-            }
-            else
-            {
-                // Add a new section
-                sectionList.push_back(STextSection());
-                STextSection& section = sectionList.back();
-                section.wstrText = std::wstring(wszSectionStart, uiSeekPos);
-                section.fWidth = GetDXTextExtentW(section.wstrText.c_str(), fScaleX, pDXFont);
-                section.color = currentColor;
-
-                fTotalWidth += section.fWidth;
-            }
-        }
+        AddTextSection(wszSectionStart, uiSeekPos, currentColor);
 
         nextColor.A = currentColor.A;
         currentColor = nextColor;
@@ -1410,10 +1561,28 @@ void CGraphics::DrawColorCodedTextLine(float fLeft, float fRight, float fY, SCol
     else
         fX = fLeft;  // DT_LEFT
 
-    // Draw all the color sections
+    // Draw all the color and emoji sections
     for (std::list<STextSection>::const_iterator iter = sectionList.begin(); iter != sectionList.end(); ++iter)
     {
         const STextSection& section = *iter;
+
+        if (section.pEmojiTexture)
+        {
+            float fIconLeft = fX;
+            float fIconTop = fY;
+
+            if (!bSubPixelPositioning)
+            {
+                fIconLeft = floor(fIconLeft);
+                fIconTop = floor(fIconTop);
+            }
+
+            DrawTextureQueued(fIconLeft, fIconTop, fEmojiSize, fEmojiSize, 0, 0, 1, 1, true, section.pEmojiTexture, fRotation, 0, 0,
+                              SColorARGB(section.color.A, 255, 255, 255), bPostGUI);
+
+            fX += section.fWidth;
+            continue;
+        }
 
         float fLeft = fX;
         float fTop = fY;
@@ -1698,6 +1867,7 @@ void CGraphics::OnDeviceCreate(IDirect3DDevice9* pDevice)
         GetRenderItemManager()->CreateTexture(CalcMTASAPath("MTA\\cgui\\images\\busy_spinner.png"), NULL, false, -1, -1, RFORMAT_DXT3, TADDRESS_CLAMP);
     CPixels rectEdge = {CBuffer(g_rectEdgePixelsData, sizeof(g_rectEdgePixelsData))};
     m_RectangleEdgeTexture = GetRenderItemManager()->CreateTexture(nullptr, &rectEdge, false, 8, 8, RFORMAT_ARGB, TADDRESS_CLAMP);
+    m_EmojiManager.LoadTextures(GetRenderItemManager());
     m_pAspectRatioConverter->Init(GetViewportHeight());
 }
 

@@ -35,7 +35,38 @@
 #define BAD_WCHAR ((wchar_t)0xfffd)
 #define BAD_CHAR  '?'
 
-int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len)
+// wchar_t is 16-bit on Windows, so code points above U+FFFF must be split into a UTF-16 surrogate pair.
+static inline void utf8_push_utf16(std::wstring& wstr, char32_t wc)
+{
+    if (wc >= 0x10000)
+    {
+        char32_t v = wc - 0x10000;
+        wstr.push_back((wchar_t)(0xd800 + (v >> 10)));
+        wstr.push_back((wchar_t)(0xdc00 + (v & 0x3ff)));
+    }
+    else
+    {
+        wstr.push_back((wchar_t)wc);
+    }
+}
+
+// Combines a UTF-16 surrogate pair starting at wstr[i] into a single code point, advancing i if a pair was consumed.
+static inline char32_t utf8_combine_utf16(const std::wstring& wstr, unsigned int& i)
+{
+    wchar_t high = wstr[i];
+    if (high >= 0xd800 && high <= 0xdbff && i + 1 < wstr.size())
+    {
+        wchar_t low = wstr[i + 1];
+        if (low >= 0xdc00 && low <= 0xdfff)
+        {
+            ++i;
+            return 0x10000 + (((char32_t)high - 0xd800) << 10) + (low - 0xdc00);
+        }
+    }
+    return high;
+}
+
+int utf8_mbtowc(char32_t* pwc, const unsigned char* src, int src_len)
 {
     if (!pwc)
         return 0;
@@ -57,7 +88,7 @@ int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len)
             return RET_TOOFEW(0);
         if (!((src[1] ^ 0x80) < 0x40))
             return RET_ILSEQ;
-        *pwc = ((wchar_t)(c & 0x1f) << 6) | (wchar_t)(src[1] ^ 0x80);
+        *pwc = ((char32_t)(c & 0x1f) << 6) | (char32_t)(src[1] ^ 0x80);
         return 2;
     }
     else if (c < 0xf0)
@@ -66,7 +97,7 @@ int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len)
             return RET_TOOFEW(0);
         if (!((src[1] ^ 0x80) < 0x40 && (src[2] ^ 0x80) < 0x40 && (c >= 0xe1 || src[1] >= 0xa0)))
             return RET_ILSEQ;
-        *pwc = ((wchar_t)(c & 0x0f) << 12) | ((wchar_t)(src[1] ^ 0x80) << 6) | (wchar_t)(src[2] ^ 0x80);
+        *pwc = ((char32_t)(c & 0x0f) << 12) | ((char32_t)(src[1] ^ 0x80) << 6) | (char32_t)(src[2] ^ 0x80);
         return 3;
     }
     else if (c < 0xf8)
@@ -75,7 +106,7 @@ int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len)
             return RET_TOOFEW(0);
         if (!((src[1] ^ 0x80) < 0x40 && (src[2] ^ 0x80) < 0x40 && (src[3] ^ 0x80) < 0x40 && (c >= 0xf1 || src[1] >= 0x90)))
             return RET_ILSEQ;
-        *pwc = ((wchar_t)(c & 0x07) << 18) | ((wchar_t)(src[1] ^ 0x80) << 12) | ((wchar_t)(src[2] ^ 0x80) << 6) | (wchar_t)(src[3] ^ 0x80);
+        *pwc = ((char32_t)(c & 0x07) << 18) | ((char32_t)(src[1] ^ 0x80) << 12) | ((char32_t)(src[2] ^ 0x80) << 6) | (char32_t)(src[3] ^ 0x80);
         return 4;
     }
     else if (c < 0xfc)
@@ -84,8 +115,8 @@ int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len)
             return RET_TOOFEW(0);
         if (!((src[1] ^ 0x80) < 0x40 && (src[2] ^ 0x80) < 0x40 && (src[3] ^ 0x80) < 0x40 && (src[4] ^ 0x80) < 0x40 && (c >= 0xf9 || src[1] >= 0x88)))
             return RET_ILSEQ;
-        *pwc = ((wchar_t)(c & 0x03) << 24) | ((wchar_t)(src[1] ^ 0x80) << 18) | ((wchar_t)(src[2] ^ 0x80) << 12) | ((wchar_t)(src[3] ^ 0x80) << 6) |
-               (wchar_t)(src[4] ^ 0x80);
+        *pwc = ((char32_t)(c & 0x03) << 24) | ((char32_t)(src[1] ^ 0x80) << 18) | ((char32_t)(src[2] ^ 0x80) << 12) | ((char32_t)(src[3] ^ 0x80) << 6) |
+               (char32_t)(src[4] ^ 0x80);
         return 5;
     }
     else if (c < 0xfe)
@@ -95,15 +126,15 @@ int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len)
         if (!((src[1] ^ 0x80) < 0x40 && (src[2] ^ 0x80) < 0x40 && (src[3] ^ 0x80) < 0x40 && (src[4] ^ 0x80) < 0x40 && (src[5] ^ 0x80) < 0x40 &&
               (c >= 0xfd || src[1] >= 0x84)))
             return RET_ILSEQ;
-        *pwc = ((wchar_t)(c & 0x01) << 30) | ((wchar_t)(src[1] ^ 0x80) << 24) | ((wchar_t)(src[2] ^ 0x80) << 18) | ((wchar_t)(src[3] ^ 0x80) << 12) |
-               ((wchar_t)(src[4] ^ 0x80) << 6) | (wchar_t)(src[5] ^ 0x80);
+        *pwc = ((char32_t)(c & 0x01) << 30) | ((char32_t)(src[1] ^ 0x80) << 24) | ((char32_t)(src[2] ^ 0x80) << 18) | ((char32_t)(src[3] ^ 0x80) << 12) |
+               ((char32_t)(src[4] ^ 0x80) << 6) | (char32_t)(src[5] ^ 0x80);
         return 6;
     }
     else
         return RET_ILSEQ;
 }
 
-int utf8_wctomb(unsigned char* dest, wchar_t wc, int dest_size)
+int utf8_wctomb(unsigned char* dest, char32_t wc, int dest_size)
 {
     if (!dest)
         return 0;
@@ -161,7 +192,7 @@ int utf8_wctomb(unsigned char* dest, wchar_t wc, int dest_size)
 std::wstring utf8_mbstowcs_orig(const std::string& str)
 {
     std::wstring wstr;
-    wchar_t      wc;
+    char32_t     wc;
     unsigned int sn = 0;
     int          un = 0;
 
@@ -169,7 +200,7 @@ std::wstring utf8_mbstowcs_orig(const std::string& str)
 
     while (sn < str.length() && *s != 0 && (un = utf8_mbtowc(&wc, s, str.length() - sn)) > 0)
     {
-        wstr.push_back(wc);
+        utf8_push_utf16(wstr, wc);
         s += un;
         sn += un;
     }
@@ -184,7 +215,8 @@ std::string utf8_wcstombs_orig(const std::wstring& wstr)
 
     for (unsigned int i = 0; i < wstr.size(); ++i)
     {
-        un = utf8_wctomb((unsigned char*)utf8, wstr[i], 6);
+        char32_t wc = utf8_combine_utf16(wstr, i);
+        un = utf8_wctomb((unsigned char*)utf8, wc, 6);
         if (un > 0)
             str.append(utf8, un);
     }
@@ -210,13 +242,22 @@ std::wstring utf8_mbstowcs(const std::string& str)
 
         wchar_t*     buffer = (wchar_t*)alloca(cBytes);
         wchar_t*     ptr = buffer;
-        wchar_t      wc;
+        char32_t     wc;
         unsigned int sn = 0;
         int          un = 0;
 
         while (sn < length && *s != 0 && (un = utf8_mbtowc(&wc, s, length - sn)) > 0)
         {
-            *ptr++ = wc;
+            if (wc >= 0x10000)
+            {
+                char32_t v = wc - 0x10000;
+                *ptr++ = (wchar_t)(0xd800 + (v >> 10));
+                *ptr++ = (wchar_t)(0xdc00 + (v & 0x3ff));
+            }
+            else
+            {
+                *ptr++ = (wchar_t)wc;
+            }
             s += un;
             sn += un;
         }
@@ -227,13 +268,13 @@ std::wstring utf8_mbstowcs(const std::string& str)
     {
         // Slower but any size
         std::wstring wstr;
-        wchar_t      wc;
+        char32_t     wc;
         unsigned int sn = 0;
         int          un = 0;
 
         while (sn < length && *s != 0 && (un = utf8_mbtowc(&wc, s, length - sn)) > 0)
         {
-            wstr.push_back(wc);
+            utf8_push_utf16(wstr, wc);
             s += un;
             sn += un;
         }
@@ -254,7 +295,8 @@ std::string utf8_wcstombs(const std::wstring& wstr)
         char*        ptr = buffer;
         for (unsigned int i = 0; i < size; ++i)
         {
-            ptr += utf8_wctomb((unsigned char*)ptr, wstr[i], 6);
+            char32_t wc = utf8_combine_utf16(wstr, i);
+            ptr += utf8_wctomb((unsigned char*)ptr, wc, 6);
         }
         size_t usedsize = ptr - buffer;
         return std::string(buffer, usedsize);
@@ -267,7 +309,8 @@ std::string utf8_wcstombs(const std::wstring& wstr)
 
         for (unsigned int i = 0; i < size; ++i)
         {
-            int un = utf8_wctomb((unsigned char*)utf8, wstr[i], 6);
+            char32_t wc = utf8_combine_utf16(wstr, i);
+            int      un = utf8_wctomb((unsigned char*)utf8, wc, 6);
             if (un > 0)
                 str.append(utf8, un);
         }

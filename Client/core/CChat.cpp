@@ -634,10 +634,21 @@ bool CChat::CharacterKeyHandler(CGUIKeyEventArgs KeyboardArgs)
         {
             if (m_strInputText.size() > 0)
             {
-                // Convert our string to UTF8 before resizing, then back to ANSI.
-                std::wstring strText = MbUTF8ToUTF16(m_strInputText);
-                strText.resize(strText.size() - 1);
-                SetInputText(UTF16ToMbUTF8(strText).c_str());
+                // If the input ends in a whole emoji token (:shortcode: or a pasted-in emoji), delete it
+                // as one unit instead of unraveling it one character at a time.
+                unsigned int uiEmojiByteLength = g_pCore->GetGraphics()->GetTrailingEmojiTokenLength(m_strInputText.c_str());
+                if (uiEmojiByteLength > 0)
+                {
+                    m_strInputText.resize(m_strInputText.size() - uiEmojiByteLength);
+                    SetInputText(m_strInputText.c_str());
+                }
+                else
+                {
+                    // Convert our string to UTF8 before resizing, then back to ANSI.
+                    std::wstring strText = MbUTF8ToUTF16(m_strInputText);
+                    strText.resize(strText.size() - 1);
+                    SetInputText(UTF16ToMbUTF8(strText).c_str());
+                }
             }
             break;
         }

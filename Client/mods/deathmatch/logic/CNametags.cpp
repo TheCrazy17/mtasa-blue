@@ -276,9 +276,11 @@ void CNametags::DrawTagForPlayer(CClientPlayer* pPlayer, unsigned char ucAlpha)
         // Draw shadow first
         int iScreenPosX = static_cast<int>(vecScreenPosition.fX);
         int iScreenPosY = static_cast<int>(vecScreenPosition.fY);
+        // Nicknames are shown as-is, without emoji substitution: a player's name shouldn't silently turn into an icon
         pGraphics->DrawString(iScreenPosX + 1, iScreenPosY + 1, iScreenPosX + 1, iScreenPosY + 1, COLOR_ARGB(255, 0, 0, 0), szNick, 1.0f, 1.0f,
-                              DT_NOCLIP | DT_CENTER);
-        pGraphics->DrawString(iScreenPosX, iScreenPosY, iScreenPosX, iScreenPosY, COLOR_ARGB(255, ucR, ucG, ucB), szNick, 1.0f, 1.0f, DT_NOCLIP | DT_CENTER);
+                              DT_NOCLIP | DT_CENTER, nullptr, false, false);
+        pGraphics->DrawString(iScreenPosX, iScreenPosY, iScreenPosX, iScreenPosY, COLOR_ARGB(255, ucR, ucG, ucB), szNick, 1.0f, 1.0f, DT_NOCLIP | DT_CENTER,
+                              nullptr, false, false);
 
         // We need to draw health tags?
         if (m_bDrawHealth)

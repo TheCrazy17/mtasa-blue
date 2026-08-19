@@ -25,9 +25,9 @@
 
 #include <string>
 
-int utf8_mbtowc(wchar_t* pwc, const unsigned char* src, int src_len);
+int utf8_mbtowc(char32_t* pwc, const unsigned char* src, int src_len);
 
-int utf8_wctomb(unsigned char* dest, wchar_t wc, int dest_size);
+int utf8_wctomb(unsigned char* dest, char32_t wc, int dest_size);
 
 //////////////////////////////////////////////////
 //

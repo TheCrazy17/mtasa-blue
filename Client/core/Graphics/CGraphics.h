@@ -18,6 +18,7 @@ class CGraphics;
 #include "CGUI.h"
 #include "CSingleton.h"
 #include "CRenderItemManager.h"
+#include "CEmojiManager.h"
 
 #define DUMMY_PROGRESS_INITIAL_DELAY      1000  // Game stall time before spinner is displayed
 #define DUMMY_PROGRESS_MIN_DISPLAY_TIME   1000  // Minimum time spinner is drawn (to prevent flicker)
@@ -83,8 +84,9 @@ public:
 
     // DirectX drawing functions
     void DrawString(int iLeft, int iTop, int iRight, int iBottom, unsigned long dwColor, const char* wszText, float fScaleX, float fScaleY,
-                    unsigned long ulFormat, ID3DXFont* pDXFont = NULL, bool bOutline = false);
+                    unsigned long ulFormat, ID3DXFont* pDXFont = NULL, bool bOutline = false, bool bAllowEmoji = true);
     void DrawString(int iX, int iY, unsigned long dwColor, float fScale, const char* szText, ...);
+    unsigned int GetTrailingEmojiTokenLength(const char* szUtf8Text);
     void DrawLine3D(const CVector& vecBegin, const CVector& vecEnd, unsigned long ulColor, float fWidth = 1.0f);
     void DrawRectangle(float fX, float fY, float fWidth, float fHeight, unsigned long ulColor, bool bSubPixelPositioning = false);
     void DrawStringOutline(const RECT& rect, unsigned long ulColor, const wchar_t* szText, unsigned long ulFormat, LPD3DXFONT pDXFont);
@@ -221,7 +223,9 @@ private:
     void       CheckModes(EDrawModeType newDrawMode, EBlendModeType newBlendMode = EBlendMode::NONE);
     void       DrawColorCodedTextLine(float fLeft, float fRight, float fY, SColor& currentColor, const wchar_t* wszText, float fScaleX, float fScaleY,
                                       unsigned long ulFormat, ID3DXFont* pDXFont, bool bPostGUI, bool bSubPixelPositioning, float fRotation, float fRotationCenterX,
-                                      float fRotationCenterY);
+                                      float fRotationCenterY, bool bColorCoded);
+    void       DrawStringWithEmoji(const RECT& rect, unsigned long ulColor, const std::wstring& wstrText, float fScaleX, float fScaleY, unsigned long ulFormat,
+                                   ID3DXFont* pDXFont, bool bOutline);
     int        GetTrailingSpacesWidth(ID3DXFont* pDXFont, WString& strText);
 
     CLocalGUI* m_pGUI;
@@ -400,6 +404,7 @@ private:
     CRenderTargetItem*                      m_pTempBackBufferData = nullptr;
     CTextureItem*                           m_ProgressSpinnerTexture = nullptr;
     CTextureItem*                           m_RectangleEdgeTexture = nullptr;
+    CEmojiManager                           m_EmojiManager;
     SString                                 m_strProgressMessage;
     CElapsedTime                            m_FirstDrawnProgressTimer;
     CElapsedTime                            m_LastDrawnProgressTimer;
