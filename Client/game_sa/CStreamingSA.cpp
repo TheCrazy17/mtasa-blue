@@ -452,13 +452,30 @@ void CStreamingSA::RemoveArchive(unsigned char ucArchiveID)
     m_StreamHandles[uiStreamHandlerID] = NULL;
 }
 
+// Diagnostic build for the crash reported at gta_sa offset 0x00068096 (CRenderWareSA::
+// RwTexDictionaryRemoveTexture, reading a garbage RwTexture*, seen during client shutdown).
+// SetStreamingBufferSize suspends the native streaming thread, frees the buffer it reads from,
+// and resumes it - if the thread was mid-copy at the suspend point, it keeps using its own
+// already-fetched pointer to the now-freed buffer once resumed, since nothing tells it the
+// global pointer moved. Reproducing that on demand needs many suspend/free/resume cycles to
+// happen while the thread is genuinely busy, not a longer pause per cycle (the thread is frozen
+// the whole time either way, so a sleep here doesn't change what it was doing when suspended).
+// So this build: (1) forces every call to actually resize, even to the same size, so spamming
+// engineStreamingSetBufferSize/engineStreamingRestoreBufferSize from a Lua timer while driving
+// through a busy area produces one resize attempt per call instead of mostly early-returning,
+// and (2) logs each cycle so a crash can be matched against how recently one happened.
+// Off unless explicitly compiled in, so it can never affect a normal build.
+// #define MTA_DEBUG_STRESS_STREAMING_BUFFER_RESIZE
+
 bool CStreamingSA::SetStreamingBufferSize(uint32 numBlocks)
 {
     numBlocks += numBlocks % 2;  // Make sure number is even by "rounding" it upwards. [Otherwise it can't be split in half properly]
 
     // Check if the size is the same already
+#ifndef MTA_DEBUG_STRESS_STREAMING_BUFFER_RESIZE
     if (numBlocks == ms_streamingHalfOfBufferSizeBlocks * 2)
         return true;
+#endif
 
     if (ms_pStreamingBuffer[0] == nullptr || ms_pStreamingBuffer[1] == nullptr)
         return false;
@@ -473,12 +490,23 @@ bool CStreamingSA::SetStreamingBufferSize(uint32 numBlocks)
     int pointer = *(int*)0x8E3FFC;
     SGtaStream(&streaming)[5] = *(SGtaStream(*)[5])(pointer);
 
+#ifdef MTA_DEBUG_STRESS_STREAMING_BUFFER_RESIZE
+    static unsigned int s_uiResizeCounter = 0;
+    unsigned int        uiThisResize = ++s_uiResizeCounter;
+    OutputDebugLine(SString("[crash-0x00068096] resize #%u: waiting for slots 0/1, bInUse=%d/%d", uiThisResize, streaming[0].bInUse, streaming[1].bInUse));
+#endif
+
     // Wait while streaming thread ends tasks
     while (streaming[0].bInUse || streaming[1].bInUse)
         ;
 
     // Suspend streaming thread [otherwise data might become corrupted]
     SuspendThread(*phStreamingThread);
+
+#ifdef MTA_DEBUG_STRESS_STREAMING_BUFFER_RESIZE
+    OutputDebugLine(SString("[crash-0x00068096] resize #%u: thread suspended, old buffers %p/%p -> new %p (+%u blocks)", uiThisResize, ms_pStreamingBuffer[0],
+                            ms_pStreamingBuffer[1], pNewBuffer, numBlocks));
+#endif
 
     // Calculate new buffer pointers
     void* const pNewBuff0 = pNewBuffer;
@@ -502,6 +530,10 @@ bool CStreamingSA::SetStreamingBufferSize(uint32 numBlocks)
 
     // Now we can resume streaming
     ResumeThread(*phStreamingThread);
+
+#ifdef MTA_DEBUG_STRESS_STREAMING_BUFFER_RESIZE
+    OutputDebugLine(SString("[crash-0x00068096] resize #%u: thread resumed", uiThisResize));
+#endif
 
     return true;
 }
