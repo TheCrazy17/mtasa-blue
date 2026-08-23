@@ -3864,26 +3864,30 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
     if (pVehicle->IsLocalEntity() || pTowedBy->IsLocalEntity())
         return true;
 
-    // Only the driver controlling the chain may turn an engine break into a real detach, and
-    // only when the condition survives one convergence: the first attempt is vetoed and the
-    // pair pulled back onto the tow bar, which cures transient divergence like the position
-    // snap when control of the truck changes hands, while a jackknifed or flipped pair keeps
-    // its rotation through the pull and breaks again immediately. Everyone else, the towed
-    // side syncer included, always vetoes; their geometry is local divergence, and the pull
-    // matters because the engine stops applying link forces while its break condition holds
+    // The engine breaks a link over geometry two ways. Overstretch is what local divergence
+    // produces all the time and a repull cures it, so it only counts for the controlling
+    // driver once it survives one convergence. Orientation, jackknifed past its limit or
+    // flipped, survives any repull since rotation is preserved; retrying it just resets the
+    // swing every tick and starves the confirm window while the pair thrashes, so the
+    // controlling driver honors it at once. Everyone else always vetoes and repulls; their
+    // geometry is local divergence, and leaving the separation alive would turn the tower
+    // pull, which runs before this check each tick, into a stream of unclamped impulses
+    CMatrix towedMatrix, towingMatrix;
+    pVehicle->GetMatrix(towedMatrix);
+    pTowedBy->GetMatrix(towingMatrix);
+    bool bOrientationBreak =
+        towedMatrix.vFront.DotProduct(&towingMatrix.vFront) < -0.3f || towedMatrix.vUp.DotProduct(&towingMatrix.vUp) < 0.0f;
+
     unsigned long ulNow = GetTickCount32();
     bool          bRepeatedAttempt = ulNow < pVehicle->GetTowLinkBreakAttemptTime() + TOW_LINK_BREAK_CONFIRM_WINDOW;
     pVehicle->SetTowLinkBreakAttemptTime(ulNow);
 
-    if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer && bRepeatedAttempt)
+    if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer && (bOrientationBreak || bRepeatedAttempt))
     {
         CommitTowLinkBreak(pTowedBy, pVehicle);
         return true;
     }
 
-    // Repull on every vetoed attempt; the tower pull earlier in the drive loop runs before
-    // this check each tick, so any separation left alive between pulls becomes a stream of
-    // unclamped impulses that catapults the pair
     pVehicle->SetTowLinkRestoreTime(ulNow);
     pTowedBy->InternalSetTowLink(pVehicle);
     return false;
@@ -3955,6 +3959,9 @@ bool CClientGame::IsAuthoritativeForTowLink(CClientVehicle* pTowing, CClientVehi
 void CClientGame::CommitTowLinkBreak(CClientVehicle* pTowing, CClientVehicle* pTowed)
 {
     pTowing->UnlinkTowedVehicle();
+
+    // The pair is still inside attach range; the engine must not relink it on its own
+    pTowed->SetSuppressedTowAttempt(pTowing, GetTickCount32());
 
     CLuaArguments Arguments;
     Arguments.PushElement(pTowing);
