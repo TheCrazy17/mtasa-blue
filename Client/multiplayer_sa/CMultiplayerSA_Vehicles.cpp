@@ -1344,53 +1344,83 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
-// CAutomobile::ProcessControl, tow link maintenance
+// CAutomobile::ProcessAI, STATUS_ABANDONED
 //
-// The drive loop pulls the tower toward the hitch whenever its velocity is not exactly
-// zero, which with a driver idling at the wheel is every frame; a parked pair never comes
-// to rest and keeps nudging itself around. Skip the link maintenance entirely while both
-// vehicles are essentially still; it resumes the moment either one moves. ECX holds the
-// towing vehicle and stays live through the replaced instructions, so it is preserved
-// around the call; EAX and EDX are scratch here and BL is replayed.
+// An abandoned vehicle only gets the handbrake and full brake while being carjacked; the
+// per frame tow link pull is stronger than the idle 0.2 brake, so a driverless tow truck
+// or truck with something hooked slowly creeps away. Treat towing something like the
+// carjack case, reusing the native brake block. Only flags are touched.
 //
 //////////////////////////////////////////////////////////////////////////////////////////
-// >>> 0x6B3202 | D9 41 44 | fld  dword ptr [ecx+44h]
-// >>> 0x6B3205 | 32 DB    | xor  bl, bl
-#define HOOKPOS_CAutomobile__ProcessControl_TowLinkAtRest   0x6B3202
-#define HOOKSIZE_CAutomobile__ProcessControl_TowLinkAtRest  5
-#define HOOKCHECK_CAutomobile__ProcessControl_TowLinkAtRest 0xD9
-static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TowLinkAtRest = 0x6B3207;
-static constexpr DWORD SKIP_CAutomobile__ProcessControl_TowLinkAtRest = 0x6B32EC;
+// >>> 0x6B559C | F6 86 2A 04 00 00 08 | test byte ptr [esi+42Ah], 8    ; bIsBeingCarJacked
+//     0x6B55A3 | 0F 84 5D 01 00 00    | jz   0x6B5706
+//     0x6B55A9 | 0C 20                | or   al, 20h                   ; handbrake on, brake 1.0
+#define HOOKPOS_CAutomobile__ProcessAI_AbandonedTowBrake   0x6B559C
+#define HOOKSIZE_CAutomobile__ProcessAI_AbandonedTowBrake  7
+#define HOOKCHECK_CAutomobile__ProcessAI_AbandonedTowBrake 0xF6
+static constexpr DWORD APPLY_CAutomobile__ProcessAI_AbandonedTowBrake = 0x6B55A9;
+static constexpr DWORD SKIP_CAutomobile__ProcessAI_AbandonedTowBrake = 0x6B5706;
 
-static constexpr float TOW_LINK_REST_SPEED_SQ = 0.005f * 0.005f;
-
-static bool __fastcall IsTowLinkAtRest(CVehicleSAInterface* towedVehicle, CVehicleSAInterface* towingVehicle)
-{
-    return towedVehicle->m_vecLinearVelocity.LengthSquared() < TOW_LINK_REST_SPEED_SQ &&
-           towingVehicle->m_vecLinearVelocity.LengthSquared() < TOW_LINK_REST_SPEED_SQ;
-}
-
-static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TowLinkAtRest()
+static void __declspec(naked) HOOK_CAutomobile__ProcessAI_AbandonedTowBrake()
 {
     MTA_VERIFY_HOOK_LOCAL_SIZE;
 
     // clang-format off
     __asm
     {
-        push    ecx
-        mov     edx, ecx                    // towing vehicle
-        mov     ecx, esi                    // towed vehicle (this)
-        call    IsTowLinkAtRest
-        pop     ecx
-        test    al, al
-        jnz     atRest
+        cmp     dword ptr [esi+4C8h], 0     // m_pVehicleBeingTowed
+        jnz     applyBrakes
+        test    byte ptr [esi+42Ah], 8      // bIsBeingCarJacked
+        jz      noBrakes
 
-        fld     dword ptr [ecx+44h]
-        xor     bl, bl
-        jmp     CONTINUE_CAutomobile__ProcessControl_TowLinkAtRest
+        applyBrakes:
+        jmp     APPLY_CAutomobile__ProcessAI_AbandonedTowBrake
 
-        atRest:
-        jmp     SKIP_CAutomobile__ProcessControl_TowLinkAtRest
+        noBrakes:
+        jmp     SKIP_CAutomobile__ProcessAI_AbandonedTowBrake
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// CVehicle::DoVehicleLights
+//
+// Lights follow the wanted state for any status other than abandoned or wrecked, so a
+// hoisted vehicle lights up at night like a driven one. Classify a driverless towed non
+// trailer as abandoned here so it stays dark; real trailers keep their native lights,
+// which follow the truck. Only DL, being defined anyway, and flags are touched.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6E1A91 | 8A 56 36 | mov dl, [esi+36h]
+// >>> 0x6E1A94 | C0 EA 03 | shr dl, 3
+#define HOOKPOS_CVehicle__DoVehicleLights_TowedLights   0x6E1A91
+#define HOOKSIZE_CVehicle__DoVehicleLights_TowedLights  6
+#define HOOKCHECK_CVehicle__DoVehicleLights_TowedLights 0x8A
+static constexpr DWORD CONTINUE_CVehicle__DoVehicleLights_TowedLights = 0x6E1A97;
+
+static void __declspec(naked) HOOK_CVehicle__DoVehicleLights_TowedLights()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     dl, [esi+36h]
+        shr     dl, 3
+        cmp     dl, 10                      // STATUS_IS_TOWED
+        jnz     done
+        cmp     dword ptr [esi+4C4h], 0     // m_pTowingVehicle
+        jz      done
+        cmp     dword ptr [esi+594h], 11    // trailers keep their native lights
+        jz      done
+        cmp     dword ptr [esi+460h], 0     // a driver keeps control of them
+        jnz     done
+
+        mov     dl, 4                       // STATUS_ABANDONED; render dark
+
+        done:
+        jmp     CONTINUE_CVehicle__DoVehicleLights_TowedLights
     }
     // clang-format on
 }
@@ -4289,7 +4319,8 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CTrailer__GetTowBarPos);
     EZHookInstallChecked(CTrailer__SetTowLink);
     EZHookInstallChecked(CAutomobile__SetTowLink);
-    EZHookInstallChecked(CAutomobile__ProcessControl_TowLinkAtRest);
+    EZHookInstallChecked(CAutomobile__ProcessAI_AbandonedTowBrake);
+    EZHookInstallChecked(CVehicle__DoVehicleLights_TowedLights);
     EZHookInstall(CAutomobile__ProcessControl_DumperDispatch);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperAngleReset);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperMiscGate);
