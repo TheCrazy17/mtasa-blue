@@ -1346,12 +1346,13 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 //
 // CAutomobile::ProcessControl, the two UpdateTractorLink calls of the drive loop
 //
-// The reaction half of the link drags the tower toward the hitch every tick. On a
-// driverless abandoned tower that pull is the only thing moving it, so a parked pair
-// creeps forever and never reaches the fake physics sleep. Skip the pull while the tower
-// is abandoned with no driver; the towed side keeps its own supporting pull, so the cargo
-// stays held. ECX holds the towing vehicle at both call sites, the callee cleans its two
-// stack arguments, and only AL, dead at both sites, is touched.
+// The reaction half of the link drags the tower toward the hitch every tick, and it is
+// the only thing moving a resting tower, so a parked pair creeps forever, with or without
+// a driver at the wheel, and never reaches the fake physics sleep. Skip the pull while
+// the tower is essentially still; it resumes as soon as anything actually moves it, and
+// the towed side keeps its own supporting pull, so the cargo stays held. ECX holds the
+// towing vehicle at both call sites and is preserved around the helper; the callee cleans
+// its two stack arguments, and EAX is dead at both sites.
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 // >>> 0x6B3266 | E8 E5 CD 02 00 | call 0x6E0050    ; CVehicle::UpdateTractorLink(false, false)
@@ -1368,6 +1369,13 @@ static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TractorPullSecond = 
 
 static constexpr DWORD FUNC_CVehicle__UpdateTractorLink = 0x6E0050;
 
+static constexpr float TRACTOR_PULL_MIN_SPEED_SQ = 0.008f * 0.008f;
+
+static bool __fastcall IsTowingVehicleStill(CVehicleSAInterface* towingVehicle)
+{
+    return towingVehicle->m_vecLinearVelocity.LengthSquared() < TRACTOR_PULL_MIN_SPEED_SQ;
+}
+
 static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst()
 {
     MTA_VERIFY_HOOK_LOCAL_SIZE;
@@ -1375,14 +1383,12 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst(
     // clang-format off
     __asm
     {
-        cmp     dword ptr [ecx+460h], 0     // pDriver
-        jnz     doPull
-        mov     al, [ecx+36h]
-        and     al, 0F8h
-        cmp     al, 20h                     // STATUS_ABANDONED << 3
-        je      skipPull
+        push    ecx
+        call    IsTowingVehicleStill
+        pop     ecx
+        test    al, al
+        jnz     skipPull
 
-        doPull:
         mov     eax, FUNC_CVehicle__UpdateTractorLink
         call    eax
         jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
@@ -1401,14 +1407,12 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullSecond
     // clang-format off
     __asm
     {
-        cmp     dword ptr [ecx+460h], 0     // pDriver
-        jnz     doPull
-        mov     al, [ecx+36h]
-        and     al, 0F8h
-        cmp     al, 20h                     // STATUS_ABANDONED << 3
-        je      skipPull
+        push    ecx
+        call    IsTowingVehicleStill
+        pop     ecx
+        test    al, al
+        jnz     skipPull
 
-        doPull:
         mov     eax, FUNC_CVehicle__UpdateTractorLink
         call    eax
         jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullSecond
@@ -1465,11 +1469,49 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessAI_AbandonedTowBrake()
 // CVehicle::DoVehicleLights
 //
 // Lights follow the wanted state for any status other than abandoned or wrecked, so a
-// hoisted vehicle lights up at night like a driven one. Classify a driverless towed non
-// trailer as abandoned here so it stays dark; real trailers keep their native lights,
-// which follow the truck. Only DL, being defined anyway, and flags are touched.
+// hoisted vehicle lights up at night like a driven one; and abandoned handling keeps
+// already lit lights while near the camera, so lights on at hookup would stay on too.
+// Two patches on the same function: the flag load clears bLightsOn for a driverless
+// towed non trailer, before the wanted-equals-current early exit that would otherwise
+// keep a lit vehicle lit forever, and the status read classifies it as abandoned so the
+// wanted state cannot relight it. A script override is applied later and still wins,
+// and real trailers keep their native lights, which follow the truck. AL holds the
+// wanted state and stays untouched; DL is scratch at both points.
 //
 //////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6E1A7B | 8A 9E 28 04 00 00 | mov bl, [esi+428h]
+#define HOOKPOS_CVehicle__DoVehicleLights_TowedFlagClear   0x6E1A7B
+#define HOOKSIZE_CVehicle__DoVehicleLights_TowedFlagClear  6
+#define HOOKCHECK_CVehicle__DoVehicleLights_TowedFlagClear 0x8A
+static constexpr DWORD CONTINUE_CVehicle__DoVehicleLights_TowedFlagClear = 0x6E1A81;
+
+static void __declspec(naked) HOOK_CVehicle__DoVehicleLights_TowedFlagClear()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     dl, [esi+36h]
+        shr     dl, 3
+        cmp     dl, 10                      // STATUS_IS_TOWED
+        jnz     original
+        cmp     dword ptr [esi+4C4h], 0     // m_pTowingVehicle
+        jz      original
+        cmp     dword ptr [esi+594h], 11    // trailers keep their native lights
+        jz      original
+        cmp     dword ptr [esi+460h], 0     // a driver keeps control of them
+        jnz     original
+
+        and     byte ptr [esi+428h], 0BFh   // bLightsOn off before it is read
+
+        original:
+        mov     bl, [esi+428h]
+        jmp     CONTINUE_CVehicle__DoVehicleLights_TowedFlagClear
+    }
+    // clang-format on
+}
+
 // >>> 0x6E1A91 | 8A 56 36 | mov dl, [esi+36h]
 // >>> 0x6E1A94 | C0 EA 03 | shr dl, 3
 #define HOOKPOS_CVehicle__DoVehicleLights_TowedLights   0x6E1A91
@@ -1495,7 +1537,7 @@ static void __declspec(naked) HOOK_CVehicle__DoVehicleLights_TowedLights()
         cmp     dword ptr [esi+460h], 0     // a driver keeps control of them
         jnz     done
 
-        mov     dl, 4                       // STATUS_ABANDONED; render dark
+        mov     dl, 4                       // STATUS_ABANDONED; the wanted state stays unapplied
 
         done:
         jmp     CONTINUE_CVehicle__DoVehicleLights_TowedLights
@@ -4400,6 +4442,7 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullFirst);
     EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullSecond);
     EZHookInstallChecked(CAutomobile__ProcessAI_AbandonedTowBrake);
+    EZHookInstallChecked(CVehicle__DoVehicleLights_TowedFlagClear);
     EZHookInstallChecked(CVehicle__DoVehicleLights_TowedLights);
     EZHookInstall(CAutomobile__ProcessControl_DumperDispatch);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperAngleReset);
