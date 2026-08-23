@@ -1895,6 +1895,8 @@ void CClientGame::UpdateTrailers()
 {
     // Converges every native tow link onto the logical, network authoritative one
     unsigned long ulCurrentTime = GetTickCount32();
+    float         fServoAlpha = std::min(TOW_ROTATION_SERVO_MAX_STEP, (ulCurrentTime - m_ulLastTowServoTime) * TOW_ROTATION_SERVO_RATE);
+    m_ulLastTowServoTime = ulCurrentTime;
 
     for (auto iterVehicles = m_pVehicleManager->StreamedBegin(); iterVehicles != m_pVehicleManager->StreamedEnd(); iterVehicles++)
     {
@@ -1927,7 +1929,25 @@ void CClientGame::UpdateTrailers()
         }
 
         if (pGameVehicle->GetTowedVehicle() == pGameTrailer)
+        {
+            // Articulation servo: converge onto the freshest driver report a sliver every
+            // frame; discrete per packet corrections read as flicker, and a reversing
+            // pair never settles on its own
+            if (ulCurrentTime < pVehicle->GetReportedTowRotationTime() + TOW_ROTATION_REPORT_LIFETIME)
+            {
+                CVector vecRotation;
+                pVehicle->GetRotationDegrees(vecRotation);
+
+                const CVector& vecTarget = pVehicle->GetReportedTowRotation();
+                CVector        vecOffset(GetOffsetDegrees(vecRotation.fX, vecTarget.fX), GetOffsetDegrees(vecRotation.fY, vecTarget.fY),
+                                         GetOffsetDegrees(vecRotation.fZ, vecTarget.fZ));
+
+                // A dead zone keeps it from dithering around the equilibrium
+                if (vecOffset.LengthSquared() > 0.25f)
+                    pVehicle->SetRotationDegrees(vecRotation + vecOffset * fServoAlpha);
+            }
             continue;
+        }
 
         // The engine dropped the native link on its own. A wreck is a real detach; anything
         // else is a glitch to repair, since real breaks are decided in BreakTowLinkHandler
@@ -3882,8 +3902,22 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
     bool          bRepeatedAttempt = ulNow < pVehicle->GetTowLinkBreakAttemptTime() + TOW_LINK_BREAK_CONFIRM_WINDOW;
     pVehicle->SetTowLinkBreakAttemptTime(ulNow);
 
-    bool bMayCommit =
-        bOrientationBreak ? IsAuthoritativeForTowLink(pTowedBy, pVehicle) : pTowedBy->GetControllingPlayer() == m_pLocalPlayer && bRepeatedAttempt;
+    bool bMayCommit;
+    if (bOrientationBreak)
+        bMayCommit = IsAuthoritativeForTowLink(pTowedBy, pVehicle);
+    else if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer)
+    {
+        // A separation far past the break scale is a deliberate release: the native tow
+        // truck gesture grounds the hoist, which idles the link, and drives off before
+        // raising it again. Repulling that would teleport the vehicle after its ex tower
+        CVector vecHitchPosition, vecTowBarPosition;
+        pTowedVehicle->GetTowHitchPos(&vecHitchPosition);
+        pTowedBy->GetGameVehicle()->GetTowBarPos(&vecTowBarPosition, pTowedVehicle);
+        bMayCommit = bRepeatedAttempt || (vecHitchPosition - vecTowBarPosition).LengthSquared() > TOW_LINK_RELEASE_DISTANCE * TOW_LINK_RELEASE_DISTANCE;
+    }
+    else
+        bMayCommit = false;
+
     if (bMayCommit)
     {
         CommitTowLinkBreak(pTowedBy, pVehicle);

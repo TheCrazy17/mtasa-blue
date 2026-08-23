@@ -50,6 +50,9 @@
 #define TOW_LINK_RESTORE_INTERVAL       500
 #define TOW_LINK_BREAK_CONFIRM_WINDOW   200
 #define TOW_ROTATION_REPORT_LIFETIME    1000
+#define TOW_LINK_RELEASE_DISTANCE       2.5f
+#define TOW_ROTATION_SERVO_RATE         0.008f
+#define TOW_ROTATION_SERVO_MAX_STEP     0.25f
 #define MIN_PUSH_ANTISPAM_RATE          1500
 #define INVALID_DOWNLOAD_PRIORITY_GROUP (INT_MIN)
 
@@ -731,6 +734,7 @@ private:
     unsigned long m_ulTimeStart;
     unsigned long m_ulVerifyTimeStart;
     unsigned long m_ulLastClickTick;
+    unsigned long m_ulLastTowServoTime = 0;
     CVector2D     m_vecLastCursorPosition;
     bool          m_bWaitingForLocalConnect;
     bool          m_bErrorStartingLocal;

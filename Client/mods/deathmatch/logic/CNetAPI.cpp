@@ -23,8 +23,6 @@ CTickRateSettings   g_TickRateSettings;
 
 static constexpr float TRAILER_POSITION_WARP_DISTANCE = 5.0f;
 static constexpr float TRAILER_SETTLED_WARP_DISTANCE = 1.0f;
-static constexpr float TRAILER_SETTLED_ROTATION_WARP = 5.0f;
-static constexpr float TRAILER_MOVING_ROTATION_WARP = 10.0f;
 static constexpr float TRAILER_SETTLED_SPEED_SQ = 0.0004f;
 static constexpr float TRAILER_WIRE_Z_TOLERANCE = 2.0f;
 static constexpr float TRAILER_CORRECTION_BLEND = 0.5f;
@@ -1470,12 +1468,11 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                 // the native forces never converge the residual error of a resting pair.
                 // Rotation also converges onto the driver report while moving; articulation
                 // diverges persistently in reverse and the driver view is the real one
-                CVector vecPosition, vecMoveSpeed, vecRotationDegrees;
+                CVector vecPosition, vecMoveSpeed;
                 pTrailer->GetPosition(vecPosition);
                 pTrailer->GetMoveSpeed(vecMoveSpeed);
-                pTrailer->GetRotationDegrees(vecRotationDegrees);
 
-                // Kept for the break veto, which snaps a diverged articulation onto it
+                // Feeds the per frame articulation servo and the break veto snap
                 pTrailer->SetReportedTowRotation(trailerRotation.data.vecRotation, GetTickCount32());
 
                 bool  bSettled = vecMoveSpeed.LengthSquared() < TRAILER_SETTLED_SPEED_SQ;
@@ -1493,30 +1490,23 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
 
                 bool bWarp =
                     fErrorX * fErrorX + fErrorY * fErrorY > fWarpDistance * fWarpDistance || fabsf(vecPosition.fZ - vecReported.fZ) > TRAILER_WIRE_Z_TOLERANCE;
-                if (!bWarp)
-                    bWarp = GetSmallestWrapUnsigned(vecRotationDegrees.fZ - trailerRotation.data.vecRotation.fZ, 360) >
-                            (bSettled ? TRAILER_SETTLED_ROTATION_WARP : TRAILER_MOVING_ROTATION_WARP);
-
                 if (bWarp)
                 {
-                    // Soften the correction: rotation always applies half the error, since
-                    // the link torque converges the rest fluidly, and position does the same
-                    // while the error is small enough for the link forces to finish it; a
-                    // large one still snaps whole. Everything this one tows is dragged by
-                    // the same delta; correcting a single chain member opens an intra chain
-                    // separation that the native pulls turn into a launch. Dragged members
-                    // meet their own chain entries right after and take their own correction
+                    // Position corrections blend halfway while small, letting the link
+                    // forces finish fluidly; a large one snaps whole, rotation included,
+                    // since the jump is unavoidable there. Rotation drift is otherwise the
+                    // per frame servo's job, in CClientGame::UpdateTrailers. Everything
+                    // this one tows is dragged by the same delta; correcting a single
+                    // chain member opens an intra chain separation that the native pulls
+                    // turn into a launch. Dragged members meet their own chain entries
+                    // right after and take their own correction
                     CVector vecWarpDelta = vecReported - vecPosition;
                     if (vecWarpDelta.LengthSquared() < TRAILER_CORRECTION_SOFT_DISTANCE * TRAILER_CORRECTION_SOFT_DISTANCE)
                         vecWarpDelta *= TRAILER_CORRECTION_BLEND;
-
-                    CVector vecNewRotation = vecRotationDegrees;
-                    vecNewRotation.fX += GetOffsetDegrees(vecRotationDegrees.fX, trailerRotation.data.vecRotation.fX) * TRAILER_CORRECTION_BLEND;
-                    vecNewRotation.fY += GetOffsetDegrees(vecRotationDegrees.fY, trailerRotation.data.vecRotation.fY) * TRAILER_CORRECTION_BLEND;
-                    vecNewRotation.fZ += GetOffsetDegrees(vecRotationDegrees.fZ, trailerRotation.data.vecRotation.fZ) * TRAILER_CORRECTION_BLEND;
+                    else
+                        pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);
 
                     pTrailer->SetPosition(vecPosition + vecWarpDelta);
-                    pTrailer->SetRotationDegrees(vecNewRotation);
 
                     for (CClientVehicle* pTowed = pTrailer->GetTowedVehicle(); pTowed; pTowed = pTowed->GetTowedVehicle())
                     {

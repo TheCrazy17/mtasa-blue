@@ -3407,9 +3407,13 @@ bool CClientVehicle::InternalSetTowLink(CClientVehicle* pTrailer)
     pGameVehicle->GetTowHitchPos(&vecHitchPosition);
     m_pVehicle->GetTowBarPos(&vecTowBarPosition, pGameVehicle);
 
-    // Calculate the new position (rotation should be set already)
+    // Calculate the new position (rotation should be set already). Only XY is aligned;
+    // the tow bar height follows model and hoist state, tractors compute it near the
+    // ground, and placing the vehicle by it can push it into the road. The wheels and the
+    // link forces own the height
     CVector vecOffset = vecHitchPosition - *pTrailerPosition;
     CVector vecDest = vecTowBarPosition - vecOffset;
+    vecDest.fZ = pTrailerPosition->fZ;
     pTrailer->SetPosition(vecDest);
 
     // Apply the towed-by-vehicle's velocities to the trailer; leaving its own turn speed
