@@ -358,7 +358,7 @@ void CUnoccupiedVehicleSync::Packet_UnoccupiedVehicleSync(CUnoccupiedVehicleSync
                             if (pTrailer)
                             {
                                 if (pVehicle->GetTowedVehicle() != pTrailer && !CTrailerLinkHelper::AttachTrailer(pVehicle, pTrailer, pPlayer))
-                                    continue;            // a script handler deleted one of them
+                                    continue;  // a script handler deleted one of them
                             }
                             else
                             {

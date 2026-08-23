@@ -3965,9 +3965,22 @@ void CGame::Packet_VehicleTrailer(CVehicleTrailerPacket& Packet)
     CVehicle* pTrailer = static_cast<CVehicle*>(pTrailerElement);
 
     // Only the client authoritative for the pair may report link changes: whoever controls
-    // the towing chain, or the towed side syncer for driverless pairs
+    // the towing chain, or the towed side syncer for driverless pairs. A rejected reporter
+    // already committed locally, so send it the server's state back
     if (pVehicle->GetController() != pPlayer && pTrailer->GetSyncer() != pPlayer)
+    {
+        if (Packet.GetAttached() && pVehicle->GetTowedVehicle() != pTrailer)
+        {
+            CVehicleTrailerPacket DetachPacket(pVehicle, pTrailer, false);
+            pPlayer->Send(DetachPacket);
+        }
+        else if (!Packet.GetAttached() && pVehicle->GetTowedVehicle() == pTrailer)
+        {
+            CVehicleTrailerPacket AttachPacket(pVehicle, pTrailer, true);
+            pPlayer->Send(AttachPacket);
+        }
         return;
+    }
 
     if (Packet.GetAttached())
     {

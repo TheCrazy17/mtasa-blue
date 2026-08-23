@@ -3860,9 +3860,18 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
         return true;
 
     // Only the authoritative side may turn an engine break into a real detach; for everyone
-    // else the link belongs to the server, so the break is vetoed outright
+    // else the link belongs to the server, so the break is vetoed and the pair pulled back
+    // together, since the engine stops applying link forces while its break condition holds
     if (!IsAuthoritativeForTowLink(pTowedBy, pVehicle))
+    {
+        unsigned long ulNow = GetTickCount32();
+        if (ulNow >= pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
+        {
+            pVehicle->SetTowLinkRestoreTime(ulNow);
+            pTowedBy->InternalSetTowLink(pVehicle);
+        }
         return false;
+    }
 
     CommitTowLinkBreak(pTowedBy, pVehicle);
     return true;
