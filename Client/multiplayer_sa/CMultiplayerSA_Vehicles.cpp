@@ -1344,15 +1344,19 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
-// CAutomobile::ProcessControl, the two UpdateTractorLink calls of the drive loop
+// CAutomobile::ProcessControl, the four link update calls of the drive loop
 //
-// The reaction half of the link drags the tower toward the hitch every tick, and it is
-// the only thing moving a resting tower, so a parked pair creeps forever, with or without
-// a driver at the wheel, and never reaches the fake physics sleep. Skip the pull while
-// the tower is essentially still; it resumes as soon as anything actually moves it, and
-// the towed side keeps its own supporting pull, so the cargo stays held. ECX holds the
-// towing vehicle at both call sites and is preserved around the helper; the callee cleans
-// its two stack arguments, and EAX is dead at both sites.
+// Each tick the drive loop corrects the link twice per side: a first pass that applies
+// the whole bar to hitch displacement as one unclamped impulse, then a clamped fine pass.
+// With healthy geometry the displacement is tiny and the clamped pass alone is
+// indistinguishable, but any divergence a networked game produces, interpolation jumps,
+// driver handovers, corrections, low framerate, turns the unclamped pass into a catapult.
+// Both unclamped passes are skipped outright. The clamped tractor pass is additionally
+// gated on the tower actually moving; that pull is the only thing moving a resting tower,
+// so a parked pair would creep forever and never reach the fake physics sleep. The
+// clamped towed pass always runs; it is what carries the cargo. ECX holds the towing
+// vehicle at the hooked sites and is preserved around the helper; the callee cleans its
+// two stack arguments, and EAX is dead at every site.
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 // >>> 0x6B3266 | E8 E5 CD 02 00 | call 0x6E0050    ; CVehicle::UpdateTractorLink(false, false)
@@ -1360,6 +1364,12 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 #define HOOKSIZE_CAutomobile__ProcessControl_TractorPullFirst  5
 #define HOOKCHECK_CAutomobile__ProcessControl_TractorPullFirst 0xE8
 static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TractorPullFirst = 0x6B326B;
+
+// >>> 0x6B3271 | E8 DA C9 02 00 | call 0x6DFC50    ; CVehicle::UpdateTrailerLink(false, false)
+#define HOOKPOS_CAutomobile__ProcessControl_TrailerPullFirst   0x6B3271
+#define HOOKSIZE_CAutomobile__ProcessControl_TrailerPullFirst  5
+#define HOOKCHECK_CAutomobile__ProcessControl_TrailerPullFirst 0xE8
+static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TrailerPullFirst = 0x6B3276;
 
 // >>> 0x6B3291 | E8 BA CD 02 00 | call 0x6E0050    ; CVehicle::UpdateTractorLink(false, true)
 #define HOOKPOS_CAutomobile__ProcessControl_TractorPullSecond   0x6B3291
@@ -1383,19 +1393,21 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst(
     // clang-format off
     __asm
     {
-        push    ecx
-        call    IsTowingVehicleStill
-        pop     ecx
-        test    al, al
-        jnz     skipPull
-
-        mov     eax, FUNC_CVehicle__UpdateTractorLink
-        call    eax
-        jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
-
-        skipPull:
         add     esp, 8                      // drop the two arguments the callee would clean
         jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
+    }
+    // clang-format on
+}
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TrailerPullFirst()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        add     esp, 8                      // drop the two arguments the callee would clean
+        jmp     CONTINUE_CAutomobile__ProcessControl_TrailerPullFirst
     }
     // clang-format on
 }
@@ -4440,6 +4452,7 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstallChecked(CTrailer__SetTowLink);
     EZHookInstallChecked(CAutomobile__SetTowLink);
     EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullFirst);
+    EZHookInstallChecked(CAutomobile__ProcessControl_TrailerPullFirst);
     EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullSecond);
     EZHookInstallChecked(CAutomobile__ProcessAI_AbandonedTowBrake);
     EZHookInstallChecked(CVehicle__DoVehicleLights_TowedFlagClear);
