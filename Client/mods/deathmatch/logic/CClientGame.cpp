@@ -3859,23 +3859,29 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
     if (pVehicle->IsLocalEntity() || pTowedBy->IsLocalEntity())
         return true;
 
-    // Only the driver controlling the chain may turn an engine break into a real detach; on
-    // any other client, the towed side syncer included, the geometry is local divergence, so
-    // the break is vetoed and the pair pulled back together, since the engine stops applying
-    // link forces while its break condition holds
-    if (pTowedBy->GetControllingPlayer() != m_pLocalPlayer)
+    // Only the driver controlling the chain may turn an engine break into a real detach, and
+    // only when the condition survives one convergence: the first attempt is vetoed and the
+    // pair pulled back onto the tow bar, which cures transient divergence like the position
+    // snap when control of the truck changes hands, while a jackknifed or flipped pair keeps
+    // its rotation through the pull and breaks again immediately. Everyone else, the towed
+    // side syncer included, always vetoes; their geometry is local divergence, and the pull
+    // matters because the engine stops applying link forces while its break condition holds
+    unsigned long ulNow = GetTickCount32();
+    bool          bRepeatedAttempt = ulNow < pVehicle->GetTowLinkBreakAttemptTime() + TOW_LINK_BREAK_CONFIRM_WINDOW;
+    pVehicle->SetTowLinkBreakAttemptTime(ulNow);
+
+    if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer && bRepeatedAttempt)
     {
-        unsigned long ulNow = GetTickCount32();
-        if (ulNow >= pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
-        {
-            pVehicle->SetTowLinkRestoreTime(ulNow);
-            pTowedBy->InternalSetTowLink(pVehicle);
-        }
-        return false;
+        CommitTowLinkBreak(pTowedBy, pVehicle);
+        return true;
     }
 
-    CommitTowLinkBreak(pTowedBy, pVehicle);
-    return true;
+    if (ulNow >= pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
+    {
+        pVehicle->SetTowLinkRestoreTime(ulNow);
+        pTowedBy->InternalSetTowLink(pVehicle);
+    }
+    return false;
 }
 
 // Gate for an engine driven attach, from CTrailer::ScanForTowLink or the tow truck hoist

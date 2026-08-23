@@ -451,6 +451,9 @@ public:
     unsigned long GetTowLinkRestoreTime() { return m_ulTowLinkRestoreTime; }
     void          SetTowLinkRestoreTime(unsigned long ulTime) { m_ulTowLinkRestoreTime = ulTime; }
 
+    unsigned long GetTowLinkBreakAttemptTime() { return m_ulTowLinkBreakAttemptTime; }
+    void          SetTowLinkBreakAttemptTime(unsigned long ulTime) { m_ulTowLinkBreakAttemptTime = ulTime; }
+
     // A cancelled or server rejected pair, vetoed silently until the engine stops retrying
     CClientVehicle* GetSuppressedTowPartner() { return m_pSuppressedTowPartner; }
     unsigned long   GetSuppressedTowAttemptTime() { return m_ulSuppressedTowAttemptTime; }
@@ -725,6 +728,7 @@ protected:
     } m_interp{};
 
     unsigned long m_ulTowLinkRestoreTime;
+    unsigned long m_ulTowLinkBreakAttemptTime = 0;
 
     CClientVehiclePtr m_pSuppressedTowPartner;
     unsigned long     m_ulSuppressedTowAttemptTime = 0;
