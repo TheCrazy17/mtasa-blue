@@ -26,6 +26,7 @@ static constexpr float TRAILER_SETTLED_WARP_DISTANCE = 1.0f;
 static constexpr float TRAILER_SETTLED_ROTATION_WARP = 5.0f;
 static constexpr float TRAILER_MOVING_ROTATION_WARP = 10.0f;
 static constexpr float TRAILER_SETTLED_SPEED_SQ = 0.0004f;
+static constexpr float TRAILER_WIRE_Z_TOLERANCE = 2.0f;
 
 CNetAPI::CNetAPI(CClientManager* pManager)
 {
@@ -1478,7 +1479,18 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                 bool  bSettled = vecMoveSpeed.LengthSquared() < TRAILER_SETTLED_SPEED_SQ;
                 float fWarpDistance = bSettled ? TRAILER_SETTLED_WARP_DISTANCE : TRAILER_POSITION_WARP_DISTANCE;
 
-                bool bWarp = (vecPosition - trailerPosition.data.vecPosition).LengthSquared() > fWarpDistance * fWarpDistance;
+                // The low precision wire Z truncates up to a unit downward, fine as the
+                // streamed out hint but never for placing a streamed in vehicle; judge the
+                // divergence on XY alone and keep the local height unless it is genuinely off
+                CVector vecReported = trailerPosition.data.vecPosition;
+                if (fabsf(vecPosition.fZ - vecReported.fZ) < TRAILER_WIRE_Z_TOLERANCE)
+                    vecReported.fZ = vecPosition.fZ;
+
+                float fErrorX = vecPosition.fX - vecReported.fX;
+                float fErrorY = vecPosition.fY - vecReported.fY;
+
+                bool bWarp = fErrorX * fErrorX + fErrorY * fErrorY > fWarpDistance * fWarpDistance ||
+                             fabsf(vecPosition.fZ - vecReported.fZ) > TRAILER_WIRE_Z_TOLERANCE;
                 if (!bWarp)
                     bWarp = GetSmallestWrapUnsigned(vecRotationDegrees.fZ - trailerRotation.data.vecRotation.fZ, 360) >
                             (bSettled ? TRAILER_SETTLED_ROTATION_WARP : TRAILER_MOVING_ROTATION_WARP);
@@ -1489,8 +1501,8 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                     // chain member opens an intra chain separation that the unclamped native
                     // pulls turn into a launch. The dragged members meet their own chain
                     // entries right after this one and take their own finer correction
-                    CVector vecWarpDelta = trailerPosition.data.vecPosition - vecPosition;
-                    pTrailer->SetPosition(trailerPosition.data.vecPosition);
+                    CVector vecWarpDelta = vecReported - vecPosition;
+                    pTrailer->SetPosition(vecReported);
                     pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);
 
                     for (CClientVehicle* pTowed = pTrailer->GetTowedVehicle(); pTowed; pTowed = pTowed->GetTowedVehicle())
