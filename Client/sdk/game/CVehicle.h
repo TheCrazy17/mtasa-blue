@@ -178,7 +178,7 @@ public:
     virtual void            FadeOut(bool bFadeOut) = 0;
     virtual bool            IsFadingOut() = 0;
 
-    virtual void      SetTowLink(CVehicle* pVehicle) = 0;
+    virtual bool      SetTowLink(CVehicle* pVehicle) = 0;
     virtual bool      BreakTowLink() = 0;
     virtual CVehicle* GetTowedVehicle() = 0;
     virtual CVehicle* GetTowedByVehicle() = 0;

@@ -276,7 +276,7 @@ public:
     virtual bool  CanPedJumpOutCar(CPedSAInterface* ped) = 0;
     virtual bool  GetTowHitchPos(CVector* pVector, bool bCheckModelInfo, CVehicleSAInterface* anotherVehicle) = 0;
     virtual bool  GetTowbarPos(CVector* pVector, bool ignoreModelType, CVehicleSAInterface* pTrailer) = 0;
-    virtual void  SetTowLink() = 0;
+    virtual bool  SetTowLink(CVehicleSAInterface* pTowingVehicle, bool bSetMyPosToTowBar) = 0;
     virtual bool  BreakTowLink() = 0;
     virtual float FindWheelWidth() = 0;
     virtual bool  Save() = 0;
@@ -537,7 +537,7 @@ public:
 
     CDamageManager* GetDamageManager();
 
-    void      SetTowLink(CVehicle* pVehicle);
+    bool      SetTowLink(CVehicle* pVehicle);
     bool      BreakTowLink();
     CVehicle* GetTowedVehicle();
     CVehicle* GetTowedByVehicle();

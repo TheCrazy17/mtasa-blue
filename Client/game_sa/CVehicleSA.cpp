@@ -1300,21 +1300,35 @@ bool CVehicleSA::IsFadingOut()
     return vehicle->m_nVehicleFlags.bFadeOut;
 }
 
-void CVehicleSA::SetTowLink(CVehicle* pVehicle)
+// Called on the vehicle being towed; establishes a full native tow link, unlike the old hand
+// written pointer copy, which skipped CEntity::RegisterReference and the moving list reorder
+bool CVehicleSA::SetTowLink(CVehicle* pVehicle)
 {
-    // We can't use the vtable func, because it teleports the trailer parallel to the vehicle => make our own one (see #1655)
-
     CVehicleSA* towingVehicleSA = dynamic_cast<CVehicleSA*>(pVehicle);
+    if (!towingVehicleSA)
+        return false;
 
-    if (towingVehicleSA)
-    {
-        CVehicleSAInterface* trailerVehicle = GetVehicleInterface();
-        CVehicleSAInterface* towingVehicle = towingVehicleSA->GetVehicleInterface();
-        towingVehicle->m_trailerVehicle = trailerVehicle;
-        trailerVehicle->m_towingVehicle = towingVehicle;
+    CVehicleSAInterface* towedVehicle = GetVehicleInterface();
+    CVehicleSAInterface* towingVehicle = towingVehicleSA->GetVehicleInterface();
 
-        SetEntityStatus(eEntityStatus::STATUS_IS_TOWED);
-    }
+    // Without IS_TOWED the engine severs the pair on its next ProcessControl, so redo the link
+    if (towedVehicle->m_towingVehicle == towingVehicle && towingVehicle->m_trailerVehicle == towedVehicle &&
+        GetEntityStatus() == eEntityStatus::STATUS_IS_TOWED)
+        return true;
+
+    // The native call refuses a vehicle that is already linked elsewhere
+    if (towedVehicle->m_towingVehicle)
+        towedVehicle->BreakTowLink();
+    if (towingVehicle->m_trailerVehicle)
+        towingVehicle->m_trailerVehicle->BreakTowLink();
+
+    // The native call only accepts PHYSICS, ABANDONED and IS_TOWED and replaces them with IS_TOWED
+    eEntityStatus status = GetEntityStatus();
+    if (status != eEntityStatus::STATUS_PHYSICS && status != eEntityStatus::STATUS_ABANDONED && status != eEntityStatus::STATUS_IS_TOWED)
+        SetEntityStatus(eEntityStatus::STATUS_ABANDONED);
+
+    // Passing false skips the native teleport onto the tow bar (#1655); the caller positions us first
+    return towedVehicle->SetTowLink(towingVehicle, false);
 }
 
 bool CVehicleSA::BreakTowLink()

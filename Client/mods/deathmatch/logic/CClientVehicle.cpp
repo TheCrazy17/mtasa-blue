@@ -3417,7 +3417,8 @@ bool CClientVehicle::InternalSetTowLink(CClientVehicle* pTrailer)
     pTrailer->SetMoveSpeed(vecMoveSpeed);
 
     // SA can attach the trailer now
-    pGameVehicle->SetTowLink(m_pVehicle);
+    if (!pGameVehicle->SetTowLink(m_pVehicle))
+        return false;
 
     pTrailer->PlaceProperlyOnGround();  // Probably not needed
 
