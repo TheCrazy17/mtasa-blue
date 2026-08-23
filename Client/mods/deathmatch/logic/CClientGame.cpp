@@ -3923,13 +3923,18 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
         bMayCommit = IsAuthoritativeForTowLink(pTowedBy, pVehicle);
     else if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer)
     {
+        bMayCommit = bRepeatedAttempt;
+
         // A separation far past the break scale is a deliberate release: the native tow
         // truck gesture grounds the hoist, which idles the link, and drives off before
         // raising it again. Repulling that would teleport the vehicle after its ex tower
-        CVector vecHitchPosition, vecTowBarPosition;
-        pTowedVehicle->GetTowHitchPos(&vecHitchPosition);
-        pTowedBy->GetGameVehicle()->GetTowBarPos(&vecTowBarPosition, pTowedVehicle);
-        bMayCommit = bRepeatedAttempt || (vecHitchPosition - vecTowBarPosition).LengthSquared() > TOW_LINK_RELEASE_DISTANCE * TOW_LINK_RELEASE_DISTANCE;
+        if (CVehicle* pGameTowedBy = pTowedBy->GetGameVehicle())
+        {
+            CVector vecHitchPosition, vecTowBarPosition;
+            pTowedVehicle->GetTowHitchPos(&vecHitchPosition);
+            pGameTowedBy->GetTowBarPos(&vecTowBarPosition, pTowedVehicle);
+            bMayCommit |= (vecHitchPosition - vecTowBarPosition).LengthSquared() > TOW_LINK_RELEASE_DISTANCE * TOW_LINK_RELEASE_DISTANCE;
+        }
     }
     else
         bMayCommit = false;
