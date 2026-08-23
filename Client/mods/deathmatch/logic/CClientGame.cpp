@@ -3876,15 +3876,14 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
     CMatrix towedMatrix, towingMatrix;
     pVehicle->GetMatrix(towedMatrix);
     pTowedBy->GetMatrix(towingMatrix);
-    bool bOrientationBreak =
-        towedMatrix.vFront.DotProduct(&towingMatrix.vFront) < -0.3f || towedMatrix.vUp.DotProduct(&towingMatrix.vUp) < 0.0f;
+    bool bOrientationBreak = towedMatrix.vFront.DotProduct(&towingMatrix.vFront) < -0.3f || towedMatrix.vUp.DotProduct(&towingMatrix.vUp) < 0.0f;
 
     unsigned long ulNow = GetTickCount32();
     bool          bRepeatedAttempt = ulNow < pVehicle->GetTowLinkBreakAttemptTime() + TOW_LINK_BREAK_CONFIRM_WINDOW;
     pVehicle->SetTowLinkBreakAttemptTime(ulNow);
 
-    bool bMayCommit = bOrientationBreak ? IsAuthoritativeForTowLink(pTowedBy, pVehicle)
-                                        : pTowedBy->GetControllingPlayer() == m_pLocalPlayer && bRepeatedAttempt;
+    bool bMayCommit =
+        bOrientationBreak ? IsAuthoritativeForTowLink(pTowedBy, pVehicle) : pTowedBy->GetControllingPlayer() == m_pLocalPlayer && bRepeatedAttempt;
     if (bMayCommit)
     {
         CommitTowLinkBreak(pTowedBy, pVehicle);
