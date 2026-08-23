@@ -1451,6 +1451,46 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TrailerPullFirst(
     // clang-format on
 }
 
+// >>> 0x6CFFAA | 8B CF          | mov  ecx, edi
+// >>> 0x6CFFAC | E8 9F 00 01 00 | call 0x6E0050    ; vehicle->UpdateTractorLink(true, false)
+//
+// CTrailer::SetTowLink's own attach time pull on the tractor, once the trailer side has
+// already registered the link. Native code guarantees this fires only a hitch width from
+// a clean scan attach, but InternalSetTowLink's own MTA driven attaches only align the
+// horizontal offset and keep the towed vehicle's current height (see the farm trailer
+// ground fix), which can leave a real vertical gap here; unclamped, that gap became a
+// yank on the tractor. Same gate as the drive loop passes, reusing the same helper: ESI
+// is the trailer here too, already carrying the tractor pointer this deep into the
+// function, so IsTowLinkStretched needs no changes.
+#define HOOKPOS_CTrailer__SetTowLink_AttachPull   0x6CFFAA
+#define HOOKSIZE_CTrailer__SetTowLink_AttachPull  7
+#define HOOKCHECK_CTrailer__SetTowLink_AttachPull 0x8B
+static constexpr DWORD CONTINUE_CTrailer__SetTowLink_AttachPull = 0x6CFFB1;
+
+static void __declspec(naked) HOOK_CTrailer__SetTowLink_AttachPull()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsTowLinkStretched
+        test    al, al
+        jnz     skipPull
+
+        mov     ecx, edi
+        mov     eax, FUNC_CVehicle__UpdateTractorLink
+        call    eax
+        jmp     CONTINUE_CTrailer__SetTowLink_AttachPull
+
+        skipPull:
+        add     esp, 8                      // drop the two arguments the callee would clean
+        jmp     CONTINUE_CTrailer__SetTowLink_AttachPull
+    }
+    // clang-format on
+}
+
 static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullSecond()
 {
     MTA_VERIFY_HOOK_LOCAL_SIZE;
@@ -4489,6 +4529,7 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CAutomobile__GetTowBarPos_TugDummy);
     EZHookInstall(CTrailer__GetTowBarPos);
     EZHookInstallChecked(CTrailer__SetTowLink);
+    EZHookInstallChecked(CTrailer__SetTowLink_AttachPull);
     EZHookInstallChecked(CAutomobile__SetTowLink);
     EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullFirst);
     EZHookInstallChecked(CAutomobile__ProcessControl_TrailerPullFirst);
