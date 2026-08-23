@@ -187,7 +187,7 @@ bool CVehiclePuresyncPacket::Read(NetBitStreamInterface& BitStream)
                     CVehicle* pTrailer = GetElementFromId<CVehicle>(TrailerID);
 
                     // Read out the trailer position and rotation
-                    SPositionSync trailerPosition(false);
+                    SLowPrecisionPositionSync trailerPosition;
                     if (!BitStream.Read(&trailerPosition))
                         return false;
 
@@ -491,7 +491,7 @@ bool CVehiclePuresyncPacket::Write(NetBitStreamInterface& BitStream) const
                     vecTrailerPosition = pTrailer->GetPosition();
                     pTrailer->GetRotationDegrees(vecTrailerRotationDegrees);
 
-                    SPositionSync trailerPosition(false);
+                    SLowPrecisionPositionSync trailerPosition;
                     trailerPosition.data.vecPosition = vecTrailerPosition;
                     BitStream.Write(&trailerPosition);
 

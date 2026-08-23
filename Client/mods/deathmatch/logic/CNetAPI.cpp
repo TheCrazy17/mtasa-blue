@@ -1412,7 +1412,7 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
             if (!BitStream.Read(TrailerID))
                 return;
 
-            SPositionSync trailerPosition(false);
+            SLowPrecisionPositionSync trailerPosition;
             if (!BitStream.Read(&trailerPosition))
                 return;
 
@@ -1725,7 +1725,7 @@ void CNetAPI::WriteVehiclePuresync(CClientPed* pPlayerModel, CClientVehicle* pVe
             pTrailer->GetPosition(vecTrailerPosition);
             pTrailer->GetRotationDegrees(vecTrailerRotationDegrees);
 
-            SPositionSync trailerPosition(false);
+            SLowPrecisionPositionSync trailerPosition;
             trailerPosition.data.vecPosition = vecTrailerPosition;
             BitStream.Write(&trailerPosition);
 

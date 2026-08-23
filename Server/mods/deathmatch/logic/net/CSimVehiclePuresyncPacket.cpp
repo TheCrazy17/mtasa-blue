@@ -138,7 +138,7 @@ bool CSimVehiclePuresyncPacket::Read(NetBitStreamInterface& BitStream)
                 BitStream.Read(info.m_TrailerID);
 
                 // Read out the trailer position and rotation
-                SPositionSync trailerPosition(false);
+                SLowPrecisionPositionSync trailerPosition;
                 if (!BitStream.Read(&trailerPosition))
                     return false;
 
@@ -146,8 +146,9 @@ bool CSimVehiclePuresyncPacket::Read(NetBitStreamInterface& BitStream)
                 if (!BitStream.Read(&trailerRotation))
                     return false;
 
-                // If we found the trailer
-                if (true)
+                // This runs on the sync thread, so no element lookup; an invalid ID still
+                // ends the chain and receivers drop entries that resolve to nothing
+                if (info.m_TrailerID != INVALID_ELEMENT_ID)
                 {
                     // Set its position and rotation
                     info.m_TrailerPosition = trailerPosition.data.vecPosition;
@@ -322,7 +323,7 @@ bool CSimVehiclePuresyncPacket::Write(NetBitStreamInterface& BitStream) const
 
                 BitStream.Write(it->m_TrailerID);
 
-                SPositionSync trailerPosition(false);
+                SLowPrecisionPositionSync trailerPosition;
                 trailerPosition.data.vecPosition = it->m_TrailerPosition;
                 BitStream.Write(&trailerPosition);
 
