@@ -1930,19 +1930,28 @@ void CClientGame::UpdateTrailers()
 
         if (pGameVehicle->GetTowedVehicle() == pGameTrailer)
         {
-            // With the hoist grounded the engine idles the link and never breaks it, so the
-            // native release gesture, grounding the hoist and driving off, needs the detach
-            // committed from here once the pair actually separates
-            if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer && pTowedBy->GetAdjustablePropertyValue() >= TOW_HOIST_GROUNDED_ANGLE)
+            // With the hoist in the native grace range the engine idles the link and never
+            // breaks it, so the release gesture, grounding the hoist and driving off, needs
+            // the detach committed from here once the pair actually separates. The grace
+            // sighting is latched for a moment past the exact frame it was seen, so a
+            // control tick that briefly nudges the angle off the range cannot cost the
+            // release the one frame separation happens to cross the distance
+            if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer)
             {
-                CVector vecHitchPosition, vecTowBarPosition;
-                pGameTrailer->GetTowHitchPos(&vecHitchPosition);
-                pGameVehicle->GetTowBarPos(&vecTowBarPosition, pGameTrailer);
-                if ((vecHitchPosition - vecTowBarPosition).LengthSquared() > TOW_LINK_RELEASE_DISTANCE * TOW_LINK_RELEASE_DISTANCE)
+                if (pTowedBy->GetAdjustablePropertyValue() > TOW_HOIST_GRACE_ANGLE)
+                    pTowedBy->SetTowHoistGraceTime(ulCurrentTime);
+
+                if (ulCurrentTime < pTowedBy->GetTowHoistGraceTime() + TOW_HOIST_RELEASE_LATCH_WINDOW)
                 {
-                    CommitTowLinkBreak(pTowedBy, pVehicle);
-                    pGameTrailer->BreakTowLink();
-                    continue;
+                    CVector vecHitchPosition, vecTowBarPosition;
+                    pGameTrailer->GetTowHitchPos(&vecHitchPosition);
+                    pGameVehicle->GetTowBarPos(&vecTowBarPosition, pGameTrailer);
+                    if ((vecHitchPosition - vecTowBarPosition).LengthSquared() > TOW_LINK_RELEASE_DISTANCE * TOW_LINK_RELEASE_DISTANCE)
+                    {
+                        CommitTowLinkBreak(pTowedBy, pVehicle);
+                        pGameTrailer->BreakTowLink();
+                        continue;
+                    }
                 }
             }
 

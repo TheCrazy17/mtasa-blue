@@ -451,6 +451,11 @@ public:
     unsigned long GetTowLinkRestoreTime() { return m_ulTowLinkRestoreTime; }
     void          SetTowLinkRestoreTime(unsigned long ulTime) { m_ulTowLinkRestoreTime = ulTime; }
 
+    // Latest tick this tractor's hoist was seen inside the native grace range; outlives a
+    // single frame so a release does not need the exact angle at the moment it is judged
+    unsigned long GetTowHoistGraceTime() { return m_ulTowHoistGraceTime; }
+    void          SetTowHoistGraceTime(unsigned long ulTime) { m_ulTowHoistGraceTime = ulTime; }
+
     unsigned long GetTowLinkBreakAttemptTime() { return m_ulTowLinkBreakAttemptTime; }
     void          SetTowLinkBreakAttemptTime(unsigned long ulTime) { m_ulTowLinkBreakAttemptTime = ulTime; }
 
@@ -744,6 +749,7 @@ protected:
 
     unsigned long m_ulTowLinkRestoreTime;
     unsigned long m_ulTowLinkBreakAttemptTime = 0;
+    unsigned long m_ulTowHoistGraceTime = 0;
     bool          m_bEngineForcedOff = false;
 
     CVector       m_vecReportedTowRotation;
