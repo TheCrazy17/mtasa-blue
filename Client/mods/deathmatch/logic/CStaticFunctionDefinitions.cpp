@@ -3360,7 +3360,9 @@ bool CStaticFunctionDefinitions::DetachTrailerFromVehicle(CClientVehicle& Vehicl
         CClientVehicle* pTempTrailer = Vehicle.GetTowedVehicle();
         if (pTempTrailer && (!pTrailer || pTempTrailer == pTrailer))
         {
-            // Detach them
+            // Suppress first: a hoist still down and in range would otherwise let the
+            // engine's own rescan reattach this same pair on the very next frame
+            pTempTrailer->SetSuppressedTowAttempt(&Vehicle, GetTickCount32());
             Vehicle.SetTowedVehicle(NULL);
             return true;
         }
