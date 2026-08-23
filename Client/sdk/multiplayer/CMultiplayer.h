@@ -91,6 +91,7 @@ typedef bool(ProjectileStopHandler)(class CEntity* owner, enum eWeaponType weapo
 typedef void(ProjectileHandler)(class CEntity* owner, class CProjectile* projectile, class CProjectileInfo* projectileInfo, enum eWeaponType weaponType,
                                 class CVector* origin, float fForce, class CVector* target, class CEntity* targetEntity);
 typedef bool(BreakTowLinkHandler)(class CVehicle* towingVehicle);
+typedef bool(AttachTrailerHandler)(class CVehicle* towedVehicle, class CVehicle* towingVehicle);
 typedef bool(ProcessCamHandler)(class CCam* pCam);
 typedef void(DrawRadarAreasHandler)();
 typedef void(Render3DStuffHandler)();
@@ -222,6 +223,7 @@ public:
     virtual void  DisableExplosions(bool bDisabled) = 0;
     virtual void  SetExplosionHandler(ExplosionHandler* pExplosionHandler) = 0;
     virtual void  SetBreakTowLinkHandler(BreakTowLinkHandler* pBreakTowLinkHandler) = 0;
+    virtual void  SetAttachTrailerHandler(AttachTrailerHandler* pAttachTrailerHandler) = 0;
     virtual void  SetDamageHandler(DamageHandler* pDamageHandler) = 0;
     virtual void  SetDeathHandler(DeathHandler* pDeathHandler) = 0;
     virtual void  SetFireHandler(FireHandler* pFireHandler) = 0;

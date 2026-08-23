@@ -142,3 +142,4 @@ bool                            GetDebugIdEnabled(uint uiDebugId);
 void                            LogEvent(uint uiDebugId, const char* szType, const char* szContext, const char* szBody, uint uiAddReportLogId = 0);
 void                            CallGameEntityRenderHandler(CEntitySAInterface* pEntity);
 extern GameEntityRenderHandler* pGameEntityRenderHandler;
+extern AttachTrailerHandler*    m_pAttachTrailerHandler;

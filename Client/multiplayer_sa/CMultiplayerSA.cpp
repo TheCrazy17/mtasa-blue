@@ -402,6 +402,7 @@ ProcessCamHandler*                         m_pProcessCamHandler = NULL;
 ChokingHandler*                            m_pChokingHandler = NULL;
 ExplosionHandler*                          m_pExplosionHandler = NULL;
 BreakTowLinkHandler*                       m_pBreakTowLinkHandler = NULL;
+AttachTrailerHandler*                      m_pAttachTrailerHandler = NULL;
 DrawRadarAreasHandler*                     m_pDrawRadarAreasHandler = NULL;
 Render3DStuffHandler*                      m_pRender3DStuffHandler = NULL;
 PreWeatherUpdateHandler*                   m_pPreWeatherUpdateHandler = NULL;
@@ -584,6 +585,7 @@ CMultiplayerSA::CMultiplayerSA()
     m_bExplosionsDisabled = false;
     m_pExplosionHandler = NULL;
     m_pBreakTowLinkHandler = NULL;
+    m_pAttachTrailerHandler = NULL;
     m_pDrawRadarAreasHandler = NULL;
     m_pDamageHandler = NULL;
     m_pFireHandler = NULL;
@@ -2617,6 +2619,11 @@ void CMultiplayerSA::SetBreakTowLinkHandler(BreakTowLinkHandler* pBreakTowLinkHa
     m_pBreakTowLinkHandler = pBreakTowLinkHandler;
 }
 
+void CMultiplayerSA::SetAttachTrailerHandler(AttachTrailerHandler* pAttachTrailerHandler)
+{
+    m_pAttachTrailerHandler = pAttachTrailerHandler;
+}
+
 void CMultiplayerSA::SetDrawRadarAreasHandler(DrawRadarAreasHandler* pRadarAreasHandler)
 {
     m_pDrawRadarAreasHandler = pRadarAreasHandler;
@@ -4361,6 +4368,7 @@ void CMultiplayerSA::Reset()
     m_pPreContextSwitchHandler = NULL;
     m_pPostContextSwitchHandler = NULL;
     m_pBreakTowLinkHandler = NULL;
+    m_pAttachTrailerHandler = NULL;
     m_pDrawRadarAreasHandler = NULL;
     DisableAllVehicleWeapons(false);
     m_pDamageHandler = NULL;

@@ -1259,6 +1259,91 @@ static void __declspec(naked) HOOK_CAutomobile__Constructor_TowTruckBouncingPane
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
+// CTrailer::SetTowLink / CAutomobile::SetTowLink
+//
+// Lets a registered handler veto a natural, engine driven attach before it happens. Both
+// hooks sit right after the function's own null and already-towing checks and before any
+// state mutation, so a veto lands on the same early return false path the function already
+// takes for an invalid status. EAX, ECX and EDX are scratch at both hook points and the
+// callee preserves ESI, EDI and EBX, so no registers need saving.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6CFDFF | 8A 46 36 | mov  al, [esi+36h]
+//     0x6CFE02 | 8A C8    | mov  cl, al
+#define HOOKPOS_CTrailer__SetTowLink   0x6CFDFF
+#define HOOKSIZE_CTrailer__SetTowLink  5
+#define HOOKCHECK_CTrailer__SetTowLink 0x8A
+static constexpr DWORD CONTINUE_CTrailer__SetTowLink = 0x6CFE04;
+static constexpr DWORD VETO_CTrailer__SetTowLink = 0x6CFE16;
+
+// >>> 0x6B4430 | 8A 46 36 | mov al, [esi+36h]
+//     0x6B4433 | C0 E8 03 | shr al, 3
+#define HOOKPOS_CAutomobile__SetTowLink   0x6B4430
+#define HOOKSIZE_CAutomobile__SetTowLink  6
+#define HOOKCHECK_CAutomobile__SetTowLink 0x8A
+static constexpr DWORD CONTINUE_CAutomobile__SetTowLink = 0x6B4436;
+static constexpr DWORD VETO_CAutomobile__SetTowLink = 0x6B4446;
+
+static bool __fastcall CallAttachTrailerHandler(CVehicleSAInterface* towedVehicle, CVehicleSAInterface* towingVehicle)
+{
+    SClientEntity<CVehicleSA>* towedPair = pGameInterface->GetPools()->GetVehicle((DWORD*)towedVehicle);
+    SClientEntity<CVehicleSA>* towingPair = pGameInterface->GetPools()->GetVehicle((DWORD*)towingVehicle);
+    CVehicle*                  pTowedVehicle = towedPair ? towedPair->pEntity : nullptr;
+    CVehicle*                  pTowingVehicle = towingPair ? towingPair->pEntity : nullptr;
+
+    if (pTowedVehicle && pTowingVehicle && m_pAttachTrailerHandler)
+        return m_pAttachTrailerHandler(pTowedVehicle, pTowingVehicle);
+    return true;
+}
+
+static void __declspec(naked) HOOK_CTrailer__SetTowLink()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi                    // trailer (this)
+        mov     edx, edi                    // towing vehicle
+        call    CallAttachTrailerHandler
+        test    al, al
+        jz      veto
+
+        mov     al, [esi+36h]
+        mov     cl, al
+        jmp     CONTINUE_CTrailer__SetTowLink
+
+        veto:
+        jmp     VETO_CTrailer__SetTowLink
+    }
+    // clang-format on
+}
+
+static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi                    // vehicle being hoisted (this)
+        mov     edx, ebx                    // tow truck or tractor
+        call    CallAttachTrailerHandler
+        test    al, al
+        jz      veto
+
+        mov     al, [esi+36h]
+        shr     al, 3
+        jmp     CONTINUE_CAutomobile__SetTowLink
+
+        veto:
+        jmp     VETO_CAutomobile__SetTowLink
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
 // The Dumper's tipping ramp on custom vehicle models
 //
 // Built on CMonsterTruck, not plain CAutomobile: ProcessControl decides whether the ramp moves,
@@ -4149,6 +4234,8 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CAutomobile__GetTowBarPos_TugAttachWhitelist);
     EZHookInstall(CAutomobile__GetTowBarPos_TugDummy);
     EZHookInstall(CTrailer__GetTowBarPos);
+    EZHookInstallChecked(CTrailer__SetTowLink);
+    EZHookInstallChecked(CAutomobile__SetTowLink);
     EZHookInstall(CAutomobile__ProcessControl_DumperDispatch);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperAngleReset);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperMiscGate);

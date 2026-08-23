@@ -116,6 +116,7 @@ public:
     void SetProjectileStopHandler(ProjectileStopHandler* pProjectileHandler);
     void SetFireHandler(FireHandler* pFireHandler);
     void SetBreakTowLinkHandler(BreakTowLinkHandler* pBreakTowLinkHandler);
+    void SetAttachTrailerHandler(AttachTrailerHandler* pAttachTrailerHandler);
     void SetProcessCamHandler(ProcessCamHandler* pProcessCamHandler);
     void SetChokingHandler(ChokingHandler* pChokingHandler);
     void SetPreWeatherUpdateHandler(PreWeatherUpdateHandler* pHandler);
