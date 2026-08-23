@@ -1344,6 +1344,84 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
+// CAutomobile::ProcessControl, the two UpdateTractorLink calls of the drive loop
+//
+// The reaction half of the link drags the tower toward the hitch every tick. On a
+// driverless abandoned tower that pull is the only thing moving it, so a parked pair
+// creeps forever and never reaches the fake physics sleep. Skip the pull while the tower
+// is abandoned with no driver; the towed side keeps its own supporting pull, so the cargo
+// stays held. ECX holds the towing vehicle at both call sites, the callee cleans its two
+// stack arguments, and only AL, dead at both sites, is touched.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6B3266 | E8 E5 CD 02 00 | call 0x6E0050    ; CVehicle::UpdateTractorLink(false, false)
+#define HOOKPOS_CAutomobile__ProcessControl_TractorPullFirst   0x6B3266
+#define HOOKSIZE_CAutomobile__ProcessControl_TractorPullFirst  5
+#define HOOKCHECK_CAutomobile__ProcessControl_TractorPullFirst 0xE8
+static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TractorPullFirst = 0x6B326B;
+
+// >>> 0x6B3291 | E8 BA CD 02 00 | call 0x6E0050    ; CVehicle::UpdateTractorLink(false, true)
+#define HOOKPOS_CAutomobile__ProcessControl_TractorPullSecond   0x6B3291
+#define HOOKSIZE_CAutomobile__ProcessControl_TractorPullSecond  5
+#define HOOKCHECK_CAutomobile__ProcessControl_TractorPullSecond 0xE8
+static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TractorPullSecond = 0x6B3296;
+
+static constexpr DWORD FUNC_CVehicle__UpdateTractorLink = 0x6E0050;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        cmp     dword ptr [ecx+460h], 0     // pDriver
+        jnz     doPull
+        mov     al, [ecx+36h]
+        and     al, 0F8h
+        cmp     al, 20h                     // STATUS_ABANDONED << 3
+        je      skipPull
+
+        doPull:
+        mov     eax, FUNC_CVehicle__UpdateTractorLink
+        call    eax
+        jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
+
+        skipPull:
+        add     esp, 8                      // drop the two arguments the callee would clean
+        jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
+    }
+    // clang-format on
+}
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullSecond()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        cmp     dword ptr [ecx+460h], 0     // pDriver
+        jnz     doPull
+        mov     al, [ecx+36h]
+        and     al, 0F8h
+        cmp     al, 20h                     // STATUS_ABANDONED << 3
+        je      skipPull
+
+        doPull:
+        mov     eax, FUNC_CVehicle__UpdateTractorLink
+        call    eax
+        jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullSecond
+
+        skipPull:
+        add     esp, 8                      // drop the two arguments the callee would clean
+        jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullSecond
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
 // CAutomobile::ProcessAI, STATUS_ABANDONED
 //
 // An abandoned vehicle only gets the handbrake and full brake while being carjacked; the
@@ -4319,6 +4397,8 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CTrailer__GetTowBarPos);
     EZHookInstallChecked(CTrailer__SetTowLink);
     EZHookInstallChecked(CAutomobile__SetTowLink);
+    EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullFirst);
+    EZHookInstallChecked(CAutomobile__ProcessControl_TractorPullSecond);
     EZHookInstallChecked(CAutomobile__ProcessAI_AbandonedTowBrake);
     EZHookInstallChecked(CVehicle__DoVehicleLights_TowedLights);
     EZHookInstall(CAutomobile__ProcessControl_DumperDispatch);

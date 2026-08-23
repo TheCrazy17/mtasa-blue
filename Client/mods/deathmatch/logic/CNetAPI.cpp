@@ -22,6 +22,9 @@ extern CClientGame* g_pClientGame;
 CTickRateSettings   g_TickRateSettings;
 
 static constexpr float TRAILER_POSITION_WARP_DISTANCE = 5.0f;
+static constexpr float TRAILER_SETTLED_WARP_DISTANCE = 1.0f;
+static constexpr float TRAILER_SETTLED_ROTATION_WARP = 5.0f;
+static constexpr float TRAILER_SETTLED_SPEED_SQ = 0.0004f;
 
 CNetAPI::CNetAPI(CClientManager* pManager)
 {
@@ -1458,11 +1461,22 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
             }
             else
             {
-                // Streamed in trailers follow the local tow physics; only a large divergence
-                // from the reporting driver warrants a hard correction
-                CVector vecPosition;
+                // Streamed in trailers follow the local tow physics; correct hard past a
+                // large divergence, or past a small one while the trailer is settled, since
+                // the native forces never converge the residual error of a resting pair
+                CVector vecPosition, vecMoveSpeed, vecRotationDegrees;
                 pTrailer->GetPosition(vecPosition);
-                if ((vecPosition - trailerPosition.data.vecPosition).LengthSquared() > TRAILER_POSITION_WARP_DISTANCE * TRAILER_POSITION_WARP_DISTANCE)
+                pTrailer->GetMoveSpeed(vecMoveSpeed);
+                pTrailer->GetRotationDegrees(vecRotationDegrees);
+
+                bool  bSettled = vecMoveSpeed.LengthSquared() < TRAILER_SETTLED_SPEED_SQ;
+                float fWarpDistance = bSettled ? TRAILER_SETTLED_WARP_DISTANCE : TRAILER_POSITION_WARP_DISTANCE;
+
+                bool bWarp = (vecPosition - trailerPosition.data.vecPosition).LengthSquared() > fWarpDistance * fWarpDistance;
+                if (bSettled && !bWarp)
+                    bWarp = GetSmallestWrapUnsigned(vecRotationDegrees.fZ - trailerRotation.data.vecRotation.fZ, 360) > TRAILER_SETTLED_ROTATION_WARP;
+
+                if (bWarp)
                 {
                     pTrailer->SetPosition(trailerPosition.data.vecPosition);
                     pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);

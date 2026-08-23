@@ -3881,11 +3881,11 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
         return true;
     }
 
-    if (ulNow >= pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
-    {
-        pVehicle->SetTowLinkRestoreTime(ulNow);
-        pTowedBy->InternalSetTowLink(pVehicle);
-    }
+    // Repull on every vetoed attempt; the tower pull earlier in the drive loop runs before
+    // this check each tick, so any separation left alive between pulls becomes a stream of
+    // unclamped impulses that catapults the pair
+    pVehicle->SetTowLinkRestoreTime(ulNow);
+    pTowedBy->InternalSetTowLink(pVehicle);
     return false;
 }
 
