@@ -1930,6 +1930,22 @@ void CClientGame::UpdateTrailers()
 
         if (pGameVehicle->GetTowedVehicle() == pGameTrailer)
         {
+            // With the hoist grounded the engine idles the link and never breaks it, so the
+            // native release gesture, grounding the hoist and driving off, needs the detach
+            // committed from here once the pair actually separates
+            if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer && pTowedBy->GetAdjustablePropertyValue() >= TOW_HOIST_GROUNDED_ANGLE)
+            {
+                CVector vecHitchPosition, vecTowBarPosition;
+                pGameTrailer->GetTowHitchPos(&vecHitchPosition);
+                pGameVehicle->GetTowBarPos(&vecTowBarPosition, pGameTrailer);
+                if ((vecHitchPosition - vecTowBarPosition).LengthSquared() > TOW_LINK_RELEASE_DISTANCE * TOW_LINK_RELEASE_DISTANCE)
+                {
+                    CommitTowLinkBreak(pTowedBy, pVehicle);
+                    pGameTrailer->BreakTowLink();
+                    continue;
+                }
+            }
+
             // Articulation servo: converge onto the freshest driver report a sliver every
             // frame; discrete per packet corrections read as flicker, and a reversing
             // pair never settles on its own

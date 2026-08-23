@@ -3416,13 +3416,18 @@ bool CClientVehicle::InternalSetTowLink(CClientVehicle* pTrailer)
     vecDest.fZ = pTrailerPosition->fZ;
     pTrailer->SetPosition(vecDest);
 
-    // Apply the towed-by-vehicle's velocities to the trailer; leaving its own turn speed
-    // in place lets angular momentum build across repeated relinks of a diverged pair
+    // A moving vehicle takes the tower velocities, which damps the momentum a diverged
+    // pair builds across relinks; a resting one keeps its rest, since handing it the tower
+    // velocity at a fresh attach flings it away from an approaching tractor
     CVector vecMoveSpeed;
-    this->GetMoveSpeed(vecMoveSpeed);
-    pTrailer->SetMoveSpeed(vecMoveSpeed);
-    this->GetTurnSpeed(vecMoveSpeed);
-    pTrailer->SetTurnSpeed(vecMoveSpeed);
+    pTrailer->GetMoveSpeed(vecMoveSpeed);
+    if (vecMoveSpeed.LengthSquared() > 0.0004f)
+    {
+        this->GetMoveSpeed(vecMoveSpeed);
+        pTrailer->SetMoveSpeed(vecMoveSpeed);
+        this->GetTurnSpeed(vecMoveSpeed);
+        pTrailer->SetTurnSpeed(vecMoveSpeed);
+    }
 
     // SA can attach the trailer now; the native call pulls the towed vehicle onto the tow
     // bar itself, and grounding it here would undo that lift for hoisted vehicles

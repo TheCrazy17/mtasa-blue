@@ -1444,9 +1444,14 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
             else if (pTowingVehicle && pTowingVehicle->GetTowedVehicle() != pTrailer)
             {
                 // The driver's report is authoritative for its own chain; a link this client
-                // missed or lost locally gets rebuilt here, unless the server just rejected it
-                if (pTrailer->GetSuppressedTowPartner() != pTowingVehicle)
+                // missed or lost locally gets rebuilt here. Fresh suppression means the
+                // server just rejected the pair and this report predates the rollback;
+                // stale suppression yields, since a detached pair travelling in scan range
+                // refreshes its suppression every frame and would block its own heal forever
+                if (pTrailer->GetSuppressedTowPartner() != pTowingVehicle ||
+                    GetTickCount32() >= pTrailer->GetSuppressedTowArmTime() + TRAILER_SUPPRESS_HEAL_DELAY)
                 {
+                    pTrailer->SetSuppressedTowAttempt(nullptr, 0);
                     pTrailer->SetPosition(trailerPosition.data.vecPosition);
                     if (pTowingVehicle->SetTowedVehicle(pTrailer, &trailerRotation.data.vecRotation))
                     {

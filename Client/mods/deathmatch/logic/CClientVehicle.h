@@ -463,11 +463,17 @@ public:
         m_ulReportedTowRotationTime = ulTime;
     }
 
-    // A cancelled or server rejected pair, vetoed silently until the engine stops retrying
+    // A cancelled or server rejected pair, vetoed silently until the engine stops retrying.
+    // The arm time survives the per attempt refreshes, so stale suppression can be told
+    // apart from a fresh one when the driver report says the pair is attached after all
     CClientVehicle* GetSuppressedTowPartner() { return m_pSuppressedTowPartner; }
     unsigned long   GetSuppressedTowAttemptTime() { return m_ulSuppressedTowAttemptTime; }
+    unsigned long   GetSuppressedTowArmTime() { return m_ulSuppressedTowArmTime; }
     void            SetSuppressedTowAttempt(CClientVehicle* pPartner, unsigned long ulTime)
     {
+        if (m_pSuppressedTowPartner != pPartner)
+            m_ulSuppressedTowArmTime = ulTime;
+
         m_pSuppressedTowPartner = pPartner;
         m_ulSuppressedTowAttemptTime = ulTime;
     }
@@ -745,6 +751,7 @@ protected:
 
     CClientVehiclePtr m_pSuppressedTowPartner;
     unsigned long     m_ulSuppressedTowAttemptTime = 0;
+    unsigned long     m_ulSuppressedTowArmTime = 0;
 
     bool m_bHasDamageModel;
 
