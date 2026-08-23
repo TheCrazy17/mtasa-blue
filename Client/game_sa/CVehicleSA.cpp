@@ -1313,8 +1313,7 @@ void CVehicleSA::SetTowLink(CVehicle* pVehicle)
         towingVehicle->m_trailerVehicle = trailerVehicle;
         trailerVehicle->m_towingVehicle = towingVehicle;
 
-        // Set the trailer's status to "remote controlled"
-        SetEntityStatus(eEntityStatus::STATUS_REMOTE_CONTROLLED);
+        SetEntityStatus(eEntityStatus::STATUS_IS_TOWED);
     }
 }
 

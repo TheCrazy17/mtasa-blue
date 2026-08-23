@@ -3699,7 +3699,7 @@ bool CClientVehicle::IsOnGround()
 
 void CClientVehicle::LockSteering(bool bLock)
 {
-    // STATUS_TRAIN_MOVING or STATUS_PLAYER_DISABLED will do. STATUS_TRAIN_NOT_MOVING is neater but will screw up planes (turns off the engine).
+    // STATUS_TRAIN_MOVING will do. STATUS_TRAIN_NOT_MOVING is neater but will screw up planes (turns off the engine).
 
     eEntityStatus Status = m_pVehicle->GetEntityStatus();
 
