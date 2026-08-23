@@ -24,6 +24,7 @@ CTickRateSettings   g_TickRateSettings;
 static constexpr float TRAILER_POSITION_WARP_DISTANCE = 5.0f;
 static constexpr float TRAILER_SETTLED_WARP_DISTANCE = 1.0f;
 static constexpr float TRAILER_SETTLED_ROTATION_WARP = 5.0f;
+static constexpr float TRAILER_MOVING_ROTATION_WARP = 10.0f;
 static constexpr float TRAILER_SETTLED_SPEED_SQ = 0.0004f;
 
 CNetAPI::CNetAPI(CClientManager* pManager)
@@ -1463,7 +1464,9 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
             {
                 // Streamed in trailers follow the local tow physics; correct hard past a
                 // large divergence, or past a small one while the trailer is settled, since
-                // the native forces never converge the residual error of a resting pair
+                // the native forces never converge the residual error of a resting pair.
+                // Rotation also converges onto the driver report while moving; articulation
+                // diverges persistently in reverse and the driver view is the real one
                 CVector vecPosition, vecMoveSpeed, vecRotationDegrees;
                 pTrailer->GetPosition(vecPosition);
                 pTrailer->GetMoveSpeed(vecMoveSpeed);
@@ -1473,13 +1476,29 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                 float fWarpDistance = bSettled ? TRAILER_SETTLED_WARP_DISTANCE : TRAILER_POSITION_WARP_DISTANCE;
 
                 bool bWarp = (vecPosition - trailerPosition.data.vecPosition).LengthSquared() > fWarpDistance * fWarpDistance;
-                if (bSettled && !bWarp)
-                    bWarp = GetSmallestWrapUnsigned(vecRotationDegrees.fZ - trailerRotation.data.vecRotation.fZ, 360) > TRAILER_SETTLED_ROTATION_WARP;
+                if (!bWarp)
+                    bWarp = GetSmallestWrapUnsigned(vecRotationDegrees.fZ - trailerRotation.data.vecRotation.fZ, 360) >
+                            (bSettled ? TRAILER_SETTLED_ROTATION_WARP : TRAILER_MOVING_ROTATION_WARP);
 
                 if (bWarp)
                 {
+                    // Drag everything this one tows by the same delta; correcting a single
+                    // chain member opens an intra chain separation that the unclamped native
+                    // pulls turn into a launch. The dragged members meet their own chain
+                    // entries right after this one and take their own finer correction
+                    CVector vecWarpDelta = trailerPosition.data.vecPosition - vecPosition;
                     pTrailer->SetPosition(trailerPosition.data.vecPosition);
                     pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);
+
+                    for (CClientVehicle* pTowed = pTrailer->GetTowedVehicle(); pTowed; pTowed = pTowed->GetTowedVehicle())
+                    {
+                        if (!pTowed->GetGameVehicle())
+                            break;
+
+                        CVector vecTowedPosition;
+                        pTowed->GetPosition(vecTowedPosition);
+                        pTowed->SetPosition(vecTowedPosition + vecWarpDelta);
+                    }
                 }
             }
 
