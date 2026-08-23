@@ -3919,6 +3919,19 @@ void CClientVehicle::UpdateTargetPosition()
             if (HasTargetRotation())
                 SetRotationDegrees(m_interp.rot.vecTarget);
             m_interp.rot.ulFinishTime = 0;
+
+            // Drag the towed chain along; left behind, the next native link pull would apply
+            // the whole separation as a single unclamped impulse and catapult the pair
+            CVector vecWarpDelta = vecNewPosition - vecCurrentPosition;
+            for (CClientVehicle* pTowed = m_pTowedVehicle; pTowed; pTowed = pTowed->m_pTowedVehicle)
+            {
+                if (!pTowed->GetGameVehicle())
+                    break;
+
+                CVector vecTowedPosition;
+                pTowed->GetPosition(vecTowedPosition);
+                pTowed->SetPosition(vecTowedPosition + vecWarpDelta, false);
+            }
         }
 
         SetPosition(vecNewPosition, false);

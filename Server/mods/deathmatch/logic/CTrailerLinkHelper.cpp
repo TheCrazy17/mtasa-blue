@@ -37,6 +37,12 @@ bool CTrailerLinkHelper::AttachTrailer(CVehicle* pVehicle, CVehicle* pTrailer, C
     if (pVehicle->GetTowedVehicle() == pTrailer)
         return true;
 
+    // A sync driven retry of a pair a script just cancelled is stale data sent before that
+    // client saw the rollback, and would fire onTrailerAttach a second time; only scripted
+    // attaches may try again immediately
+    if (pSourcePlayer && pVehicle->WasTrailerRejectedRecently(pTrailer))
+        return true;
+
     // Detach whatever either side is currently linked to first
     DetachTrailer(pVehicle, nullptr, pSourcePlayer);
     if (pVehicle->IsBeingDeleted() || pTrailer->IsBeingDeleted())
@@ -65,6 +71,7 @@ bool CTrailerLinkHelper::AttachTrailer(CVehicle* pVehicle, CVehicle* pTrailer, C
     if (!bContinue)
     {
         pVehicle->SetTowedVehicle(NULL);
+        pVehicle->SetRejectedTrailer(pTrailer);
 
         // No source skip here; the reporting client committed locally and needs the rollback
         CVehicleTrailerPacket DetachPacket(pVehicle, pTrailer, false);

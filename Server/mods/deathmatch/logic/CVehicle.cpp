@@ -762,6 +762,17 @@ bool CVehicle::SetTowedByVehicle(CVehicle* pVehicle)
     return true;
 }
 
+void CVehicle::SetRejectedTrailer(CVehicle* pTrailer)
+{
+    m_RejectedTrailerID = pTrailer->GetID();
+    m_llRejectedTrailerTime = GetTickCount64_();
+}
+
+bool CVehicle::WasTrailerRejectedRecently(CVehicle* pTrailer)
+{
+    return m_RejectedTrailerID == pTrailer->GetID() && GetTickCount64_() - m_llRejectedTrailerTime < REJECTED_TRAILER_WINDOW_MS;
+}
+
 void CVehicle::SpawnAt(const CVector& vecPosition, const CVector& vecRotation)
 {
     SetBlowState(VehicleBlowState::INTACT);

@@ -293,6 +293,8 @@ public:
     bool      SetTowedVehicle(CVehicle* pVehicle);
     CVehicle* GetTowedByVehicle() { return m_pTowedByVehicle; }
     bool      SetTowedByVehicle(CVehicle* pVehicle);
+    void      SetRejectedTrailer(CVehicle* pTrailer);
+    bool      WasTrailerRejectedRecently(CVehicle* pTrailer);
 
     const char* GetRegPlate() { return m_szRegPlate; }
     void        SetRegPlate(const char* szRegPlate);
@@ -444,6 +446,11 @@ private:
 
     CVehicle* m_pTowedVehicle;
     CVehicle* m_pTowedByVehicle;
+
+    static constexpr long long REJECTED_TRAILER_WINDOW_MS = 1500;
+
+    ElementID m_RejectedTrailerID = INVALID_ELEMENT_ID;
+    long long m_llRejectedTrailerTime = 0;
 
     char          m_szRegPlate[9];
     unsigned char m_ucPaintjob;

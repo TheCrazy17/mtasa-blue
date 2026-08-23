@@ -1913,11 +1913,16 @@ void CClientGame::UpdateTrailers()
         if (!pGameVehicle)
             continue;
 
-        // The streamer never distance streams a towed vehicle back in on its own
+        // The streamer never distance streams a towed vehicle back in on its own; retry
+        // gently, since the vehicle pool may be saturated and creation can keep failing
         CVehicle* pGameTrailer = pVehicle->GetGameVehicle();
         if (!pGameTrailer)
         {
-            pVehicle->StreamIn(true);
+            if (ulCurrentTime >= pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
+            {
+                pVehicle->SetTowLinkRestoreTime(ulCurrentTime);
+                pVehicle->StreamIn(true);
+            }
             continue;
         }
 
