@@ -3891,6 +3891,12 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
         return true;
     }
 
+    // A vetoed break means the local articulation left the rails the driver reports; snap
+    // the rotation onto a fresh report before the repull, or the same fight repeats each
+    // tick with the divergence, and its angular momentum, building back up
+    if (ulNow < pVehicle->GetReportedTowRotationTime() + TOW_ROTATION_REPORT_LIFETIME)
+        pVehicle->SetRotationDegrees(pVehicle->GetReportedTowRotation());
+
     pVehicle->SetTowLinkRestoreTime(ulNow);
     pTowedBy->InternalSetTowLink(pVehicle);
     return false;

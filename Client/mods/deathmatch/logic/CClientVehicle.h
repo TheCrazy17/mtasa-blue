@@ -454,6 +454,15 @@ public:
     unsigned long GetTowLinkBreakAttemptTime() { return m_ulTowLinkBreakAttemptTime; }
     void          SetTowLinkBreakAttemptTime(unsigned long ulTime) { m_ulTowLinkBreakAttemptTime = ulTime; }
 
+    // Latest towed rotation the reporting driver sent for this vehicle
+    const CVector& GetReportedTowRotation() { return m_vecReportedTowRotation; }
+    unsigned long  GetReportedTowRotationTime() { return m_ulReportedTowRotationTime; }
+    void           SetReportedTowRotation(const CVector& vecRotationDegrees, unsigned long ulTime)
+    {
+        m_vecReportedTowRotation = vecRotationDegrees;
+        m_ulReportedTowRotationTime = ulTime;
+    }
+
     // A cancelled or server rejected pair, vetoed silently until the engine stops retrying
     CClientVehicle* GetSuppressedTowPartner() { return m_pSuppressedTowPartner; }
     unsigned long   GetSuppressedTowAttemptTime() { return m_ulSuppressedTowAttemptTime; }
@@ -730,6 +739,9 @@ protected:
     unsigned long m_ulTowLinkRestoreTime;
     unsigned long m_ulTowLinkBreakAttemptTime = 0;
     bool          m_bEngineForcedOff = false;
+
+    CVector       m_vecReportedTowRotation;
+    unsigned long m_ulReportedTowRotationTime = 0;
 
     CClientVehiclePtr m_pSuppressedTowPartner;
     unsigned long     m_ulSuppressedTowAttemptTime = 0;

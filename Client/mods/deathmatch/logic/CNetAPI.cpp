@@ -1472,6 +1472,9 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                 pTrailer->GetMoveSpeed(vecMoveSpeed);
                 pTrailer->GetRotationDegrees(vecRotationDegrees);
 
+                // Kept for the break veto, which snaps a diverged articulation onto it
+                pTrailer->SetReportedTowRotation(trailerRotation.data.vecRotation, GetTickCount32());
+
                 bool  bSettled = vecMoveSpeed.LengthSquared() < TRAILER_SETTLED_SPEED_SQ;
                 float fWarpDistance = bSettled ? TRAILER_SETTLED_WARP_DISTANCE : TRAILER_POSITION_WARP_DISTANCE;
 
