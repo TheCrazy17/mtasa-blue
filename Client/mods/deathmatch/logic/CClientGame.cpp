@@ -3866,12 +3866,13 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
 
     // The engine breaks a link over geometry two ways. Overstretch is what local divergence
     // produces all the time and a repull cures it, so it only counts for the controlling
-    // driver once it survives one convergence. Orientation, jackknifed past its limit or
-    // flipped, survives any repull since rotation is preserved; retrying it just resets the
-    // swing every tick and starves the confirm window while the pair thrashes, so the
-    // controlling driver honors it at once. Everyone else always vetoes and repulls; their
-    // geometry is local divergence, and leaving the separation alive would turn the tower
-    // pull, which runs before this check each tick, into a stream of unclamped impulses
+    // driver once it survives one convergence; a syncer must never commit it, since its
+    // stretch is usually its own drift. Orientation, jackknifed past its limit or flipped,
+    // is shared rotation state, survives any repull, and must also break for a driverless
+    // pair someone pushed past the limit, so it commits under the full attach authority at
+    // the first attempt. Everyone else always vetoes and repulls; leaving the separation
+    // alive would turn the tower pull, which runs before this check each tick, into a
+    // stream of unclamped impulses
     CMatrix towedMatrix, towingMatrix;
     pVehicle->GetMatrix(towedMatrix);
     pTowedBy->GetMatrix(towingMatrix);
@@ -3882,7 +3883,9 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
     bool          bRepeatedAttempt = ulNow < pVehicle->GetTowLinkBreakAttemptTime() + TOW_LINK_BREAK_CONFIRM_WINDOW;
     pVehicle->SetTowLinkBreakAttemptTime(ulNow);
 
-    if (pTowedBy->GetControllingPlayer() == m_pLocalPlayer && (bOrientationBreak || bRepeatedAttempt))
+    bool bMayCommit = bOrientationBreak ? IsAuthoritativeForTowLink(pTowedBy, pVehicle)
+                                        : pTowedBy->GetControllingPlayer() == m_pLocalPlayer && bRepeatedAttempt;
+    if (bMayCommit)
     {
         CommitTowLinkBreak(pTowedBy, pVehicle);
         return true;
