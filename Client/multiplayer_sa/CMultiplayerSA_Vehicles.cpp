@@ -1348,15 +1348,16 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 //
 // Each tick the drive loop corrects the link twice per side: a first pass that applies
 // the whole bar to hitch displacement as one unclamped impulse, then a clamped fine pass.
-// With healthy geometry the displacement is tiny and the clamped pass alone is
-// indistinguishable, but any divergence a networked game produces, interpolation jumps,
-// driver handovers, corrections, low framerate, turns the unclamped pass into a catapult.
-// Both unclamped passes are skipped outright. The clamped tractor pass is additionally
-// gated on the tower actually moving; that pull is the only thing moving a resting tower,
-// so a parked pair would creep forever and never reach the fake physics sleep. The
-// clamped towed pass always runs; it is what carries the cargo. ECX holds the towing
-// vehicle at the hooked sites and is preserved around the helper; the callee cleans its
-// two stack arguments, and EAX is dead at every site.
+// The unclamped pass is what keeps a healthy link tight under real towing forces, but any
+// divergence a networked game produces, interpolation jumps, driver handovers,
+// corrections, low framerate, turns it into a catapult. Both unclamped passes now run
+// only while the displacement is within the native stretch break scale; past it they are
+// skipped without any impulse and the break veto repull resolves the separation instead.
+// The clamped tractor pass is additionally gated on the tower actually moving; that pull
+// is the only thing moving a resting tower, so a parked pair would creep forever and
+// never reach the fake physics sleep. The clamped towed pass always runs; it is what
+// carries the cargo. ECX is preserved where the original call still needs it; the callee
+// cleans its two stack arguments, and EAX is dead at every site.
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 // >>> 0x6B3266 | E8 E5 CD 02 00 | call 0x6E0050    ; CVehicle::UpdateTractorLink(false, false)
@@ -1378,12 +1379,27 @@ static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TrailerPullFirst = 0
 static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TractorPullSecond = 0x6B3296;
 
 static constexpr DWORD FUNC_CVehicle__UpdateTractorLink = 0x6E0050;
+static constexpr DWORD FUNC_CVehicle__UpdateTrailerLink = 0x6DFC50;
 
 static constexpr float TRACTOR_PULL_MIN_SPEED_SQ = 0.008f * 0.008f;
+static constexpr float TOW_LINK_TIGHT_RANGE_SQ = 1.0f;
 
 static bool __fastcall IsTowingVehicleStill(CVehicleSAInterface* towingVehicle)
 {
     return towingVehicle->m_vecLinearVelocity.LengthSquared() < TRACTOR_PULL_MIN_SPEED_SQ;
+}
+
+static bool __fastcall IsTowLinkStretched(CVehicleSAInterface* towedVehicle)
+{
+    CVehicleSAInterface* towingVehicle = towedVehicle->m_towingVehicle;
+    if (!towingVehicle)
+        return true;
+
+    CVector hitchPosition, towBarPosition;
+    if (!towedVehicle->GetTowHitchPos(&hitchPosition, true, towingVehicle) || !towingVehicle->GetTowbarPos(&towBarPosition, true, towedVehicle))
+        return true;
+
+    return (hitchPosition - towBarPosition).LengthSquared() > TOW_LINK_TIGHT_RANGE_SQ;
 }
 
 static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst()
@@ -1393,6 +1409,18 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst(
     // clang-format off
     __asm
     {
+        push    ecx                         // the towing vehicle; the original call needs it
+        mov     ecx, esi
+        call    IsTowLinkStretched
+        pop     ecx
+        test    al, al
+        jnz     skipPull
+
+        mov     eax, FUNC_CVehicle__UpdateTractorLink
+        call    eax
+        jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
+
+        skipPull:
         add     esp, 8                      // drop the two arguments the callee would clean
         jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
     }
@@ -1406,6 +1434,17 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TrailerPullFirst(
     // clang-format off
     __asm
     {
+        mov     ecx, esi
+        call    IsTowLinkStretched
+        test    al, al
+        jnz     skipPull
+
+        mov     ecx, esi
+        mov     eax, FUNC_CVehicle__UpdateTrailerLink
+        call    eax
+        jmp     CONTINUE_CAutomobile__ProcessControl_TrailerPullFirst
+
+        skipPull:
         add     esp, 8                      // drop the two arguments the callee would clean
         jmp     CONTINUE_CAutomobile__ProcessControl_TrailerPullFirst
     }
