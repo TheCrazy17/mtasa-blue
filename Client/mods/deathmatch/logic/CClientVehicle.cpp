@@ -3400,13 +3400,9 @@ bool CClientVehicle::InternalSetTowLink(CClientVehicle* pTrailer)
     this->GetMoveSpeed(vecMoveSpeed);
     pTrailer->SetMoveSpeed(vecMoveSpeed);
 
-    // SA can attach the trailer now
-    if (!pGameVehicle->SetTowLink(m_pVehicle))
-        return false;
-
-    pTrailer->PlaceProperlyOnGround();  // Probably not needed
-
-    return true;
+    // SA can attach the trailer now; the native call pulls the towed vehicle onto the tow
+    // bar itself, and grounding it here would undo that lift for hoisted vehicles
+    return pGameVehicle->SetTowLink(m_pVehicle);
 }
 
 bool CClientVehicle::IsTowableBy(CClientVehicle* towingVehicle)

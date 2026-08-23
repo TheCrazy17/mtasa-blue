@@ -3859,10 +3859,11 @@ bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
     if (pVehicle->IsLocalEntity() || pTowedBy->IsLocalEntity())
         return true;
 
-    // Only the authoritative side may turn an engine break into a real detach; for everyone
-    // else the link belongs to the server, so the break is vetoed and the pair pulled back
-    // together, since the engine stops applying link forces while its break condition holds
-    if (!IsAuthoritativeForTowLink(pTowedBy, pVehicle))
+    // Only the driver controlling the chain may turn an engine break into a real detach; on
+    // any other client, the towed side syncer included, the geometry is local divergence, so
+    // the break is vetoed and the pair pulled back together, since the engine stops applying
+    // link forces while its break condition holds
+    if (pTowedBy->GetControllingPlayer() != m_pLocalPlayer)
     {
         unsigned long ulNow = GetTickCount32();
         if (ulNow >= pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
