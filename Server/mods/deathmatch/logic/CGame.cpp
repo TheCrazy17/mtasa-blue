@@ -48,6 +48,7 @@
 #include "CBandwidthSettings.h"
 #include "CMainConfig.h"
 #include "CUnoccupiedVehicleSync.h"
+#include "CTrailerLinkHelper.h"
 #include "CRegistryManager.h"
 #include "CLatentTransferManager.h"
 #include "CCommandFile.h"
@@ -1284,6 +1285,12 @@ bool CGame::ProcessPacket(CPacket& Packet)
         case PACKET_ID_VEHICLE_INOUT:
         {
             Packet_Vehicle_InOut(static_cast<CVehicleInOutPacket&>(Packet));
+            return true;
+        }
+
+        case PACKET_ID_VEHICLE_TRAILER:
+        {
+            Packet_VehicleTrailer(static_cast<CVehicleTrailerPacket&>(Packet));
             return true;
         }
 
@@ -3647,8 +3654,10 @@ void CGame::Packet_Vehicle_InOut(CVehicleInOutPacket& Packet)
 
                                     if (!m_pUnoccupiedVehicleSync->IsSyncerPersistent())
                                     {
-                                        // Force the player (or ped syncer) that just left the vehicle as the syncer
-                                        m_pUnoccupiedVehicleSync->OverrideSyncer(pVehicle, pPlayer);
+                                        // Force the player (or ped syncer) that just left the vehicle, and any
+                                        // trailers it tows, as the syncer
+                                        for (CVehicle* pSyncVehicle = pVehicle; pSyncVehicle; pSyncVehicle = pSyncVehicle->GetTowedVehicle())
+                                            m_pUnoccupiedVehicleSync->OverrideSyncer(pSyncVehicle, pPlayer);
                                     }
 
                                     // Tell everyone he can start exiting the vehicle
@@ -3713,8 +3722,10 @@ void CGame::Packet_Vehicle_InOut(CVehicleInOutPacket& Packet)
 
                                 if (!m_pUnoccupiedVehicleSync->IsSyncerPersistent())
                                 {
-                                    // Force the player (or ped syncer) that just left the vehicle as the syncer
-                                    m_pUnoccupiedVehicleSync->OverrideSyncer(pVehicle, pPlayer);
+                                    // Force the player (or ped syncer) that just left the vehicle, and any
+                                    // trailers it tows, as the syncer
+                                    for (CVehicle* pSyncVehicle = pVehicle; pSyncVehicle; pSyncVehicle = pSyncVehicle->GetTowedVehicle())
+                                        m_pUnoccupiedVehicleSync->OverrideSyncer(pSyncVehicle, pPlayer);
                                 }
 
                                 pPed->SetVehicleAction(CPed::VEHICLEACTION_NONE);
@@ -3935,105 +3946,45 @@ void CGame::Packet_Vehicle_InOut(CVehicleInOutPacket& Packet)
     }
 }
 
+// A client reporting a natural attach or engine break it was authoritative for, the moment
+// it happened, instead of waiting for its next puresync to carry the chain
 void CGame::Packet_VehicleTrailer(CVehicleTrailerPacket& Packet)
 {
     CPlayer* pPlayer = Packet.GetSourcePlayer();
-    if (pPlayer && pPlayer->IsJoined())
+    if (!pPlayer || !pPlayer->IsJoined() || !pPlayer->IsSpawned())
+        return;
+
+    CElement* pVehicleElement = CElementIDs::GetElement(Packet.GetVehicle());
+    if (!pVehicleElement || !IS_VEHICLE(pVehicleElement))
+        return;
+    CVehicle* pVehicle = static_cast<CVehicle*>(pVehicleElement);
+
+    CElement* pTrailerElement = CElementIDs::GetElement(Packet.GetAttachedVehicle());
+    if (!pTrailerElement || !IS_VEHICLE(pTrailerElement))
+        return;
+    CVehicle* pTrailer = static_cast<CVehicle*>(pTrailerElement);
+
+    // Only the client authoritative for the pair may report link changes: whoever controls
+    // the towing chain, or the towed side syncer for driverless pairs
+    if (pVehicle->GetController() != pPlayer && pTrailer->GetSyncer() != pPlayer)
+        return;
+
+    if (Packet.GetAttached())
     {
-        // Spawned?
-        if (pPlayer->IsSpawned())
+        pTrailer->SetPosition(Packet.GetPosition());
+        pTrailer->SetRotationDegrees(Packet.GetRotationDegrees());
+        pTrailer->SetTurnSpeed(Packet.GetTurnSpeed());
+
+        if (CTrailerLinkHelper::AttachTrailer(pVehicle, pTrailer, pPlayer) && pVehicle->GetTowedVehicle() == pTrailer &&
+            m_pUnoccupiedVehicleSync->IsSyncerPersistent())
         {
-            // Grab the vehicle with the chosen ID
-            ElementID ID = Packet.GetVehicle();
-            ElementID TrailerID = Packet.GetAttachedVehicle();
-            bool      bAttached = Packet.GetAttached();
-
-            CElement* pVehicleElement = CElementIDs::GetElement(ID);
-            if (pVehicleElement && IS_VEHICLE(pVehicleElement))
-            {
-                CVehicle* pVehicle = static_cast<CVehicle*>(pVehicleElement);
-
-                pVehicleElement = CElementIDs::GetElement(TrailerID);
-                if (pVehicleElement && IS_VEHICLE(pVehicleElement))
-                {
-                    CVehicle* pTrailer = static_cast<CVehicle*>(pVehicleElement);
-
-                    // If we're attaching
-                    if (bAttached)
-                    {
-                        // Do we already have a trailer?
-                        CVehicle* pPresentTrailer = pVehicle->GetTowedVehicle();
-                        if (pPresentTrailer)
-                        {
-                            pPresentTrailer->SetTowedByVehicle(NULL);
-                            pVehicle->SetTowedVehicle(NULL);
-
-                            // Detach this one
-                            CVehicleTrailerPacket DetachPacket(pVehicle, pPresentTrailer, false);
-                            DetachPacket.SetSourceElement(pPlayer);
-                            m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-                        }
-
-                        // Is our trailer already attached to something?
-                        CVehicle* pPresentVehicle = pTrailer->GetTowedByVehicle();
-                        if (pPresentVehicle)
-                        {
-                            pTrailer->SetTowedByVehicle(NULL);
-                            pPresentVehicle->SetTowedVehicle(NULL);
-
-                            // Detach from this one
-                            CVehicleTrailerPacket DetachPacket(pPresentVehicle, pTrailer, false);
-                            DetachPacket.SetSourceElement(pPlayer);
-                            m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-                        }
-
-                        // Attach them
-                        pVehicle->SetTowedVehicle(pTrailer);
-                        pTrailer->SetTowedByVehicle(pVehicle);
-
-                        if (m_pUnoccupiedVehicleSync->IsSyncerPersistent())
-                        {
-                            // Make sure the un-occupied syncer of the trailer is this driver
-                            m_pUnoccupiedVehicleSync->OverrideSyncer(pTrailer, pPlayer);
-                        }
-
-                        // Broadcast this packet to everyone else
-                        m_pPlayerManager->BroadcastOnlyJoined(Packet, pPlayer);
-
-                        // Execute the attach trailer script function
-                        CLuaArguments Arguments;
-                        Arguments.PushElement(pVehicle);
-                        bool bContinue = pTrailer->CallEvent("onTrailerAttach", Arguments);
-
-                        if (!bContinue)
-                        {
-                            // Detach them
-                            CVehicleTrailerPacket DetachPacket(pVehicle, pTrailer, false);
-                            DetachPacket.SetSourceElement(pPlayer);
-                            m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-                        }
-                    }
-                    else  // If we're detaching
-                    {
-                        // Make sure they're attached
-                        if (pVehicle->GetTowedVehicle() == pTrailer && pTrailer->GetTowedByVehicle() == pVehicle)
-                        {
-                            // Detach them
-                            pVehicle->SetTowedVehicle(NULL);
-                            pTrailer->SetTowedByVehicle(NULL);
-
-                            // Tell everyone else to detach them
-                            m_pPlayerManager->BroadcastOnlyJoined(Packet, pPlayer);
-
-                            // Execute the detach trailer script function
-                            CLuaArguments Arguments;
-                            Arguments.PushElement(pVehicle);
-                            pTrailer->CallEvent("onTrailerDetach", Arguments);
-                        }
-                    }
-                }
-            }
+            // Make sure the un-occupied syncer of the trailer is this driver
+            m_pUnoccupiedVehicleSync->OverrideSyncer(pTrailer, pPlayer);
         }
+    }
+    else
+    {
+        CTrailerLinkHelper::DetachTrailer(pVehicle, pTrailer, pPlayer);
     }
 }
 

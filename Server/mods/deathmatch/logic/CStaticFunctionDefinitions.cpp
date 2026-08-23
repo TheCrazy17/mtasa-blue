@@ -52,6 +52,7 @@
 #include "CPerfStatManager.h"
 #include "CVehicleNames.h"
 #include "CUnoccupiedVehicleSync.h"
+#include "CTrailerLinkHelper.h"
 #include "Utils.h"
 #include "CameraScriptShared.h"
 #include "lua/CLuaFunctionParseHelpers.h"
@@ -7217,57 +7218,26 @@ bool CStaticFunctionDefinitions::AttachTrailerToVehicle(CVehicle* pVehicle, CVeh
     assert(pVehicle);
     assert(pTrailer);
 
-    // Check if the vehicle already has a trailer
-    if (pVehicle->GetTowedVehicle() == NULL)
+    // Scripted attach is strict: refuse outright if either side is already busy, rather than
+    // silently detaching an existing link like the sync driven paths do
+    if (pVehicle->GetTowedVehicle() || pTrailer->GetTowedByVehicle())
+        return false;
+
+    if (!CTrailerLinkHelper::AttachTrailer(pVehicle, pTrailer))
+        return false;
+
+    if (pVehicle->GetTowedVehicle() == pTrailer && pTrailer->GetVehicleType() == VEHICLE_TRAIN)
     {
-        // ..and the trailer isnt attached to anything
-        if (pTrailer->GetTowedByVehicle() == NULL)
-        {
-            // Attach them
-            if (!pVehicle->SetTowedVehicle(pTrailer) || !pTrailer->SetTowedByVehicle(pVehicle))
-            {
-                pVehicle->SetTowedVehicle(NULL);
-                pTrailer->SetTowedByVehicle(NULL);
-                return false;
-            }
+        // Set the position near the chain engine (doesn't influence visual appearance, but will allow entering)
+        pTrailer->SetPosition(pVehicle->GetPosition());
 
-            if (pTrailer->GetVehicleType() == VEHICLE_TRAIN)
-            {
-                // Set the position near the chain engine (doesn't influence visual appearance, but will allow entering)
-                pTrailer->SetPosition(pVehicle->GetPosition());
-
-                // Find a syncer to get a more correct position
-                CPlayer* pPlayer = g_pGame->GetUnoccupiedVehicleSync()->FindPlayerCloseToVehicle(pTrailer, 250.0f);
-                if (pPlayer)
-                {
-                    g_pGame->GetUnoccupiedVehicleSync()->OverrideSyncer(pTrailer, pPlayer);
-                }
-            }
-
-            // Tell everyone to attach them
-            CVehicleTrailerPacket AttachPacket(pVehicle, pTrailer, true);
-            m_pPlayerManager->BroadcastOnlyJoined(AttachPacket);
-
-            // Execute the attach trailer script function
-            CLuaArguments Arguments;
-            Arguments.PushElement(pVehicle);
-            bool bContinue = pTrailer->CallEvent("onTrailerAttach", Arguments);
-
-            if (!bContinue)
-            {
-                // Detach them
-                pVehicle->SetTowedVehicle(NULL);
-                pTrailer->SetTowedByVehicle(NULL);
-
-                CVehicleTrailerPacket DetachPacket(pVehicle, pTrailer, false);
-                m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-            }
-
-            return true;
-        }
+        // Find a syncer to get a more correct position
+        CPlayer* pPlayer = g_pGame->GetUnoccupiedVehicleSync()->FindPlayerCloseToVehicle(pTrailer, 250.0f);
+        if (pPlayer)
+            g_pGame->GetUnoccupiedVehicleSync()->OverrideSyncer(pTrailer, pPlayer);
     }
 
-    return false;
+    return true;
 }
 
 bool CStaticFunctionDefinitions::DetachTrailerFromVehicle(CVehicle* pVehicle, CVehicle* pTrailer)
@@ -7276,27 +7246,12 @@ bool CStaticFunctionDefinitions::DetachTrailerFromVehicle(CVehicle* pVehicle, CV
     if (pTrailer)
         assert(pTrailer);
 
-    // Is there a trailer attached, and does it match this one
     CVehicle* pTempTrailer = pVehicle->GetTowedVehicle();
-    if (pTempTrailer && (pTrailer == NULL || pTempTrailer == pTrailer))
-    {
-        // Detach them
-        pVehicle->SetTowedVehicle(NULL);
-        pTempTrailer->SetTowedByVehicle(NULL);
+    if (!pTempTrailer || (pTrailer && pTempTrailer != pTrailer))
+        return false;
 
-        // Tell everyone to detach them
-        CVehicleTrailerPacket DetachPacket(pVehicle, pTempTrailer, false);
-        m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-
-        // Execute the detach trailer script function
-        CLuaArguments Arguments;
-        Arguments.PushElement(pVehicle);
-        pTempTrailer->CallEvent("onTrailerDetach", Arguments);
-
-        return true;
-    }
-
-    return false;
+    CTrailerLinkHelper::DetachTrailer(pVehicle, pTrailer);
+    return true;
 }
 
 bool CStaticFunctionDefinitions::SetVehicleEngineState(CElement* pElement, bool bState)

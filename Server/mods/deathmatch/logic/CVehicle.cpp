@@ -771,6 +771,7 @@ void CVehicle::SpawnAt(const CVector& vecPosition, const CVector& vecRotation)
     SetLandingGearDown(true);
     SetAdjustableProperty(0);
     SetTowedByVehicle(NULL);
+    SetTowedVehicle(NULL);
     AttachTo(NULL);
 
     m_vecTurnSpeed = CVector();

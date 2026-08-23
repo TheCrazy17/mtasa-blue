@@ -13,6 +13,7 @@
 #include "CUnoccupiedVehicleSync.h"
 #include "CElementIDs.h"
 #include "CVehicleManager.h"
+#include "CTrailerLinkHelper.h"
 #include "CColManager.h"
 #include "packets/CUnoccupiedVehiclePushPacket.h"
 #include "packets/CUnoccupiedVehicleStartSyncPacket.h"
@@ -354,90 +355,20 @@ void CUnoccupiedVehicleSync::Packet_UnoccupiedVehicleSync(CUnoccupiedVehicleSync
                         if (vehicle.data.bSyncTrailer)
                         {
                             CVehicle* pTrailer = GetElementFromId<CVehicle>(vehicle.data.trailer);
-                            // Trailer attach/detach
                             if (pTrailer)
                             {
-                                CVehicle* pCurrentTrailer = pVehicle->GetTowedVehicle();
-
-                                // Is this a new trailer, attached?
-                                if (pCurrentTrailer != pTrailer)
-                                {
-                                    // If theres a trailer already attached
-                                    if (pCurrentTrailer)
-                                    {
-                                        // Tell everyone to detach them
-                                        CVehicleTrailerPacket DetachPacket(pVehicle, pCurrentTrailer, false);
-                                        m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-
-                                        // Execute the attach trailer script function
-                                        CLuaArguments Arguments;
-                                        Arguments.PushElement(pVehicle);
-                                        pCurrentTrailer->CallEvent("onTrailerDetach", Arguments);
-
-                                        pVehicle->SetTowedVehicle(NULL);
-                                        pCurrentTrailer->SetTowedByVehicle(NULL);
-                                    }
-
-                                    // If something else is towing this trailer
-                                    CVehicle* pCurrentVehicle = pTrailer->GetTowedByVehicle();
-                                    if (pCurrentVehicle)
-                                    {
-                                        // Tell everyone to detach them
-                                        CVehicleTrailerPacket DetachPacket(pCurrentVehicle, pTrailer, false);
-                                        m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-
-                                        // Execute the attach trailer script function
-                                        CLuaArguments Arguments;
-                                        Arguments.PushElement(pCurrentVehicle);
-                                        pTrailer->CallEvent("onTrailerDetach", Arguments);
-
-                                        pCurrentVehicle->SetTowedVehicle(NULL);
-                                        pTrailer->SetTowedByVehicle(NULL);
-                                    }
-
-                                    pVehicle->SetTowedVehicle(pTrailer);
-                                    pTrailer->SetTowedByVehicle(pVehicle);
-
-                                    // Tell everyone to attach the new one
-                                    CVehicleTrailerPacket AttachPacket(pVehicle, pTrailer, true);
-                                    m_pPlayerManager->BroadcastOnlyJoined(AttachPacket);
-
-                                    // Execute the attach trailer script function
-                                    CLuaArguments Arguments;
-                                    Arguments.PushElement(pVehicle);
-                                    bool bContinue = pTrailer->CallEvent("onTrailerAttach", Arguments);
-
-                                    if (!bContinue)
-                                    {
-                                        // Detach them
-                                        pVehicle->SetTowedVehicle(NULL);
-                                        pTrailer->SetTowedByVehicle(NULL);
-
-                                        CVehicleTrailerPacket DetachPacket(pVehicle, pTrailer, false);
-                                        DetachPacket.SetSourceElement(pPlayer);
-                                        m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-                                    }
-                                }
+                                if (pVehicle->GetTowedVehicle() != pTrailer && !CTrailerLinkHelper::AttachTrailer(pVehicle, pTrailer, pPlayer))
+                                    continue;            // a script handler deleted one of them
                             }
                             else
                             {
-                                // If there was a trailer before
-                                CVehicle* pCurrentTrailer = pVehicle->GetTowedVehicle();
-                                if (pCurrentTrailer)
-                                {
-                                    pVehicle->SetTowedVehicle(NULL);
-                                    pCurrentTrailer->SetTowedByVehicle(NULL);
-
-                                    // Tell everyone else to detach them
-                                    CVehicleTrailerPacket DetachPacket(pVehicle, pCurrentTrailer, false);
-                                    m_pPlayerManager->BroadcastOnlyJoined(DetachPacket);
-
-                                    // Execute the detach trailer script function
-                                    CLuaArguments Arguments;
-                                    Arguments.PushElement(pVehicle);
-                                    pCurrentTrailer->CallEvent("onTrailerDetach", Arguments);
-                                }
+                                CTrailerLinkHelper::DetachTrailer(pVehicle, nullptr, pPlayer);
+                                if (pVehicle->IsBeingDeleted())
+                                    continue;
                             }
+
+                            // CVehicleTrailerPacket already carried this; don't force a full resync
+                            vehicle.data.bSyncTrailer = false;
                         }
                         bool bEngineOn = pVehicle->IsEngineOn();
                         bool bDerailed = pVehicle->IsDerailed();

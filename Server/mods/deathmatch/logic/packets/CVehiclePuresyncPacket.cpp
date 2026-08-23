@@ -12,6 +12,7 @@
 #include "StdInc.h"
 #include "CVehiclePuresyncPacket.h"
 #include "CVehicleManager.h"
+#include "CTrailerLinkHelper.h"
 #include "CGame.h"
 #include "CTrainTrackManager.h"
 #include "CWeaponNames.h"
@@ -202,59 +203,14 @@ bool CVehiclePuresyncPacket::Read(NetBitStreamInterface& BitStream)
                         pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);
 
                         // Is this a new trailer, attached?
-                        CVehicle* pCurrentTrailer = pTowedByVehicle->GetTowedVehicle();
-                        if (pCurrentTrailer != pTrailer)
+                        if (pTowedByVehicle->GetTowedVehicle() != pTrailer)
                         {
-                            // If theres a trailer already attached
-                            if (pCurrentTrailer)
-                            {
-                                pTowedByVehicle->SetTowedVehicle(NULL);
-                                pCurrentTrailer->SetTowedByVehicle(NULL);
-
-                                // Tell everyone to detach them
-                                CVehicleTrailerPacket DetachPacket(pTowedByVehicle, pCurrentTrailer, false);
-                                g_pGame->GetPlayerManager()->BroadcastOnlyJoined(DetachPacket);
-
-                                // Execute the attach trailer script function
-                                CLuaArguments Arguments;
-                                Arguments.PushElement(pTowedByVehicle);
-                                pCurrentTrailer->CallEvent("onTrailerDetach", Arguments);
-                                if (pTowedByVehicle->IsBeingDeleted() || pTrailer->IsBeingDeleted())
-                                    return false;
-                            }
-
-                            // If something else is towing this trailer
-                            CVehicle* pCurrentVehicle = pTrailer->GetTowedByVehicle();
-                            if (pCurrentVehicle)
-                            {
-                                pCurrentVehicle->SetTowedVehicle(NULL);
-                                pTrailer->SetTowedByVehicle(NULL);
-
-                                // Tell everyone to detach them
-                                CVehicleTrailerPacket DetachPacket(pCurrentVehicle, pTrailer, false);
-                                g_pGame->GetPlayerManager()->BroadcastOnlyJoined(DetachPacket);
-
-                                // Execute the attach trailer script function
-                                CLuaArguments Arguments;
-                                Arguments.PushElement(pCurrentVehicle);
-                                pTrailer->CallEvent("onTrailerDetach", Arguments);
-                                if (pTowedByVehicle->IsBeingDeleted() || pTrailer->IsBeingDeleted())
-                                    return false;
-                            }
-
-                            pTowedByVehicle->SetTowedVehicle(pTrailer);
-                            pTrailer->SetTowedByVehicle(pTowedByVehicle);
-
-                            // Execute the attach trailer script function
-                            CLuaArguments Arguments;
-                            Arguments.PushElement(pTowedByVehicle);
-                            bool bContinue = pTrailer->CallEvent("onTrailerAttach", Arguments);
-                            if (pTowedByVehicle->IsBeingDeleted() || pTrailer->IsBeingDeleted())
+                            if (!CTrailerLinkHelper::AttachTrailer(pTowedByVehicle, pTrailer, pSourcePlayer))
                                 return false;
 
-                            // Attach or detach trailers depending on the event outcome
-                            CVehicleTrailerPacket TrailerPacket(pTowedByVehicle, pTrailer, bContinue);
-                            g_pGame->GetPlayerManager()->BroadcastOnlyJoined(TrailerPacket);
+                            // A script cancel also returns true, so drop the rest of the chain
+                            if (pTowedByVehicle->GetTowedVehicle() != pTrailer)
+                                break;
                         }
                     }
                     else
@@ -266,25 +222,11 @@ bool CVehiclePuresyncPacket::Read(NetBitStreamInterface& BitStream)
                         return false;
                 }
 
-                // If there was a trailer before
-                CVehicle* pCurrentTrailer = pTowedByVehicle->GetTowedVehicle();
-                if (pCurrentTrailer)
-                {
-                    pTowedByVehicle->SetTowedVehicle(NULL);
-                    pCurrentTrailer->SetTowedByVehicle(NULL);
-
-                    // Tell everyone else to detach them
-                    CVehicleTrailerPacket DetachPacket(pTowedByVehicle, pCurrentTrailer, false);
-                    g_pGame->GetPlayerManager()->BroadcastOnlyJoined(DetachPacket);
-
-                    // Execute the detach trailer script function
-                    CLuaArguments Arguments;
-                    Arguments.PushElement(pTowedByVehicle);
-                    pCurrentTrailer->CallEvent("onTrailerDetach", Arguments);
-                    // Skip later vehicle writes if the event destroyed the vehicle.
-                    if (pVehicle->IsBeingDeleted())
-                        return false;
-                }
+                // If there was a trailer before that's no longer reported, detach it
+                CTrailerLinkHelper::DetachTrailer(pTowedByVehicle, nullptr, pSourcePlayer);
+                // Skip later vehicle writes if the event destroyed the vehicle
+                if (pVehicle->IsBeingDeleted())
+                    return false;
             }
 
             if (BitStream.ReadBit())
