@@ -2356,6 +2356,21 @@ void CClientVehicle::StreamedInPulse()
             RemoveTargetRotation();
         }
 
+        // A driverless towed vehicle plays no running engine; the audio treats any status
+        // other than abandoned as a live drivetrain, so a hoisted car would rev, sound and
+        // light up with the tower. m_bEngineOn keeps the real synced state for the release
+        if (m_pTowedByVehicle && !m_pDriver)
+        {
+            if (m_pVehicle->IsEngineOn())
+                m_pVehicle->SetEngineOn(false);
+            m_bEngineForcedOff = true;
+        }
+        else if (m_bEngineForcedOff)
+        {
+            m_bEngineForcedOff = false;
+            m_pVehicle->SetEngineOn(m_bEngineOn);
+        }
+
         // Remove link in CClientVehicle structure if SA does it
         if (GetVehicleType() == CLIENTVEHICLE_TRAIN)
         {
@@ -3044,7 +3059,9 @@ void CClientVehicle::Destroy()
         m_bSireneOrAlarmActive = m_pVehicle->IsSirenOrAlarmActive() ? true : false;
         m_bLandingGearDown = IsLandingGearDown();
         m_usAdjustablePropertyValue = m_pVehicle->GetAdjustablePropertyValue();
-        m_bEngineOn = m_pVehicle->IsEngineOn();
+        // While towed the game flag is forced off; saving it would leak into the synced state
+        if (!m_bEngineForcedOff)
+            m_bEngineOn = m_pVehicle->IsEngineOn();
         m_bIsOnGround = IsOnGround();
         m_fHeliRotorSpeed = GetHeliRotorSpeed();
         m_fPlaneRotorSpeed = GetPlaneRotorSpeed();

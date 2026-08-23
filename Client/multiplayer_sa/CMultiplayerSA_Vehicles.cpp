@@ -1344,6 +1344,59 @@ static void __declspec(naked) HOOK_CAutomobile__SetTowLink()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
+// CAutomobile::ProcessControl, tow link maintenance
+//
+// The drive loop pulls the tower toward the hitch whenever its velocity is not exactly
+// zero, which with a driver idling at the wheel is every frame; a parked pair never comes
+// to rest and keeps nudging itself around. Skip the link maintenance entirely while both
+// vehicles are essentially still; it resumes the moment either one moves. ECX holds the
+// towing vehicle and stays live through the replaced instructions, so it is preserved
+// around the call; EAX and EDX are scratch here and BL is replayed.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6B3202 | D9 41 44 | fld  dword ptr [ecx+44h]
+// >>> 0x6B3205 | 32 DB    | xor  bl, bl
+#define HOOKPOS_CAutomobile__ProcessControl_TowLinkAtRest   0x6B3202
+#define HOOKSIZE_CAutomobile__ProcessControl_TowLinkAtRest  5
+#define HOOKCHECK_CAutomobile__ProcessControl_TowLinkAtRest 0xD9
+static constexpr DWORD CONTINUE_CAutomobile__ProcessControl_TowLinkAtRest = 0x6B3207;
+static constexpr DWORD SKIP_CAutomobile__ProcessControl_TowLinkAtRest = 0x6B32EC;
+
+static constexpr float TOW_LINK_REST_SPEED_SQ = 0.005f * 0.005f;
+
+static bool __fastcall IsTowLinkAtRest(CVehicleSAInterface* towedVehicle, CVehicleSAInterface* towingVehicle)
+{
+    return towedVehicle->m_vecLinearVelocity.LengthSquared() < TOW_LINK_REST_SPEED_SQ &&
+           towingVehicle->m_vecLinearVelocity.LengthSquared() < TOW_LINK_REST_SPEED_SQ;
+}
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TowLinkAtRest()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        mov     edx, ecx                    // towing vehicle
+        mov     ecx, esi                    // towed vehicle (this)
+        call    IsTowLinkAtRest
+        pop     ecx
+        test    al, al
+        jnz     atRest
+
+        fld     dword ptr [ecx+44h]
+        xor     bl, bl
+        jmp     CONTINUE_CAutomobile__ProcessControl_TowLinkAtRest
+
+        atRest:
+        jmp     SKIP_CAutomobile__ProcessControl_TowLinkAtRest
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
 // The Dumper's tipping ramp on custom vehicle models
 //
 // Built on CMonsterTruck, not plain CAutomobile: ProcessControl decides whether the ramp moves,
@@ -4236,6 +4289,7 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CTrailer__GetTowBarPos);
     EZHookInstallChecked(CTrailer__SetTowLink);
     EZHookInstallChecked(CAutomobile__SetTowLink);
+    EZHookInstallChecked(CAutomobile__ProcessControl_TowLinkAtRest);
     EZHookInstall(CAutomobile__ProcessControl_DumperDispatch);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperAngleReset);
     EZHookInstall(CAutomobile__UpdateMovingCollision_DumperMiscGate);

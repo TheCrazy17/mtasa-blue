@@ -729,6 +729,7 @@ protected:
 
     unsigned long m_ulTowLinkRestoreTime;
     unsigned long m_ulTowLinkBreakAttemptTime = 0;
+    bool          m_bEngineForcedOff = false;
 
     CClientVehiclePtr m_pSuppressedTowPartner;
     unsigned long     m_ulSuppressedTowAttemptTime = 0;
