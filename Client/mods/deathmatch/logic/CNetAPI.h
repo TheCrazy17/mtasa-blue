@@ -51,6 +51,7 @@ public:
     bool GetInterpolation(CVector& vecPosition, unsigned short usLatency);
     void SendBulletSyncFire(eWeaponType weapon, const CVector& start, const CVector& end, float damage, std::uint8_t zone, CClientPlayer* damaged);
     void SendBulletSyncCustomWeaponFire(CClientWeapon* weapon, const CVector& start, const CVector& end);
+    void SendVehicleTrailerChange(CClientVehicle* pVehicle, CClientVehicle* pTrailer, bool bAttached);
     bool IsNetworkTrouble() { return m_bIsNetworkTrouble; }
 
     static bool IsWeaponIDAkimbo(unsigned char ucWeaponID);

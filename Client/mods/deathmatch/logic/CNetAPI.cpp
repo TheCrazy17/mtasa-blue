@@ -21,6 +21,8 @@
 extern CClientGame* g_pClientGame;
 CTickRateSettings   g_TickRateSettings;
 
+static constexpr float TRAILER_POSITION_WARP_DISTANCE = 5.0f;
+
 CNetAPI::CNetAPI(CClientManager* pManager)
 {
     // Init
@@ -1402,36 +1404,72 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
         pVehicle->SetMoveSpeed(velocity.data.vecVelocity);
         pVehicle->SetTurnSpeed(turnSpeed.data.vecVelocity);
 
+        // One chain entry per towed vehicle, each towed by the previous one
+        CClientVehicle* pTowingVehicle = pVehicle;
         while (BitStream.ReadBit())
         {
             ElementID TrailerID;
-            if (BitStream.Read(TrailerID))
+            if (!BitStream.Read(TrailerID))
+                return;
+
+            SPositionSync trailerPosition(false);
+            if (!BitStream.Read(&trailerPosition))
+                return;
+
+            SRotationDegreesSync trailerRotation;
+            if (!BitStream.Read(&trailerRotation))
+                return;
+
+            CClientVehicle* pTrailer = m_pVehicleManager->Get(TrailerID);
+            if (!pTrailer)
             {
-                CClientVehicle* pTrailer = m_pVehicleManager->Get(TrailerID);
-                if (pTrailer)
+                pTowingVehicle = nullptr;
+                continue;
+            }
+
+            if (pTrailer->GetVehicleType() == CLIENTVEHICLE_TRAIN)
+            {
+                // Set streaming position to fix streaming
+                pTrailer->UpdatePedPositions(trailerPosition.data.vecPosition);
+
+                // Use the synced train speed as long as the chain engine isn't streamed in
+                if (!pVehicle->IsStreamedIn())
+                    pTrailer->SetTrainSpeed(pVehicle->GetTrainSpeed());
+            }
+            else if (pTowingVehicle && pTowingVehicle->GetTowedVehicle() != pTrailer)
+            {
+                // The driver's report is authoritative for its own chain; a link this client
+                // missed or lost locally gets rebuilt here, unless the server just rejected it
+                if (pTrailer->GetSuppressedTowPartner() != pTowingVehicle)
                 {
-                    SPositionSync trailerPosition(false);
-                    BitStream.Read(&trailerPosition);
-
-                    SRotationDegreesSync trailerRotation;
-                    BitStream.Read(&trailerRotation);
-
-                    if (pTrailer->GetVehicleType() != CLIENTVEHICLE_TRAIN && !pTrailer->IsStreamedIn())
+                    pTrailer->SetPosition(trailerPosition.data.vecPosition);
+                    if (pTowingVehicle->SetTowedVehicle(pTrailer, &trailerRotation.data.vecRotation))
                     {
-                        pTrailer->SetTargetPosition(trailerPosition.data.vecPosition, TICK_RATE, true, velocity.data.vecVelocity.fZ);
-                        pTrailer->SetTargetRotation(trailerRotation.data.vecRotation, TICK_RATE);
-                    }
-                    else if (pTrailer->GetVehicleType() == CLIENTVEHICLE_TRAIN)
-                    {
-                        // Set streaming position to fix streaming
-                        pTrailer->UpdatePedPositions(trailerPosition.data.vecPosition);
-
-                        // Use the synced train speed as long as the chain engine isn't streamed in
-                        if (!pVehicle->IsStreamedIn())
-                            pTrailer->SetTrainSpeed(pVehicle->GetTrainSpeed());
+                        CLuaArguments Arguments;
+                        Arguments.PushElement(pTowingVehicle);
+                        pTrailer->CallEvent("onClientTrailerAttach", Arguments, true);
                     }
                 }
             }
+            else if (!pTrailer->IsStreamedIn())
+            {
+                pTrailer->SetTargetPosition(trailerPosition.data.vecPosition, TICK_RATE, true, velocity.data.vecVelocity.fZ);
+                pTrailer->SetTargetRotation(trailerRotation.data.vecRotation, TICK_RATE);
+            }
+            else
+            {
+                // Streamed in trailers follow the local tow physics; only a large divergence
+                // from the reporting driver warrants a hard correction
+                CVector vecPosition;
+                pTrailer->GetPosition(vecPosition);
+                if ((vecPosition - trailerPosition.data.vecPosition).LengthSquared() > TRAILER_POSITION_WARP_DISTANCE * TRAILER_POSITION_WARP_DISTANCE)
+                {
+                    pTrailer->SetPosition(trailerPosition.data.vecPosition);
+                    pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);
+                }
+            }
+
+            pTowingVehicle = pTrailer;
         }
     }
 
@@ -1673,8 +1711,8 @@ void CNetAPI::WriteVehiclePuresync(CClientPed* pPlayerModel, CClientVehicle* pVe
         health.data.fValue = pVehicle->GetHealth();
         BitStream.Write(&health);
 
-        // Write the trailer chain
-        CClientVehicle* pTrailer = pVehicle->GetVehicleType() == CLIENTVEHICLE_TRAIN ? pVehicle->GetNextTrainCarriage() : pVehicle->GetRealTowedVehicle();
+        // Write the trailer chain; the logical link survives native breaks and stream out
+        CClientVehicle* pTrailer = pVehicle->GetVehicleType() == CLIENTVEHICLE_TRAIN ? pVehicle->GetNextTrainCarriage() : pVehicle->GetTowedVehicle();
         while (pTrailer && !pTrailer->IsLocalEntity())
         {
             BitStream.WriteBit(true);
@@ -1696,7 +1734,7 @@ void CNetAPI::WriteVehiclePuresync(CClientPed* pPlayerModel, CClientVehicle* pVe
             BitStream.Write(&trailerRotation);
 
             // Get the next towed vehicle
-            pTrailer = pTrailer->GetVehicleType() == CLIENTVEHICLE_TRAIN ? pTrailer->GetNextTrainCarriage() : pTrailer->GetRealTowedVehicle();
+            pTrailer = pTrailer->GetVehicleType() == CLIENTVEHICLE_TRAIN ? pTrailer->GetNextTrainCarriage() : pTrailer->GetTowedVehicle();
         }
 
         // End of our trailer chain
@@ -2443,6 +2481,42 @@ void CNetAPI::SendBulletSyncFire(eWeaponType weapon, const CVector& start, const
 
     g_pNet->SendPacket(PACKET_ID_PLAYER_BULLETSYNC, stream, PACKET_PRIORITY_MEDIUM, PACKET_RELIABILITY_RELIABLE);
     g_pNet->DeallocateNetBitStream(stream);
+}
+
+// Reports an attach or detach this client is authoritative for the moment it happens, instead
+// of leaving it to ride on the next puresync
+void CNetAPI::SendVehicleTrailerChange(CClientVehicle* pVehicle, CClientVehicle* pTrailer, bool bAttached)
+{
+    NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
+    if (!pBitStream)
+        return;
+
+    pBitStream->Write(pVehicle->GetID());
+    pBitStream->Write(pTrailer->GetID());
+    pBitStream->WriteBit(bAttached);
+
+    if (bAttached)
+    {
+        CVector vecPosition, vecRotationDegrees, vecTurnSpeed;
+        pTrailer->GetPosition(vecPosition);
+        pTrailer->GetRotationDegrees(vecRotationDegrees);
+        pTrailer->GetTurnSpeed(vecTurnSpeed);
+
+        SPositionSync position(false);
+        position.data.vecPosition = vecPosition;
+        pBitStream->Write(&position);
+
+        SRotationDegreesSync rotation(false);
+        rotation.data.vecRotation = vecRotationDegrees;
+        pBitStream->Write(&rotation);
+
+        SVelocitySync turnSpeed;
+        turnSpeed.data.vecVelocity = vecTurnSpeed;
+        pBitStream->Write(&turnSpeed);
+    }
+
+    g_pNet->SendPacket(PACKET_ID_VEHICLE_TRAILER, pBitStream, PACKET_PRIORITY_HIGH, PACKET_RELIABILITY_RELIABLE_ORDERED);
+    g_pNet->DeallocateNetBitStream(pBitStream);
 }
 
 void CNetAPI::SendBulletSyncCustomWeaponFire(CClientWeapon* weapon, const CVector& start, const CVector& end)

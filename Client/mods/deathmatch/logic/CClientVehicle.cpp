@@ -192,7 +192,7 @@ CClientVehicle::CClientVehicle(CClientManager* pManager, ElementID ID, unsigned 
     m_bAlphaChanged = false;
     m_blowAfterStreamIn = false;
     m_bIsOnGround = false;
-    m_ulIllegalTowBreakTime = 0;
+    m_ulTowLinkRestoreTime = 0;
     m_LastSyncedData = new SLastSyncedVehData;
     m_bIsDerailed = false;
     m_bIsDerailable = true;
@@ -3228,47 +3228,6 @@ void CClientVehicle::NotifyDestroy()
     m_pVehicleManager->OnDestruction(this);
 }
 
-CClientVehicle* CClientVehicle::GetTowedVehicle()
-{
-    if (m_pVehicle)
-    {
-        CVehicle* pGameVehicle = m_pVehicle->GetTowedVehicle();
-        if (pGameVehicle)
-        {
-            CPools*                    pPools = g_pGame->GetPools();
-            SClientEntity<CVehicleSA>* pVehicleEntity = pPools->GetVehicle((DWORD*)pGameVehicle->GetInterface());
-            if (pVehicleEntity && pVehicleEntity->pClientEntity)
-            {
-                return reinterpret_cast<CClientVehicle*>(pVehicleEntity->pClientEntity);
-            }
-        }
-    }
-
-    return m_pTowedVehicle;
-}
-
-CClientVehicle* CClientVehicle::GetRealTowedVehicle()
-{
-    if (m_pVehicle)
-    {
-        CVehicle* pGameVehicle = m_pVehicle->GetTowedVehicle();
-        if (pGameVehicle)
-        {
-            CPools*                    pPools = g_pGame->GetPools();
-            SClientEntity<CVehicleSA>* pVehicleEntity = pPools->GetVehicle((DWORD*)pGameVehicle->GetInterface());
-            if (pVehicleEntity && pVehicleEntity->pClientEntity)
-            {
-                return reinterpret_cast<CClientVehicle*>(pVehicleEntity->pClientEntity);
-            }
-        }
-
-        // This is the only difference from ::GetTowedVehicle
-        return NULL;
-    }
-
-    return m_pTowedVehicle;
-}
-
 bool CClientVehicle::SetTowedVehicle(CClientVehicle* pVehicle, const CVector* vecRotationDegrees)
 {
     // Train carriages
@@ -3385,10 +3344,35 @@ bool CClientVehicle::SetTowedVehicle(CClientVehicle* pVehicle, const CVector* ve
         }
     }
     else
-        m_ulIllegalTowBreakTime = 0;
+        m_ulTowLinkRestoreTime = 0;
 
     m_pTowedVehicle = pVehicle;
     return true;
+}
+
+// Bookkeeping half of an attach the engine is committing natively right now; SetTowedVehicle
+// would start a second native link from inside the first
+void CClientVehicle::LinkTowedVehicle(CClientVehicle* pTrailer)
+{
+    if (m_pTowedVehicle && m_pTowedVehicle != pTrailer)
+        m_pTowedVehicle->m_pTowedByVehicle = nullptr;
+    if (pTrailer->m_pTowedByVehicle && pTrailer->m_pTowedByVehicle != this)
+        pTrailer->m_pTowedByVehicle->m_pTowedVehicle = nullptr;
+
+    m_pTowedVehicle = pTrailer;
+    pTrailer->m_pTowedByVehicle = this;
+}
+
+// Bookkeeping half of a break the engine is committing natively right now
+void CClientVehicle::UnlinkTowedVehicle()
+{
+    if (m_pTowedVehicle)
+    {
+        m_pTowedVehicle->m_pTowedByVehicle = nullptr;
+        m_pTowedVehicle = nullptr;
+    }
+
+    m_ulTowLinkRestoreTime = 0;
 }
 
 bool CClientVehicle::InternalSetTowLink(CClientVehicle* pTrailer)

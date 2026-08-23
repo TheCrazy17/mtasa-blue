@@ -382,10 +382,11 @@ public:
     CVehicleUpgrades* GetUpgrades() { return m_pUpgrades; }
     CModelInfo*       GetModelInfo() { return m_pModelInfo; }
 
-    CClientVehicle* GetTowedVehicle();
-    CClientVehicle* GetRealTowedVehicle();
+    CClientVehicle* GetTowedVehicle() { return m_pTowedVehicle; }
     bool            SetTowedVehicle(CClientVehicle* pVehicle, const CVector* vecRotationDegrees = NULL);
     CClientVehicle* GetTowedByVehicle() { return m_pTowedByVehicle; }
+    void            LinkTowedVehicle(CClientVehicle* pTrailer);
+    void            UnlinkTowedVehicle();
     bool            InternalSetTowLink(CClientVehicle* pTrailer);
     bool            IsTowableBy(CClientVehicle* towingVehicle);
 
@@ -447,8 +448,17 @@ public:
     void UpdateTargetRotation();
     void UpdateUnderFloorFix(const CVector& vecTargetPosition, bool bValidVelocityZ, float fVelocityZ);
 
-    unsigned long GetIllegalTowBreakTime() { return m_ulIllegalTowBreakTime; }
-    void          SetIllegalTowBreakTime(unsigned long ulTime) { m_ulIllegalTowBreakTime = ulTime; }
+    unsigned long GetTowLinkRestoreTime() { return m_ulTowLinkRestoreTime; }
+    void          SetTowLinkRestoreTime(unsigned long ulTime) { m_ulTowLinkRestoreTime = ulTime; }
+
+    // A cancelled or server rejected pair, vetoed silently until the engine stops retrying
+    CClientVehicle* GetSuppressedTowPartner() { return m_pSuppressedTowPartner; }
+    unsigned long   GetSuppressedTowAttemptTime() { return m_ulSuppressedTowAttemptTime; }
+    void            SetSuppressedTowAttempt(CClientVehicle* pPartner, unsigned long ulTime)
+    {
+        m_pSuppressedTowPartner = pPartner;
+        m_ulSuppressedTowAttemptTime = ulTime;
+    }
 
     void GetGravity(CVector& vecGravity) const { vecGravity = m_vecGravity; }
     void SetGravity(const CVector& vecGravity);
@@ -714,7 +724,10 @@ protected:
         } rot{};
     } m_interp{};
 
-    unsigned long m_ulIllegalTowBreakTime;
+    unsigned long m_ulTowLinkRestoreTime;
+
+    CClientVehiclePtr m_pSuppressedTowPartner;
+    unsigned long     m_ulSuppressedTowAttemptTime = 0;
 
     bool m_bHasDamageModel;
 

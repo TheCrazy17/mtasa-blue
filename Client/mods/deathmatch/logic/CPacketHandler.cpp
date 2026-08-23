@@ -1639,6 +1639,8 @@ void CPacketHandler::Packet_VehicleSpawn(NetBitStreamInterface& bitStream)
         CClientVehicle* pTowedBy = pVehicle->GetTowedByVehicle();
         if (pTowedBy)
             pTowedBy->SetTowedVehicle(NULL);
+        if (pVehicle->GetTowedVehicle())
+            pVehicle->SetTowedVehicle(NULL);
         pVehicle->AttachTo(NULL);
 
         // Call the onClientVehicleRespawn event
@@ -2203,31 +2205,42 @@ void CPacketHandler::Packet_VehicleTrailer(NetBitStreamInterface& bitStream)
         {
             if (bAttached)
             {
-                pTrailer->SetPosition(position.data.vecPosition);
-                pTrailer->SetRotationDegrees(rotation.data.vecRotation);
-                pTrailer->SetTurnSpeed(turn.data.vecVelocity);
+                // A no-op when the link already exists; the reporting client committed it
+                // locally before the server ever saw it
+                if (pVehicle->GetTowedVehicle() != pTrailer)
+                {
+                    pTrailer->SetPosition(position.data.vecPosition);
+                    pTrailer->SetTurnSpeed(turn.data.vecVelocity);
 
 #ifdef MTA_DEBUG
-                g_pCore->GetConsole()->Printf("Packet_VehicleTrailer: attaching trailer %d to vehicle %d", TrailerID, ID);
+                    g_pCore->GetConsole()->Printf("Packet_VehicleTrailer: attaching trailer %d to vehicle %d", TrailerID, ID);
 #endif
-                pVehicle->SetTowedVehicle(pTrailer);
+                    pVehicle->SetTowedVehicle(pTrailer, &rotation.data.vecRotation);
 
-                // Call the onClientTrailerAttach
-                CLuaArguments Arguments;
-                Arguments.PushElement(pVehicle);
-                pTrailer->CallEvent("onClientTrailerAttach", Arguments, true);
+                    // Call the onClientTrailerAttach
+                    CLuaArguments Arguments;
+                    Arguments.PushElement(pVehicle);
+                    pTrailer->CallEvent("onClientTrailerAttach", Arguments, true);
+                }
             }
             else
             {
+                if (pVehicle->GetTowedVehicle() == pTrailer)
+                {
 #ifdef MTA_DEBUG
-                g_pCore->GetConsole()->Printf("Packet_VehicleTrailer: detaching trailer %d from vehicle %d", TrailerID, ID);
+                    g_pCore->GetConsole()->Printf("Packet_VehicleTrailer: detaching trailer %d from vehicle %d", TrailerID, ID);
 #endif
-                pVehicle->SetTowedVehicle(NULL);
+                    pVehicle->SetTowedVehicle(NULL);
 
-                // Call the onClientTrailerDetach
-                CLuaArguments Arguments;
-                Arguments.PushElement(pVehicle);
-                pTrailer->CallEvent("onClientTrailerDetach", Arguments, true);
+                    // The pair may still be in attach range; the local engine must not redo
+                    // a link the server just took apart
+                    pTrailer->SetSuppressedTowAttempt(pVehicle, GetTickCount32());
+
+                    // Call the onClientTrailerDetach
+                    CLuaArguments Arguments;
+                    Arguments.PushElement(pVehicle);
+                    pTrailer->CallEvent("onClientTrailerDetach", Arguments, true);
+                }
             }
         }
         else

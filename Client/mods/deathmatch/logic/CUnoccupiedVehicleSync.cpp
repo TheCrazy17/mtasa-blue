@@ -287,7 +287,8 @@ bool CUnoccupiedVehicleSync::WriteVehicleInformation(NetBitStreamInterface* pBit
 
     vehicle.data.fHealth = pVehicle->GetHealth();
 
-    CClientVehicle* pTrailer = pVehicle->GetVehicleType() == CLIENTVEHICLE_TRAIN ? pVehicle->GetNextTrainCarriage() : pVehicle->GetRealTowedVehicle();
+    // Report the logical link; it survives native breaks and stream out
+    CClientVehicle* pTrailer = pVehicle->GetVehicleType() == CLIENTVEHICLE_TRAIN ? pVehicle->GetNextTrainCarriage() : pVehicle->GetTowedVehicle();
     if (pTrailer)
         vehicle.data.trailer = pTrailer->GetID();
     else

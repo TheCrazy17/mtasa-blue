@@ -46,6 +46,8 @@
 #include "CObjectRespawner.h"
 
 #define HeliKill_List_Clear_Rate        500
+#define TRAILER_ATTACH_SUPPRESS_TIMEOUT 1000
+#define TOW_LINK_RESTORE_INTERVAL       500
 #define MIN_PUSH_ANTISPAM_RATE          1500
 #define INVALID_DOWNLOAD_PRIORITY_GROUP (INT_MIN)
 
@@ -571,6 +573,7 @@ private:
     static void                              StaticDeathHandler(CPed* pKilledPed, unsigned char ucDeathReason, unsigned char ucBodyPart);
     static bool                              StaticFireHandler(CEntitySAInterface* target, CEntitySAInterface* creator);
     static bool                              StaticBreakTowLinkHandler(CVehicle* pTowedVehicle);
+    static bool                              StaticAttachTrailerHandler(CVehicle* pTowedVehicle, CVehicle* pTowingVehicle);
     static void                              StaticDrawRadarAreasHandler();
     static void                              StaticRender3DStuffHandler();
     static void                              StaticPreRenderSkyHandler();
@@ -623,6 +626,9 @@ private:
     void                              DeathHandler(CPed* pKilledPed, unsigned char ucDeathReason, unsigned char ucBodyPart);
     bool                              FireHandler(CEntitySAInterface* target, CEntitySAInterface* creator);
     bool                              BreakTowLinkHandler(CVehicle* pTowedVehicle);
+    bool                              HandleNativeTrailerAttach(CVehicle* pTowedVehicle, CVehicle* pTowingCandidate);
+    bool                              IsAuthoritativeForTowLink(CClientVehicle* pTowing, CClientVehicle* pTowed);
+    void                              CommitTowLinkBreak(CClientVehicle* pTowing, CClientVehicle* pTowed);
     void                              DrawRadarAreasHandler();
     void                              Render3DStuffHandler();
     void                              PreRenderSkyHandler();

@@ -274,6 +274,7 @@ CClientGame::CClientGame(bool bLocalPlay) : m_ServerInfo(new CServerInfo())
     g_pMultiplayer->SetBulletFireHandler(CClientGame::BulletFire);
     g_pMultiplayer->SetExplosionHandler(CClientExplosionManager::Hook_StaticExplosionCreation);
     g_pMultiplayer->SetBreakTowLinkHandler(CClientGame::StaticBreakTowLinkHandler);
+    g_pMultiplayer->SetAttachTrailerHandler(CClientGame::StaticAttachTrailerHandler);
     g_pMultiplayer->SetDrawRadarAreasHandler(CClientGame::StaticDrawRadarAreasHandler);
     g_pMultiplayer->SetDamageHandler(CClientGame::StaticDamageHandler);
     g_pMultiplayer->SetDeathHandler(CClientGame::StaticDeathHandler);
@@ -490,6 +491,7 @@ CClientGame::~CClientGame()
     g_pMultiplayer->SetBulletFireHandler(NULL);
     g_pMultiplayer->SetExplosionHandler(NULL);
     g_pMultiplayer->SetBreakTowLinkHandler(NULL);
+    g_pMultiplayer->SetAttachTrailerHandler(NULL);
     g_pMultiplayer->SetDrawRadarAreasHandler(NULL);
     g_pMultiplayer->SetDamageHandler(NULL);
     g_pMultiplayer->SetFireHandler(NULL);
@@ -1891,50 +1893,55 @@ void CClientGame::UpdatePlayerWeapons()
 
 void CClientGame::UpdateTrailers()
 {
-    // This function is here to re-attach trailers if they fall off
-
+    // Converges every native tow link onto the logical, network authoritative one
     unsigned long ulCurrentTime = GetTickCount32();
 
-    CClientVehicle *                        pVehicle = NULL, *pTrailer = NULL;
-    CVehicle *                              pGameVehicle = NULL, *pGameTrailer = NULL;
-    unsigned long                           ulIllegalTowBreakTime;
-    vector<CClientVehicle*>::const_iterator iterVehicles = m_pVehicleManager->StreamedBegin();
-    for (; iterVehicles != m_pVehicleManager->StreamedEnd(); iterVehicles++)
+    for (auto iterVehicles = m_pVehicleManager->StreamedBegin(); iterVehicles != m_pVehicleManager->StreamedEnd(); iterVehicles++)
     {
-        pVehicle = *iterVehicles;
-        ulIllegalTowBreakTime = pVehicle->GetIllegalTowBreakTime();
+        CClientVehicle* pVehicle = *iterVehicles;
 
-        // Do we have an illegal break?
-        if (ulIllegalTowBreakTime != 0)
+        // A vetoed pair stays suppressed only while the engine keeps retrying it every frame;
+        // once attempts stop arriving the pair has separated, so a fresh approach asks again
+        if (pVehicle->GetSuppressedTowPartner() && ulCurrentTime > pVehicle->GetSuppressedTowAttemptTime() + TRAILER_ATTACH_SUPPRESS_TIMEOUT)
+            pVehicle->SetSuppressedTowAttempt(nullptr, 0);
+
+        CClientVehicle* pTowedBy = pVehicle->GetTowedByVehicle();
+        if (!pTowedBy)
+            continue;
+
+        CVehicle* pGameVehicle = pTowedBy->GetGameVehicle();
+        if (!pGameVehicle)
+            continue;
+
+        // The streamer never distance streams a towed vehicle back in on its own
+        CVehicle* pGameTrailer = pVehicle->GetGameVehicle();
+        if (!pGameTrailer)
         {
-            // Has it been atleast 1 second since the break
-            if (ulCurrentTime > (ulIllegalTowBreakTime + 1000))
-            {
-                // Try to re-attach them
-                CClientVehicle* pTowedBy = pVehicle->GetTowedByVehicle();
-                if (pTowedBy)
-                {
-                    // Little hack to keep illegaly detached trailers close to their tower
-                    CVector vecPosition;
-                    pVehicle->GetPosition(vecPosition);
-                    pVehicle->SetPosition(vecPosition);
-
-                    pGameVehicle = pTowedBy->GetGameVehicle();
-                    pGameTrailer = pVehicle->GetGameVehicle();
-                    if (pGameVehicle && pGameTrailer)
-                    {
-                        // pGameTrailer->SetTowLink ( pGameVehicle );
-                        CVector vecRotation;
-                        pTowedBy->GetRotationRadians(vecRotation);
-                        pVehicle->SetRotationRadians(vecRotation);
-                        pTowedBy->InternalSetTowLink(pVehicle);
-                    }
-                }
-
-                // Reset the break time, even if we couldnt re-attach it
-                pVehicle->SetIllegalTowBreakTime(0);
-            }
+            pVehicle->StreamIn(true);
+            continue;
         }
+
+        if (pGameVehicle->GetTowedVehicle() == pGameTrailer)
+            continue;
+
+        // The engine dropped the native link on its own. A wreck is a real detach; anything
+        // else is a glitch to repair, since real breaks are decided in BreakTowLinkHandler
+        if (pVehicle->IsBlown() || pTowedBy->IsBlown())
+        {
+            if (pVehicle->IsLocalEntity() || pTowedBy->IsLocalEntity())
+                pTowedBy->UnlinkTowedVehicle();
+            else if (IsAuthoritativeForTowLink(pTowedBy, pVehicle))
+                CommitTowLinkBreak(pTowedBy, pVehicle);
+            continue;
+        }
+
+        if (ulCurrentTime < pVehicle->GetTowLinkRestoreTime() + TOW_LINK_RESTORE_INTERVAL)
+            continue;
+
+        // InternalSetTowLink repositions the trailer hitch onto the tow bar with the rotation
+        // it already has; a crossed trailer must not come back straightened
+        pVehicle->SetTowLinkRestoreTime(ulCurrentTime);
+        pTowedBy->InternalSetTowLink(pVehicle);
     }
 }
 
@@ -3565,9 +3572,14 @@ void CClientGame::SetupGlobalLuaEvents()
                        });
 }
 
-bool CClientGame::StaticBreakTowLinkHandler(CVehicle* pTowingVehicle)
+bool CClientGame::StaticBreakTowLinkHandler(CVehicle* pTowedVehicle)
 {
-    return g_pClientGame->BreakTowLinkHandler(pTowingVehicle);
+    return g_pClientGame->BreakTowLinkHandler(pTowedVehicle);
+}
+
+bool CClientGame::StaticAttachTrailerHandler(CVehicle* pTowedVehicle, CVehicle* pTowingVehicle)
+{
+    return g_pClientGame->HandleNativeTrailerAttach(pTowedVehicle, pTowingVehicle);
 }
 
 void CClientGame::StaticDrawRadarAreasHandler()
@@ -3828,30 +3840,106 @@ void CClientGame::DrawRadarAreasHandler()
     m_pRadarAreaManager->DoPulse();
 }
 
+// Gate for the engine's own geometric break of a tow link: overstretched or jackknifed past
+// its limits. The hook only covers this call site, so no teardown or cleanup break lands here
 bool CClientGame::BreakTowLinkHandler(CVehicle* pTowedVehicle)
 {
-    CPools*                    pPools = g_pGame->GetPools();
-    SClientEntity<CVehicleSA>* pVehicleClientEntity = pPools->GetVehicle((DWORD*)pTowedVehicle->GetInterface());
-    if (pVehicleClientEntity)
-    {
-        CClientVehicle* pVehicle = reinterpret_cast<CClientVehicle*>(pVehicleClientEntity->pClientEntity);
-        if (pVehicle)
-        {
-            // Check if this is a legal break
-            bool bLegal =
-                ((pVehicle->GetControllingPlayer() == m_pLocalPlayer) || (m_pUnoccupiedVehicleSync->Exists(static_cast<CDeathmatchVehicle*>(pVehicle))));
+    SClientEntity<CVehicleSA>* pVehicleClientEntity = g_pGame->GetPools()->GetVehicle((DWORD*)pTowedVehicle->GetInterface());
+    if (!pVehicleClientEntity)
+        return true;
 
-            // Not a legal break?
-            if (!bLegal)
-            {
-                // Save the time it broke (used in UpdateTrailers)
-                pVehicle->SetIllegalTowBreakTime(GetTickCount32());
-            }
-        }
+    CClientVehicle* pVehicle = reinterpret_cast<CClientVehicle*>(pVehicleClientEntity->pClientEntity);
+    if (!pVehicle)
+        return true;
+
+    CClientVehicle* pTowedBy = pVehicle->GetTowedByVehicle();
+    if (!pTowedBy)
+        return true;
+
+    if (pVehicle->IsLocalEntity() || pTowedBy->IsLocalEntity())
+        return true;
+
+    // Only the authoritative side may turn an engine break into a real detach; for everyone
+    // else the link belongs to the server, so the break is vetoed outright
+    if (!IsAuthoritativeForTowLink(pTowedBy, pVehicle))
+        return false;
+
+    CommitTowLinkBreak(pTowedBy, pVehicle);
+    return true;
+}
+
+// Gate for an engine driven attach, from CTrailer::ScanForTowLink or the tow truck hoist
+// scan. Runs before the native function mutates anything, so returning false cancels it
+bool CClientGame::HandleNativeTrailerAttach(CVehicle* pTowedVehicle, CVehicle* pTowingCandidate)
+{
+    CPools*                    pPools = g_pGame->GetPools();
+    SClientEntity<CVehicleSA>* pTowedEntity = pPools->GetVehicle((DWORD*)pTowedVehicle->GetInterface());
+    SClientEntity<CVehicleSA>* pTowingEntity = pPools->GetVehicle((DWORD*)pTowingCandidate->GetInterface());
+    if (!pTowedEntity || !pTowingEntity)
+        return true;
+
+    CClientVehicle* pTowed = reinterpret_cast<CClientVehicle*>(pTowedEntity->pClientEntity);
+    CClientVehicle* pTowing = reinterpret_cast<CClientVehicle*>(pTowingEntity->pClientEntity);
+    if (!pTowed || !pTowing)
+        return true;
+
+    // Network authorized links pass through here too; their logical link is already in place
+    if (pTowed->GetTowedByVehicle() == pTowing)
+        return true;
+
+    // Client side created vehicles have no server state to protect
+    if (pTowed->IsLocalEntity() || pTowing->IsLocalEntity())
+        return true;
+
+    // Only the authoritative side gets a say; every other client vetoes its local copy and
+    // waits for the network authorized outcome
+    if (!IsAuthoritativeForTowLink(pTowing, pTowed))
+        return false;
+
+    unsigned long ulNow = GetTickCount32();
+    if (pTowed->GetSuppressedTowPartner() == pTowing)
+    {
+        pTowed->SetSuppressedTowAttempt(pTowing, ulNow);
+        return false;
     }
 
-    // Allow it to break
+    CLuaArguments Arguments;
+    Arguments.PushElement(pTowing);
+    if (!pTowed->CallEvent("onClientTrailerAttach", Arguments, true))
+    {
+        pTowed->SetSuppressedTowAttempt(pTowing, ulNow);
+        return false;
+    }
+
+    // The event handler may have destroyed either game vehicle while the engine holds raw pointers
+    if (!pPools->GetVehicle((DWORD*)pTowedVehicle->GetInterface()) || !pPools->GetVehicle((DWORD*)pTowingCandidate->GetInterface()))
+        return false;
+    if (pTowed->IsBeingDeleted() || pTowing->IsBeingDeleted())
+        return false;
+
+    // Commit and report before the engine finishes the link; reporting and streaming follow
+    // the logical link, so it must exist the moment the pair is physically joined
+    pTowing->LinkTowedVehicle(pTowed);
+    m_pNetAPI->SendVehicleTrailerChange(pTowing, pTowed, true);
     return true;
+}
+
+bool CClientGame::IsAuthoritativeForTowLink(CClientVehicle* pTowing, CClientVehicle* pTowed)
+{
+    // A towed vehicle has no meaningful driver, so authority rests with whoever controls the
+    // hookup; the towed side syncer covers abandoned pairs with nobody driving
+    return pTowing->GetControllingPlayer() == m_pLocalPlayer || m_pUnoccupiedVehicleSync->Exists(static_cast<CDeathmatchVehicle*>(pTowed));
+}
+
+void CClientGame::CommitTowLinkBreak(CClientVehicle* pTowing, CClientVehicle* pTowed)
+{
+    pTowing->UnlinkTowedVehicle();
+
+    CLuaArguments Arguments;
+    Arguments.PushElement(pTowing);
+    pTowed->CallEvent("onClientTrailerDetach", Arguments, true);
+
+    m_pNetAPI->SendVehicleTrailerChange(pTowing, pTowed, false);
 }
 
 bool CClientGame::FireHandler(CEntitySAInterface* target, CEntitySAInterface* creator)
