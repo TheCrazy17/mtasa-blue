@@ -4014,6 +4014,15 @@ bool CClientGame::HandleNativeTrailerAttach(CVehicle* pTowedVehicle, CVehicle* p
     if (pTowed->IsBeingDeleted() || pTowing->IsBeingDeleted())
         return false;
 
+    // Stop both sides right here; the native attach pulls whatever hitch to towbar gap is
+    // left closed in one unclamped tick, and any speed either vehicle still carries into
+    // that turns into a launch. Also just makes lining up the hitch far less fiddly
+    CVector vecStop;
+    pTowedVehicle->SetMoveSpeed(vecStop);
+    pTowedVehicle->SetTurnSpeed(&vecStop);
+    pTowingCandidate->SetMoveSpeed(vecStop);
+    pTowingCandidate->SetTurnSpeed(&vecStop);
+
     // Commit and report before the engine finishes the link; reporting and streaming follow
     // the logical link, so it must exist the moment the pair is physically joined
     pTowing->LinkTowedVehicle(pTowed);
