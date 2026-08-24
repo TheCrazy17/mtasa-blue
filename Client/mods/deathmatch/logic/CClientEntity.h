@@ -348,6 +348,12 @@ protected:
 
     unsigned short m_usDimension;
 
+    // Cached result of the streamed-out GetMatrix() fallback, valid as long as the rotation
+    // it was built from hasn't changed since
+    mutable CVector m_vecCachedStreamedOutRotation;
+    mutable CMatrix m_matCachedStreamedOutRotation;
+    mutable bool    m_bStreamedOutRotationCacheValid = false;
+
 private:
     unsigned int m_uiTypeHash;
     SString      m_strTypeName;

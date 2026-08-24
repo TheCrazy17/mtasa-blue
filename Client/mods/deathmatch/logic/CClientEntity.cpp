@@ -528,17 +528,26 @@ bool CClientEntity::GetMatrix(CMatrix& matrix) const
             return true;
     }
 
-    // When streamed out
+    // When streamed out. Rebuilding the rotation is expensive (Euler reorder plus a matrix
+    // conversion), so only redo it when the rotation has actually changed since last time.
     CVector vecRotation;
     GetRotationRadians(vecRotation);
 
-    // Change rotation order so it works correctly for CClientObjects
-    // Any maybe other types that don't have a GetMatrix() override - Needs checking.
-    ConvertRadiansToDegreesNoWrap(vecRotation);
-    vecRotation = ConvertEulerRotationOrder(vecRotation, EULER_ZXY, EULER_MINUS_ZYX);
-    ConvertDegreesToRadiansNoWrap(vecRotation);
+    if (!m_bStreamedOutRotationCacheValid || vecRotation != m_vecCachedStreamedOutRotation)
+    {
+        // Change rotation order so it works correctly for CClientObjects
+        // Any maybe other types that don't have a GetMatrix() override - Needs checking.
+        CVector vecConverted = vecRotation;
+        ConvertRadiansToDegreesNoWrap(vecConverted);
+        vecConverted = ConvertEulerRotationOrder(vecConverted, EULER_ZXY, EULER_MINUS_ZYX);
+        ConvertDegreesToRadiansNoWrap(vecConverted);
 
-    g_pMultiplayer->ConvertEulerAnglesToMatrix(matrix, vecRotation.fX, vecRotation.fY, vecRotation.fZ);
+        g_pMultiplayer->ConvertEulerAnglesToMatrix(m_matCachedStreamedOutRotation, vecConverted.fX, vecConverted.fY, vecConverted.fZ);
+        m_vecCachedStreamedOutRotation = vecRotation;
+        m_bStreamedOutRotationCacheValid = true;
+    }
+
+    matrix = m_matCachedStreamedOutRotation;
     GetPosition(matrix.vPos);
     return true;
 }
