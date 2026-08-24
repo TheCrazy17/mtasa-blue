@@ -9,6 +9,7 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <algorithm>
 #include <cstdint>
 using std::list;
 
@@ -195,27 +196,46 @@ void                CClientStreamer::DoPulse(CVector& vecPosition)
 
 void CClientStreamer::SetDimension(unsigned short usDimension)
 {
-    // Different dimension than before?
-    if (usDimension != m_usDimension)
-    {
-        // Set the new dimension
-        m_usDimension = usDimension;
+    if (usDimension == m_usDimension)
+        return;
 
-        // That means all of the currently streamed in elements will have to
-        // go. Unstream all elements that are streamed in.
-        CClientStreamElement*                 pElement = NULL;
-        list<CClientStreamElement*>::iterator iter = m_ActiveElements.begin();
-        for (; iter != m_ActiveElements.end(); iter++)
+    m_usDimension = usDimension;
+
+    auto evictIfWrongDimension = [this](CClientStreamElement* pElement)
+    {
+        if (!pElement->IsInStreamerDimension())
+            DemoteElement(pElement);
+    };
+
+    // Every element currently in the sector grid belongs to the old dimension, so it all has
+    // to be re-checked. Snapshot each sector's elements before mutating it, since DemoteElement
+    // erases from the very list being walked here (via OnElementEnterSector).
+    for (CClientStreamSectorRow* pRow : m_WorldRows)
+    {
+        for (auto sectorIter = pRow->Begin(); sectorIter != pRow->End(); ++sectorIter)
         {
-            pElement = *iter;
-            if (pElement->IsStreamedIn())
-            {
-                if (!pElement->IsVisibleInAllDimensions())
-                {
-                    // Unstream it
-                    m_ToStreamOut.push_back(pElement);
-                }
-            }
+            std::vector<CClientStreamElement*> snapshot((*sectorIter)->Begin(), (*sectorIter)->End());
+            std::ranges::for_each(snapshot, evictIfWrongDimension);
+        }
+    }
+    for (auto& [rowIndex, pRow] : m_ExtraRows)
+    {
+        for (auto sectorIter = pRow->Begin(); sectorIter != pRow->End(); ++sectorIter)
+        {
+            std::vector<CClientStreamElement*> snapshot((*sectorIter)->Begin(), (*sectorIter)->End());
+            std::ranges::for_each(snapshot, evictIfWrongDimension);
+        }
+    }
+
+    // Only the bucket for our new dimension can have anything to promote
+    auto bucketIter = m_OutOfDimensionElements.find(m_usDimension);
+    if (bucketIter != m_OutOfDimensionElements.end())
+    {
+        std::vector<CClientStreamElement*> toPromote(bucketIter->second.begin(), bucketIter->second.end());
+        for (CClientStreamElement* pElement : toPromote)
+        {
+            bucketIter->second.erase(pElement);
+            AdmitElement(pElement);
         }
     }
 }
@@ -291,6 +311,9 @@ CClientStreamSectorRow* CClientStreamer::FindRow(float fY)
 
 void CClientStreamer::OnUpdateStreamPosition(CClientStreamElement* pElement)
 {
+    if (!pElement->GetStreamRow())
+        return;  // parked outside our dimension, nothing to keep in sync
+
     CVector                 vecPosition = pElement->GetStreamPosition();
     CClientStreamSectorRow* pRow = pElement->GetStreamRow();
     CClientStreamSector*    pSector = pElement->GetStreamSector();
@@ -315,22 +338,47 @@ void CClientStreamer::OnUpdateStreamPosition(CClientStreamElement* pElement)
     }
 }
 
-void CClientStreamer::AddElement(CClientStreamElement* pElement)
+void CClientStreamer::AdmitElement(CClientStreamElement* pElement)
 {
-    assert(pAddingElement == NULL);
-    pAddingElement = pElement;
     CVector                 vecPosition = pElement->GetStreamPosition();
     CClientStreamSectorRow* pRow = FindOrCreateRow(vecPosition);
     pElement->SetStreamRow(pRow);
     OnElementEnterSector(pElement, pRow->FindOrCreateSector(vecPosition));
+}
+
+void CClientStreamer::DemoteElement(CClientStreamElement* pElement)
+{
+    if (pElement->IsStreamedIn())
+        m_ToStreamOut.push_back(pElement);
+
+    pElement->SetStreamRow(nullptr);
+    OnElementEnterSector(pElement, nullptr);  // detaches sector membership only
+
+    if (m_ActiveElementSet.erase(pElement))
+        m_ActiveElements.erase(pElement->GetActiveElementIter());
+
+    m_OutOfDimensionElements[pElement->GetDimension()].insert(pElement);
+}
+
+void CClientStreamer::AddElement(CClientStreamElement* pElement)
+{
+    assert(pAddingElement == NULL);  // pre-existing static guard, unrelated to dimension admission
+    pAddingElement = pElement;
+
+    if (pElement->IsInStreamerDimension())
+        AdmitElement(pElement);
+    else
+        m_OutOfDimensionElements[pElement->GetDimension()].insert(pElement);
+
     pAddingElement = NULL;
 }
 
 void CClientStreamer::RemoveElement(CClientStreamElement* pElement)
 {
     OnElementEnterSector(pElement, NULL);
-    m_ActiveElements.remove(pElement);
-    m_ActiveElementSet.erase(pElement);
+    if (m_ActiveElementSet.erase(pElement))
+        m_ActiveElements.erase(pElement->GetActiveElementIter());
+    m_OutOfDimensionElements[pElement->GetDimension()].erase(pElement);  // no-op if never parked
     m_ToStreamOut.remove(pElement);
 }
 
@@ -361,7 +409,7 @@ void CClientStreamer::AddToSortedList(list<CClientStreamElement*>* pList, CClien
     m_ActiveElementSet.insert(pElement);
 
     // Append unsorted - DoPulse sorts the list every frame via m_ActiveElements.sort()
-    pList->push_back(pElement);
+    pElement->SetActiveElementIter(pList->insert(pList->end(), pElement));
 }
 
 bool CClientStreamer::CompareExpDistance(CClientStreamElement* p1, CClientStreamElement* p2)
@@ -485,75 +533,80 @@ void CClientStreamer::Restream(bool bMovedFar)
         }
         else
         {
-            // Same dimension as us?
-            if (pElement->GetDimension() == m_usDimension || pElement->IsVisibleInAllDimensions())
+            // AddElement/OnElementDimension/SetDimension all funnel demotion through
+            // DemoteElement, so an off-dimension element should never reach this list; this
+            // is a defense in depth check, not the primary gate.
+            if (!pElement->IsInStreamerDimension())
             {
-                // Too far away? Stop here.
-                if (fElementDistanceExp > m_fMaxDistanceExp)
-                    continue;
+                assert(false && "off-dimension element leaked into m_ActiveElements, demotion invariant violated");
+                continue;
+            }
 
-                if (IS_VEHICLE(pElement))
-                {
-                    CClientVehicle* pVehicle = DynamicCast<CClientVehicle>(pElement);
-                    if (pVehicle && pVehicle->GetOccupant() && IS_PLAYER(pVehicle->GetOccupant()))
-                    {
-                        CClientPlayer* pPlayer = DynamicCast<CClientPlayer>(pVehicle->GetOccupant());
-                        if (pPlayer->GetLastPuresyncType() == PURESYNC_TYPE_LIGHTSYNC)
-                        {
-                            // if the last packet was ls he isn't streaming in soon.
-                            continue;
-                        }
-                    }
+            // Too far away? Stop here.
+            if (fElementDistanceExp > m_fMaxDistanceExp)
+                continue;
 
-                    if (pVehicle && pVehicle->GetTowedByVehicle())
-                    {
-                        // Streaming in of towed vehicles is done in CClientVehicle::StreamIn by the towing vehicle
-                        continue;
-                    }
-                }
-                if (IS_PLAYER(pElement))
+            if (IS_VEHICLE(pElement))
+            {
+                CClientVehicle* pVehicle = DynamicCast<CClientVehicle>(pElement);
+                if (pVehicle && pVehicle->GetOccupant() && IS_PLAYER(pVehicle->GetOccupant()))
                 {
-                    CClientPlayer* pPlayer = DynamicCast<CClientPlayer>(pElement);
+                    CClientPlayer* pPlayer = DynamicCast<CClientPlayer>(pVehicle->GetOccupant());
                     if (pPlayer->GetLastPuresyncType() == PURESYNC_TYPE_LIGHTSYNC)
                     {
                         // if the last packet was ls he isn't streaming in soon.
                         continue;
                     }
                 }
-                // If attached and attached-to is streamed out, don't consider for streaming in
-                CClientStreamElement* pAttachedTo = DynamicCast<CClientStreamElement>(pElement->GetAttachedTo());
-                if (pAttachedTo && !pAttachedTo->IsStreamedIn())
-                {
-                    // ...unless attached to low LOD version
-                    CClientObject* pAttachedToObject = DynamicCast<CClientObject>(pAttachedTo);
-                    CClientObject* pObject = DynamicCast<CClientObject>(pElement);
-                    if (!pObject || !pAttachedToObject || pObject->IsLowLod() == pAttachedToObject->IsLowLod())
-                        continue;
-                }
 
-                // Prevent rapid in/out thrashing of the same element.
-                if (!bMovedFar && (currentTime - pElement->GetLastStreamOutTime()) < minStreamInDelayAfterOutMs)
+                if (pVehicle && pVehicle->GetTowedByVehicle())
+                {
+                    // Streaming in of towed vehicles is done in CClientVehicle::StreamIn by the towing vehicle
                     continue;
-
-                // Not room to stream in more elements?
-                if (bReachedLimit)
-                {
-                    // Add to the list that might be streamed in during the final phase
-                    if ((int)ClosestStreamedOutList.size() < iMaxIn)  // (only add if there is a chance it will be used)
-                        ClosestStreamedOutList.push_back(pElement);
                 }
-                else
+            }
+            if (IS_PLAYER(pElement))
+            {
+                CClientPlayer* pPlayer = DynamicCast<CClientPlayer>(pElement);
+                if (pPlayer->GetLastPuresyncType() == PURESYNC_TYPE_LIGHTSYNC)
                 {
-                    // Stream in the new element. Don't do it instantly unless moved from far away.
-                    pElement->InternalStreamIn(bMovedFar);
-                    bReachedLimit = ReachedLimit();
+                    // if the last packet was ls he isn't streaming in soon.
+                    continue;
+                }
+            }
+            // If attached and attached-to is streamed out, don't consider for streaming in
+            CClientStreamElement* pAttachedTo = DynamicCast<CClientStreamElement>(pElement->GetAttachedTo());
+            if (pAttachedTo && !pAttachedTo->IsStreamedIn())
+            {
+                // ...unless attached to low LOD version
+                CClientObject* pAttachedToObject = DynamicCast<CClientObject>(pAttachedTo);
+                CClientObject* pObject = DynamicCast<CClientObject>(pElement);
+                if (!pObject || !pAttachedToObject || pObject->IsLowLod() == pAttachedToObject->IsLowLod())
+                    continue;
+            }
 
-                    if (!bReachedLimit)
-                    {
-                        iMaxIn--;
-                        if (iMaxIn <= 0)
-                            break;
-                    }
+            // Prevent rapid in/out thrashing of the same element.
+            if (!bMovedFar && (currentTime - pElement->GetLastStreamOutTime()) < minStreamInDelayAfterOutMs)
+                continue;
+
+            // Not room to stream in more elements?
+            if (bReachedLimit)
+            {
+                // Add to the list that might be streamed in during the final phase
+                if ((int)ClosestStreamedOutList.size() < iMaxIn)  // (only add if there is a chance it will be used)
+                    ClosestStreamedOutList.push_back(pElement);
+            }
+            else
+            {
+                // Stream in the new element. Don't do it instantly unless moved from far away.
+                pElement->InternalStreamIn(bMovedFar);
+                bReachedLimit = ReachedLimit();
+
+                if (!bReachedLimit)
+                {
+                    iMaxIn--;
+                    if (iMaxIn <= 0)
+                        break;
                 }
             }
         }
@@ -662,8 +715,6 @@ void CClientStreamer::OnEnterSector(CClientStreamSector* pSector)
         }
     }
     m_pSector = pSector;
-    SetExpDistances(&m_ActiveElements);
-    m_ActiveElements.sort(CompareExpDistance);
 }
 
 void CClientStreamer::OnElementEnterSector(CClientStreamElement* pElement, CClientStreamSector* pSector)
@@ -676,12 +727,12 @@ void CClientStreamer::OnElementEnterSector(CClientStreamElement* pElement, CClie
             return;
 
         // Remove the element from its old sector
-        pPreviousSector->Remove(pElement);
+        pPreviousSector->Remove(pElement->GetSectorElementIter());
     }
     if (pSector)
     {
         // Add the element to its new sector
-        pSector->Add(pElement);
+        pElement->SetSectorElementIter(pSector->Add(pElement));
 
         // Is this new sector activated?
         if (pSector->IsActivated())
@@ -726,18 +777,26 @@ void CClientStreamer::OnElementForceStreamOut(CClientStreamElement* pElement)
     }
 }
 
-void CClientStreamer::OnElementDimension(CClientStreamElement* pElement)
+void CClientStreamer::OnElementDimension(CClientStreamElement* pElement, unsigned short usOldDimension)
 {
-    // Grab its new dimenson
-    unsigned short usDimension = pElement->GetDimension();
-    // Is it streamed in?
-    if (pElement->IsStreamedIn())
+    bool bWasAdmitted = (pElement->GetStreamSector() != nullptr);
+    bool bShouldBeAdmitted = pElement->IsInStreamerDimension();
+
+    if (bWasAdmitted && !bShouldBeAdmitted)
     {
-        // Has it moved to a different dimension to us?
-        if (usDimension != m_usDimension)
-        {
-            // Stream it out
-            m_ToStreamOut.push_back(pElement);
-        }
+        DemoteElement(pElement);
     }
+    else if (!bWasAdmitted && bShouldBeAdmitted)
+    {
+        m_OutOfDimensionElements[usOldDimension].erase(pElement);
+        AdmitElement(pElement);
+    }
+    else if (!bWasAdmitted && !bShouldBeAdmitted && usOldDimension != pElement->GetDimension())
+    {
+        // Still outside, but the numeric dimension changed from one foreign one to another;
+        // relocate buckets so a later promotion still finds it
+        m_OutOfDimensionElements[usOldDimension].erase(pElement);
+        m_OutOfDimensionElements[pElement->GetDimension()].insert(pElement);
+    }
+    // else already correctly admitted, or already correctly parked; nothing to do
 }

@@ -51,6 +51,9 @@ private:
     void AddElement(CClientStreamElement* pElement);
     void RemoveElement(CClientStreamElement* pElement);
 
+    void AdmitElement(CClientStreamElement* pElement);
+    void DemoteElement(CClientStreamElement* pElement);
+
     void SetExpDistances(std::list<CClientStreamElement*>* pList);
     void AddToSortedList(std::list<CClientStreamElement*>* pList, CClientStreamElement* pElement);
 
@@ -61,7 +64,7 @@ private:
     void OnElementEnterSector(CClientStreamElement* pElement, CClientStreamSector* pSector);
     void OnElementForceStreamIn(CClientStreamElement* pElement);
     void OnElementForceStreamOut(CClientStreamElement* pElement);
-    void OnElementDimension(CClientStreamElement* pElement);
+    void OnElementDimension(CClientStreamElement* pElement, unsigned short usOldDimension);
 
     const float                                      m_fSectorSize;
     const float                                      m_fRowSize;
@@ -77,6 +80,11 @@ private:
     std::list<CClientStreamElement*>                 m_ActiveElements;
     std::unordered_set<CClientStreamElement*>        m_ActiveElementSet;
     std::list<CClientStreamElement*>                 m_ToStreamOut;
+
+    // Elements that don't belong to m_usDimension (and aren't visible in all dimensions) sit
+    // here instead of in the sector grid, bucketed by their own dimension so a dimension change
+    // only has to look at the one bucket that can now qualify
+    std::unordered_map<unsigned short, std::unordered_set<CClientStreamElement*>> m_OutOfDimensionElements;
 
     static void* pAddingElement;
 };

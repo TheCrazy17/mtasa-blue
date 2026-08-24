@@ -873,6 +873,7 @@ void CClientObject::SetCenterOfMass(const CVector& vecCenterOfMass)
 
 void CClientObject::SetVisibleInAllDimensions(bool bVisible, unsigned short usNewDimension)
 {
+    unsigned short usOldDimension = m_usDimension;
     m_bVisibleInAllDimensions = bVisible;
 
     // Stream-in/out the object as needed
@@ -887,4 +888,9 @@ void CClientObject::SetVisibleInAllDimensions(bool bVisible, unsigned short usNe
     {
         SetDimension(usNewDimension);
     }
+
+    // SetDimension above does nothing when usNewDimension matches our current dimension (the
+    // usual setElementDimension(obj, -1) then setElementDimension(obj, sameDimension) sequence),
+    // so force a recheck here too; otherwise the streamer never learns the visibility flag changed.
+    NotifyDimensionRecheck(usOldDimension);
 }

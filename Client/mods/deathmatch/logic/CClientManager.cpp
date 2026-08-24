@@ -22,6 +22,8 @@ CClientManager::CClientManager()
     m_pPickupStreamer = new CClientStreamer(CClientPickupManager::IsPickupLimitReached, 100.0f, 300, 300);
     m_pPlayerStreamer = new CClientStreamer(CClientPlayerManager::IsPlayerLimitReached, 250.0f, 300, 300);
     m_pVehicleStreamer = new CClientStreamer(CClientVehicleManager::IsVehicleLimitReached, 250.0f, 300, 300);
+    // CClientGame::SetAllDimensions never calls SetDimension on this one; search lights use their
+    // own dimension mechanism in CClientPointLightsManager, so this streamer's dimension stays 0
     m_pLightStreamer = new CClientStreamer(CClientPointLightsManager::IsLightsLimitReached, 600.0f, 300, 300);
     m_pModelRequestManager = new CClientModelRequestManager;
 

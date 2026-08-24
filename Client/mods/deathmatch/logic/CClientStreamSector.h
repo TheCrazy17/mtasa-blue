@@ -34,8 +34,8 @@ public:
     void CompareSurroundings(CClientStreamSector* pSector, std::list<CClientStreamSector*>* pCommon, std::list<CClientStreamSector*>* pUncommon,
                              bool bIncludeCenter);
 
-    void                                       Add(CClientStreamElement* pElement) { m_Elements.push_back(pElement); }
-    void                                       Remove(CClientStreamElement* pElement) { m_Elements.remove(pElement); }
+    std::list<CClientStreamElement*>::iterator Add(CClientStreamElement* pElement) { return m_Elements.insert(m_Elements.end(), pElement); }
+    void                                       Remove(std::list<CClientStreamElement*>::iterator iter) { m_Elements.erase(iter); }
     std::list<CClientStreamElement*>::iterator Begin() { return m_Elements.begin(); }
     std::list<CClientStreamElement*>::iterator End() { return m_Elements.end(); }
 

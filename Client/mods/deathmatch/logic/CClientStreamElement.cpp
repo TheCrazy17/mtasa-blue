@@ -164,10 +164,14 @@ void CClientStreamElement::SetDimension(unsigned short usDimension)
     // Different dimension than before?
     if (m_usDimension != usDimension)
     {
+        // CClientEntity::SetDimension below overwrites m_usDimension, so grab the old
+        // value first; OnElementDimension needs it to find the element's current bucket
+        unsigned short usOldDimension = m_usDimension;
+
         // Set the new dimension
         CClientEntity::SetDimension(usDimension);
 
-        m_pStreamer->OnElementDimension(this);
+        m_pStreamer->OnElementDimension(this, usOldDimension);
     }
 }
 

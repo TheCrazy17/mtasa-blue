@@ -142,17 +142,19 @@ void CClientStreamSector::AddElements(list<CClientStreamElement*>* pList, std::u
     list<CClientStreamElement*>::iterator iter = m_Elements.begin();
     for (; iter != m_Elements.end(); iter++)
     {
+        CClientStreamElement* pElement = *iter;
+
         // Don't add if already in the list (O(1) if set provided)
         if (pSet)
         {
-            if (pSet->count(*iter))
+            if (pSet->count(pElement))
                 continue;
-            pSet->insert(*iter);
+            pSet->insert(pElement);
         }
-        else if (ListContains(*pList, *iter))
+        else if (ListContains(*pList, pElement))
             continue;
 
-        pList->push_back(*iter);
+        pElement->SetActiveElementIter(pList->insert(pList->end(), pElement));
     }
 }
 
@@ -161,8 +163,17 @@ void CClientStreamSector::RemoveElements(list<CClientStreamElement*>* pList, std
     list<CClientStreamElement*>::iterator iter = m_Elements.begin();
     for (; iter != m_Elements.end(); iter++)
     {
-        pList->remove(*iter);
+        CClientStreamElement* pElement = *iter;
+
+        // Erase by iterator instead of by value so this stays O(1) per element
         if (pSet)
-            pSet->erase(*iter);
+        {
+            if (pSet->erase(pElement))
+                pList->erase(pElement->GetActiveElementIter());
+        }
+        else
+        {
+            pList->remove(pElement);
+        }
     }
 }
