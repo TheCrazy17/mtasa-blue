@@ -175,6 +175,16 @@ void CClientStreamElement::SetDimension(unsigned short usDimension)
     }
 }
 
+bool CClientStreamElement::IsInStreamerDimension()
+{
+    return GetDimension() == m_pStreamer->GetDimension() || IsVisibleInAllDimensions();
+}
+
+void CClientStreamElement::NotifyDimensionRecheck(unsigned short usOldDimension)
+{
+    m_pStreamer->OnElementDimension(this, usOldDimension);
+}
+
 CSphere CClientStreamElement::GetWorldBoundingSphere()
 {
     // Default to a point at stream position

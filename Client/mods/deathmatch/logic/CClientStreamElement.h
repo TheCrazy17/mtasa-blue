@@ -57,12 +57,13 @@ public:
 
     // Whether this element currently belongs to the streamer's own dimension. Not const,
     // since GetDimension() and IsVisibleInAllDimensions() aren't const anywhere in this
-    // hierarchy, and not noexcept, since it dereferences the streamer pointer.
-    bool IsInStreamerDimension() { return GetDimension() == m_pStreamer->GetDimension() || IsVisibleInAllDimensions(); }
+    // hierarchy, and not noexcept, since it dereferences the streamer pointer. Defined in the
+    // .cpp, not inline here, since CClientStreamer is only forward declared in this header.
+    bool IsInStreamerDimension();
 
     // Lets a subclass force a dimension admission recheck even when SetDimension's own
     // no-op guard skipped calling OnElementDimension (see CClientObject::SetVisibleInAllDimensions)
-    void NotifyDimensionRecheck(unsigned short usOldDimension) { m_pStreamer->OnElementDimension(this, usOldDimension); }
+    void NotifyDimensionRecheck(unsigned short usOldDimension);
 
 private:
     void SetStreamRow(CClientStreamSectorRow* pRow) { m_pStreamRow = pRow; }
