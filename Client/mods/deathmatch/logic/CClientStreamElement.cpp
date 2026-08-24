@@ -15,8 +15,8 @@ using std::list;
 CClientStreamElement::CClientStreamElement(CClientStreamer* pStreamer, ElementID ID) : ClassInit(this), CClientEntity(ID)
 {
     m_pStreamer = pStreamer;
-    m_pStreamRow = NULL;
-    m_pStreamSector = NULL;
+    m_pStreamRow = nullptr;
+    m_pStreamSector = nullptr;
     m_fExpDistance = 0.0f;
     m_bStreamedIn = false;
     m_bAttemptingToStreamIn = false;

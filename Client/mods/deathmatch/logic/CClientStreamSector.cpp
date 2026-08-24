@@ -17,27 +17,27 @@ CClientStreamSector::CClientStreamSector(CClientStreamSectorRow* pRow, CVector2D
     m_pRow = pRow;
     m_vecBottomLeft = vecBottomLeft;
     m_vecTopRight = vecTopRight;
-    m_pLeft = NULL;
-    m_pRight = NULL;
-    m_pTop = NULL;
-    m_pBottom = NULL;
+    m_pLeft = nullptr;
+    m_pRight = nullptr;
+    m_pTop = nullptr;
+    m_pBottom = nullptr;
     m_bActivated = false;
     m_bExtra = false;
 
-    m_pArea = NULL;
+    m_pArea = nullptr;
 }
 
 CClientStreamSector::~CClientStreamSector()
 {
     // Remove our connected sectors
     if (m_pLeft)
-        m_pLeft->m_pRight = NULL;
+        m_pLeft->m_pRight = nullptr;
     if (m_pRight)
-        m_pRight->m_pLeft = NULL;
+        m_pRight->m_pLeft = nullptr;
     if (m_pTop)
-        m_pTop->m_pBottom = NULL;
+        m_pTop->m_pBottom = nullptr;
     if (m_pBottom)
-        m_pBottom->m_pTop = NULL;
+        m_pBottom->m_pTop = nullptr;
 }
 
 bool CClientStreamSector::DoesContain(CVector& vecPosition)
