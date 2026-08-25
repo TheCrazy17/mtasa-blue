@@ -168,12 +168,23 @@ inner:
 // Post handler. player peds, cars and bikes set ref 1 and restore it inside their
 // own Render fns. boats and trains never did, so vehicles get the same scaling,
 // for cars and bikes it's a no-op since their own ref write lands after ours.
+//
+// #5193: vehicle body paint commonly carries its own partial alpha material (~128) for a
+// MatFX environment map shine layer, unrelated to element alpha entirely (confirmed against
+// real vehicle DFFs, e.g. infernus.dff has several body materials at alpha 128 with a MatFX
+// extension). Before #5006 that always passed because RenderEverythingBarRoads's vehicle
+// ALPHAREF was patched to 1; #5006 restored SA's native 140 there, which a 128 shine layer
+// now fails outright and gets discarded instead of blended, so painted panels look duller
+// than upgrade parts that don't carry that material. This isn't an element alpha problem so
+// it needs its own branch: force the same permissive ref of 1 vehicles used to render with,
+// for every vehicle regardless of its own element alpha, not just scripted-alpha ones.
 static bool  ms_bAlphaTestRefOverridden = false;
 static DWORD ms_dwSavedAlphaTestRef = 0;
 
 static void OverrideAlphaTestRefForElementAlpha(CEntitySAInterface* pEntity)
 {
     unsigned char ucAlpha = 255;
+    bool          bIsVehicle = false;
 
     if (pEntity->nType == ENTITY_TYPE_OBJECT)
     {
@@ -183,12 +194,13 @@ static void OverrideAlphaTestRefForElementAlpha(CEntitySAInterface* pEntity)
     }
     else if (pEntity->nType == ENTITY_TYPE_VEHICLE)
     {
+        bIsVehicle = true;
         SClientEntity<CVehicleSA>* pVehicleClientEntity = pGameInterface->GetPools()->GetVehicle((DWORD*)pEntity);
         if (pVehicleClientEntity && pVehicleClientEntity->pEntity)
             ucAlpha = pVehicleClientEntity->pEntity->GetAlpha();
     }
 
-    if (ucAlpha == 255)
+    if (ucAlpha == 255 && !bIsVehicle)
         return;
 
     // RwEngineInstance->dOpenDevice.fpRenderStateGet/fpRenderStateSet
@@ -197,7 +209,9 @@ static void OverrideAlphaTestRefForElementAlpha(CEntitySAInterface* pEntity)
     auto  fpSet = reinterpret_cast<BOOL(__cdecl*)(DWORD, void*)>(*(DWORD*)(engine + 0x20));
 
     fpGet(0x1e /*rwRENDERSTATEALPHATESTFUNCTIONREF*/, &ms_dwSavedAlphaTestRef);
-    fpSet(0x1e /*rwRENDERSTATEALPHATESTFUNCTIONREF*/, reinterpret_cast<void*>(ms_dwSavedAlphaTestRef * ucAlpha / 255));
+
+    DWORD dwNewRef = (ucAlpha == 255) ? 1 : (ms_dwSavedAlphaTestRef * ucAlpha / 255);
+    fpSet(0x1e /*rwRENDERSTATEALPHATESTFUNCTIONREF*/, reinterpret_cast<void*>(dwNewRef));
     ms_bAlphaTestRefOverridden = true;
 }
 
