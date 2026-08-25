@@ -37,7 +37,7 @@ private:
     void RemoveBuildingFromWorld(CBuildingSAInterface* pBuilding);
     bool AddBuildingToPool(CClientBuilding* pClientBuilding, CBuildingSA* pBuilding);
     void UpdateIplEntrysPointers(uint32_t offset);
-    void UpdateBackupLodPointers(uint32_t offset);
+    void UpdateBackupLodPointers(uint32_t offset, std::uintptr_t oldPoolStart, std::uintptr_t oldPoolEnd);
     void RemoveVehicleDamageLinks();
     void RemovePedsContactEnityLinks();
     void RemoveObjectEntityLinks();

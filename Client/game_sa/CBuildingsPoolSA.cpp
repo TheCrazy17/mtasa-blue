@@ -374,12 +374,18 @@ bool CBuildingsPoolSA::Resize(int size)
         UpdateIplEntrysPointers(offset);
     }
 
+    // Only pointers that actually fall inside the old buildings array were invalidated by the
+    // move above; a building or dummy whose LOD is the other pool type never moved and must be
+    // left untouched, otherwise it drifts a bit further off into unrelated memory on every resize.
+    const auto oldPoolStart = reinterpret_cast<std::uintptr_t>(oldPool);
+    const auto oldPoolEnd = oldPoolStart + static_cast<std::uintptr_t>(currentSize) * sizeof(CBuildingSAInterface);
+
     if (m_pOriginalBuildingsBackup)
     {
-        UpdateBackupLodPointers(offset);
+        UpdateBackupLodPointers(offset, oldPoolStart, oldPoolEnd);
     }
 
-    pGame->GetPools()->GetDummyPool().UpdateBuildingLods(offset);
+    pGame->GetPools()->GetDummyPool().UpdateBuildingLods(offset, oldPoolStart, oldPoolEnd);
 
     // RemoveAllWithBackup already ran these in the same remove/resize cycle; skip them.
     // Run when Resize is called directly without a prior backup (e.g. pool size change).
@@ -419,7 +425,7 @@ void CBuildingsPoolSA::UpdateIplEntrysPointers(uint32_t offset)
     }
 }
 
-void CBuildingsPoolSA::UpdateBackupLodPointers(uint32_t offset)
+void CBuildingsPoolSA::UpdateBackupLodPointers(uint32_t offset, std::uintptr_t oldPoolStart, std::uintptr_t oldPoolEnd)
 {
     auto& arr = *m_pOriginalBuildingsBackup;
     for (size_t i = 0; i < arr.size(); ++i)
@@ -428,9 +434,10 @@ void CBuildingsPoolSA::UpdateBackupLodPointers(uint32_t offset)
         if (data.first)
         {
             CBuildingSAInterface* building = reinterpret_cast<CBuildingSAInterface*>(&data.second);
-            if (building->m_pLod != nullptr)
+            auto                  lodAddress = reinterpret_cast<std::uintptr_t>(building->m_pLod);
+            if (lodAddress >= oldPoolStart && lodAddress < oldPoolEnd)
             {
-                building->m_pLod = (CBuildingSAInterface*)((uint32_t)building->m_pLod + offset);
+                building->m_pLod = reinterpret_cast<CBuildingSAInterface*>(lodAddress + offset);
             }
         }
     }
