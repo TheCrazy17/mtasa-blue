@@ -1500,11 +1500,15 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                     // Position corrections blend halfway while small, letting the link
                     // forces finish fluidly; a large one snaps whole, rotation included,
                     // since the jump is unavoidable there. Rotation drift is otherwise the
-                    // per frame servo's job, in CClientGame::UpdateTrailers. Everything
-                    // this one tows is dragged by the same delta; correcting a single
-                    // chain member opens an intra chain separation that the native pulls
-                    // turn into a launch. Dragged members meet their own chain entries
-                    // right after and take their own correction
+                    // per frame servo's job, in CClientGame::UpdateTrailers. Everything in
+                    // the chain, both what this one tows and what tows this one, is dragged
+                    // by the same delta; leaving either side behind opens a fresh gap that
+                    // the native pulls read as real stretch and turn into a launch, which on
+                    // the tower's side reads as the tractor itself teleporting for no reason
+                    // right when a correction lands. Dragged members meet their own chain
+                    // entries right after and take their own correction; the tower keeps
+                    // whatever interpolation it already has running, since it is not what is
+                    // being corrected here
                     CVector vecWarpDelta = vecReported - vecPosition;
                     if (vecWarpDelta.LengthSquared() < TRAILER_CORRECTION_SOFT_DISTANCE * TRAILER_CORRECTION_SOFT_DISTANCE)
                         vecWarpDelta *= TRAILER_CORRECTION_BLEND;
@@ -1512,6 +1516,13 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
                         pTrailer->SetRotationDegrees(trailerRotation.data.vecRotation);
 
                     pTrailer->SetPosition(vecPosition + vecWarpDelta);
+
+                    if (pTowingVehicle->GetGameVehicle())
+                    {
+                        CVector vecTowingPosition;
+                        pTowingVehicle->GetPosition(vecTowingPosition);
+                        pTowingVehicle->SetPosition(vecTowingPosition + vecWarpDelta, false);
+                    }
 
                     for (CClientVehicle* pTowed = pTrailer->GetTowedVehicle(); pTowed; pTowed = pTowed->GetTowedVehicle())
                     {
