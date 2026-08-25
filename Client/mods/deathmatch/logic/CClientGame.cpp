@@ -1982,6 +1982,18 @@ void CClientGame::UpdateTrailers()
                 pTowedBy->UnlinkTowedVehicle();
             else if (IsAuthoritativeForTowLink(pTowedBy, pVehicle))
                 CommitTowLinkBreak(pTowedBy, pVehicle);
+            else
+            {
+                // Nobody has claimed the syncer yet; the tower's own controller died with
+                // it, and the unoccupied sync only reassigns on its next pulse, up to half
+                // a second away. Holding the trailer at rest here beats every client free
+                // running the blast locally with its own slightly diverged state, which is
+                // what reads as the trailer launching once a syncer finally lands and
+                // corrects it
+                CVector vecStop;
+                pGameTrailer->SetMoveSpeed(vecStop);
+                pGameTrailer->SetTurnSpeed(&vecStop);
+            }
             continue;
         }
 
