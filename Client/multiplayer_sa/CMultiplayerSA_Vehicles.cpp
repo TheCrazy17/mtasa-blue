@@ -1384,9 +1384,29 @@ static constexpr DWORD FUNC_CVehicle__UpdateTrailerLink = 0x6DFC50;
 static constexpr float TRACTOR_PULL_MIN_SPEED_SQ = 0.008f * 0.008f;
 static constexpr float TOW_LINK_TIGHT_RANGE_SQ = 1.0f;
 
+// Must match CClientGame.h's TOW_HOIST_GRACE_ANGLE; the drive loop pulls run in this same
+// module and cannot include the deathmatch client's headers, so the threshold is repeated
+static constexpr unsigned short TOW_HOIST_GRACE_ANGLE = 19900;
+
 static bool __fastcall IsTowingVehicleStill(CVehicleSAInterface* towingVehicle)
 {
     return towingVehicle->m_vecLinearVelocity.LengthSquared() < TRACTOR_PULL_MIN_SPEED_SQ;
+}
+
+// True once the hoist sits in the native grace range, the deliberate release gesture:
+// ground it, then drive away. The pulls below have no idea a release is under way and
+// would otherwise keep reeling the towed vehicle back in every tick the gap stays inside
+// the tight range, which a normal drive off never grows past in a single tick; nothing
+// short of skipping the pull outright ever lets the pair actually separate
+static bool __fastcall IsHoistGrounded(CVehicleSAInterface* towingVehicle)
+{
+    return reinterpret_cast<CAutomobileSAInterface*>(towingVehicle)->m_wMiscComponentAngle > TOW_HOIST_GRACE_ANGLE;
+}
+
+static bool __fastcall IsTowingHoistGrounded(CVehicleSAInterface* towedVehicle)
+{
+    CVehicleSAInterface* towingVehicle = towedVehicle->m_towingVehicle;
+    return towingVehicle && IsHoistGrounded(towingVehicle);
 }
 
 static bool __fastcall IsTowLinkStretched(CVehicleSAInterface* towedVehicle)
@@ -1416,6 +1436,13 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullFirst(
         test    al, al
         jnz     skipPull
 
+        push    ecx
+        mov     ecx, esi
+        call    IsTowingHoistGrounded
+        pop     ecx
+        test    al, al
+        jnz     skipPull
+
         mov     eax, FUNC_CVehicle__UpdateTractorLink
         call    eax
         jmp     CONTINUE_CAutomobile__ProcessControl_TractorPullFirst
@@ -1436,6 +1463,11 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TrailerPullFirst(
     {
         mov     ecx, esi
         call    IsTowLinkStretched
+        test    al, al
+        jnz     skipPull
+
+        mov     ecx, esi
+        call    IsTowingHoistGrounded
         test    al, al
         jnz     skipPull
 
@@ -1500,6 +1532,12 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_TractorPullSecond
     {
         push    ecx
         call    IsTowingVehicleStill
+        pop     ecx
+        test    al, al
+        jnz     skipPull
+
+        push    ecx
+        call    IsHoistGrounded
         pop     ecx
         test    al, al
         jnz     skipPull
