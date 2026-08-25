@@ -21,6 +21,7 @@ CClientStreamer::CClientStreamer(StreamerLimitReachedFunction* pLimitReachedFunc
     m_fMaxDistanceExp = fMaxDistance * fMaxDistance;
     m_fMaxDistanceThreshold = (fMaxDistance + 50.0f) * (fMaxDistance + 50.0f);
     m_usDimension = 0;
+    m_bSkipThrottleNextPulse = false;
 
     // We need the limit reached func
     assert(pLimitReachedFunc);
@@ -184,6 +185,17 @@ void                CClientStreamer::DoPulse(CVector& vecPosition)
             // Grab our new sector
             OnEnterSector(m_pRow->FindOrCreateSector(vecPosition, m_pSector));
         }
+    }
+
+    // Something other than ordinary movement can still force nearby elements to stream out
+    // and back in (eg. a player respawning practically on the spot, which shuffles sector
+    // activation and swap ordering without moving the camera far enough to trip the check
+    // above). Treat that the same as a big jump so the catch-up happens in one go instead
+    // of trickling in over several frames.
+    if (m_bSkipThrottleNextPulse)
+    {
+        bMovedFar = true;
+        m_bSkipThrottleNextPulse = false;
     }
 
     // Update distances every frame

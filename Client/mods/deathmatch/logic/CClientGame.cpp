@@ -2206,6 +2206,12 @@ void CClientGame::SetAllInteriors(unsigned char ucInterior)
     m_pNametags->m_ucInterior = ucInterior;
 }
 
+void CClientGame::SkipObjectStreamerThrottleOnce()
+{
+    m_pManager->GetObjectStreamer()->SkipThrottleNextPulse();
+    m_pManager->GetObjectLodStreamer()->SkipThrottleNextPulse();
+}
+
 bool CClientGame::StaticKeyStrokeHandler(const SString& strKey, bool bState, bool bIsConsoleInputKey)
 {
     return g_pClientGame->KeyStrokeHandler(strKey, bState, bIsConsoleInputKey);

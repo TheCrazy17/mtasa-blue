@@ -1176,6 +1176,12 @@ void CPacketHandler::Packet_PlayerSpawn(NetBitStreamInterface& bitStream)
             g_pClientGame->SetAllDimensions(usDimension);
             g_pClientGame->SetAllInteriors(ucInterior);
 
+            // A respawn near where the player died can still make custom objects stream out
+            // and back in (sector activation and swap ordering aren't purely distance based),
+            // and that catch-up would otherwise trickle in over several visible frames since
+            // the camera hasn't necessarily moved far. Let it happen in one go instead.
+            g_pClientGame->SkipObjectStreamerThrottleOnce();
+
             // Reset return position so we can't warp back to where we were if local player
             g_pClientGame->m_pNetAPI->ResetReturnPosition();
         }

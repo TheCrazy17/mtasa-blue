@@ -30,6 +30,12 @@ public:
     void DoPulse(CVector& vecPosition);
     void SetDimension(unsigned short usDimension);
 
+    // Lift the per-frame stream in/out cap for the next pulse only, as if the camera had
+    // jumped a long distance. Used when something other than movement (eg. a player
+    // respawn) may have forced nearby elements to stream out and back in, so the catch-up
+    // isn't spread visibly over several frames.
+    void SkipThrottleNextPulse() { m_bSkipThrottleNextPulse = true; }
+
     static bool CompareExpDistance(CClientStreamElement* p1, CClientStreamElement* p2);
 
     unsigned int                               CountActiveElements() { return (unsigned int)m_ActiveElements.size(); }
@@ -74,6 +80,7 @@ private:
     CClientStreamSector*                             m_pSector;
     CVector                                          m_vecPosition;
     unsigned short                                   m_usDimension;
+    bool                                             m_bSkipThrottleNextPulse;
     std::list<CClientStreamElement*>                 m_ActiveElements;
     std::unordered_set<CClientStreamElement*>        m_ActiveElementSet;
     std::list<CClientStreamElement*>                 m_ToStreamOut;

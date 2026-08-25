@@ -366,6 +366,12 @@ public:
     void SetAllDimensions(unsigned short usDimension);
     void SetAllInteriors(unsigned char ucInterior);
 
+    // A respawn can shuffle object streaming (sector activation, swap ordering) even when
+    // the player lands close to where they died, and the normal distance-based throttle
+    // then spreads the resulting stream out/in over several visible frames. Call this for
+    // the local player's respawn so any of that catches up in one go instead.
+    void SkipObjectStreamerThrottleOnce();
+
     static bool StaticKeyStrokeHandler(const SString& strKey, bool bState, bool bIsConsoleInputKey);
     bool        KeyStrokeHandler(const SString& strKey, bool bState, bool bIsConsoleInputKey);
     static bool StaticCharacterKeyHandler(WPARAM wChar);
