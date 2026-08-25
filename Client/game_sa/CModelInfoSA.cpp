@@ -325,7 +325,13 @@ bool CModelInfoSA::IsVehicleModel(std::uint32_t model) noexcept
 
 bool CModelInfoSA::IsPlayerModel()
 {
-    return (GetInterface() && GetInterface()->pColModel && GetInterface()->pColModel == (CColModelSAInterface*)VAR_CTempColModels_ModelPed1);
+    // Every CPedModelInfo defaults its pColModel to the shared generic ped collision (see
+    // CPedModelInfoSAInterface's constructor), but that placeholder isn't unique to peds.
+    // Some non-ped "generic" models without their own col, like the cutscene object slots
+    // that CClientObjectManager::IsValidModel already refuses to touch, point at the exact
+    // same shared collision. Comparing pColModel let those slip through as valid player
+    // models. Check the real model type instead, same as IsVehicle() does for vehicles.
+    return GetModelType() == eModelInfoType::PED;
 }
 
 bool CModelInfoSA::IsUpgrade()
