@@ -945,10 +945,31 @@ bool CLuaPlayerDefs::ResetPlayerHudComponentProperty(eHudComponent component, eH
 std::variant<float, bool, std::string, CLuaMultiReturn<float, float>, CLuaMultiReturn<std::uint8_t, std::uint8_t, std::uint8_t, std::uint8_t>>
 CLuaPlayerDefs::GetPlayerHudComponentProperty(eHudComponent component, eHudComponentProperty property)
 {
-    if (component == HUD_ALL || component == HUD_CROSSHAIR || component == HUD_VITAL_STATS || component == HUD_HELP_TEXT || component == HUD_RADAR)
+    if (component == HUD_ALL || component == HUD_CROSSHAIR || component == HUD_VITAL_STATS || component == HUD_HELP_TEXT)
         return false;
 
     CHud* hud = g_pGame->GetHud();
+
+    // The radar doesn't use the generic per-component storage the rest of the properties rely on, so
+    // there's only a position and a size to give back for it, both worked out from the screen resolution.
+    if (component == HUD_RADAR)
+    {
+        switch (property)
+        {
+            case eHudComponentProperty::POSITION:
+            {
+                CVector2D pos = hud->GetComponentPosition(component);
+                return CLuaMultiReturn<float, float>{pos.fX, pos.fY};
+            }
+            case eHudComponentProperty::SIZE:
+            {
+                CVector2D size = hud->GetComponentSize(component);
+                return CLuaMultiReturn<float, float>{size.fX, size.fY};
+            }
+            default:
+                return false;
+        }
+    }
 
     switch (property)
     {

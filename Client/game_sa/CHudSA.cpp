@@ -589,6 +589,12 @@ void CHudSA::SetComponentFontDropColor(const eHudComponent& component, std::uint
 
 CVector2D CHudSA::GetComponentPosition(const eHudComponent& component) const noexcept
 {
+    // The radar doesn't have an entry in the placement map like the other components, since the game
+    // always draws it at a fixed spot worked out from the current resolution rather than storing an
+    // x/y anywhere. Work out that same spot here instead of falling through to GetHudComponentRef.
+    if (component == HUD_RADAR)
+        return CVector2D(calcStreetchX * 40.0f, static_cast<float>(rsGlobal->maximumHeight) - calcStreetchY * 104.0f);
+
     const auto& ref = GetHudComponentRef(component);
 
     float x = ref.placement.useCustomPosition ? ref.placement.customX : ref.placement.x;
@@ -599,6 +605,11 @@ CVector2D CHudSA::GetComponentPosition(const eHudComponent& component) const noe
 
 CVector2D CHudSA::GetComponentSize(const eHudComponent& component) const noexcept
 {
+    // Same story as GetComponentPosition above, the radar's size just comes from the same
+    // resolution-based formula the game uses to draw it, not from stored placement data.
+    if (component == HUD_RADAR)
+        return CVector2D(calcStreetchX * 94.0f, calcStreetchY * 76.0f);
+
     const auto& ref = GetHudComponentRef(component);
 
     float w = ref.placement.useCustomSize ? ref.placement.customWidth : ref.placement.width;
