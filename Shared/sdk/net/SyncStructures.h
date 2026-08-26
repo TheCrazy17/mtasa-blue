@@ -192,14 +192,17 @@ struct SPlayerArmorSync : public SFloatAsBitsSync<8>
 
 struct SVehicleHealthSync : public SFloatAsBitsSync<12>
 {
-    // 0 - 2000 step 0.5                                2047.5 = ( 2^12 - 1 ) * 0.5
-    SVehicleHealthSync() : SFloatAsBitsSync<12>(0.f, 2047.5f, true, false) {}
+    // 0 - 10000 step 2.5                             10237.5 = ( 2^12 - 1 ) * 2.5
+    // Range covers MAX_VEHICLE_HEALTH (see CClientVehicle.h / CVehicle.h). Was 0 - 2047.5 with step 0.5,
+    // which silently clamped any health above ~2050 and kept onVehicleDamage from ever firing for it.
+    SVehicleHealthSync() : SFloatAsBitsSync<12>(0.f, 10237.5f, true, false) {}
 };
 
 struct SLowPrecisionVehicleHealthSync : public SFloatAsBitsSync<8>
 {
-    // 0 - 2000 step 8                                              2040 = ( 2^8 - 1 ) * 8
-    SLowPrecisionVehicleHealthSync() : SFloatAsBitsSync<8>(0.0f, 2040.0f, true, false) {}
+    // 0 - 10000 step 40                                 10200 = ( 2^8 - 1 ) * 40
+    // Same widened range as SVehicleHealthSync, just coarser since this is the lightsync variant.
+    SLowPrecisionVehicleHealthSync() : SFloatAsBitsSync<8>(0.0f, 10200.0f, true, false) {}
 };
 
 struct SObjectHealthSync : public SFloatAsBitsSync<11>

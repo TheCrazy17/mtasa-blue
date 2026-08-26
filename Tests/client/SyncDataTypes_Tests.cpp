@@ -188,7 +188,8 @@ TEST(SPlayerArmorSync, RoundTrip_FullArmor)
     EXPECT_NEAR(100.0f, out.data.fValue, 0.6f);
 }
 
-// Vehicle health: 12 bits over [0, 2047.5]. Step = 0.5.
+// Vehicle health: 12 bits over [0, 10237.5]. Step = 2.5.
+// Range covers MAX_VEHICLE_HEALTH (10000); see issue #5019.
 TEST(SVehicleHealthSync, RoundTrip_MidRange)
 {
     MockBitStream      bs;
@@ -199,10 +200,24 @@ TEST(SVehicleHealthSync, RoundTrip_MidRange)
     bs.ResetReadPointer();
     SVehicleHealthSync out;
     EXPECT_TRUE(out.Read(bs));
-    EXPECT_NEAR(1000.0f, out.data.fValue, 0.6f);
+    EXPECT_NEAR(1000.0f, out.data.fValue, 2.6f);
 }
 
-// Low-precision vehicle health: 8 bits over [0, 2040]. Step = 8.
+// Vehicle health above the old 2047.5 ceiling now round-trips instead of clamping.
+// This is the exact case that used to swallow onVehicleDamage above ~2050 health.
+TEST(SVehicleHealthSync, RoundTrip_AboveOldCeiling)
+{
+    MockBitStream      bs;
+    SVehicleHealthSync sync;
+    sync.data.fValue = 9000.0f;
+    sync.Write(bs);
+    bs.ResetReadPointer();
+    SVehicleHealthSync out;
+    EXPECT_TRUE(out.Read(bs));
+    EXPECT_NEAR(9000.0f, out.data.fValue, 2.6f);
+}
+
+// Low-precision vehicle health: 8 bits over [0, 10200]. Step = 40.
 // Used when bandwidth savings outweigh precision.
 TEST(SLowPrecisionVehicleHealthSync, RoundTrip)
 {
@@ -214,7 +229,7 @@ TEST(SLowPrecisionVehicleHealthSync, RoundTrip)
     bs.ResetReadPointer();
     SLowPrecisionVehicleHealthSync out;
     EXPECT_TRUE(out.Read(bs));
-    EXPECT_NEAR(1000.0f, out.data.fValue, 9.0f);
+    EXPECT_NEAR(1000.0f, out.data.fValue, 41.0f);
 }
 
 // Object health: 11 bits over [0, 1023.5]. Step = 0.5.

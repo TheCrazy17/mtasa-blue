@@ -330,7 +330,7 @@ TEST(SUnoccupiedVehicleSync, RoundTrip_PositionAndHealth)
     EXPECT_NEAR(100.0f, out.data.vecPosition.fX, 0.01f);
     EXPECT_NEAR(200.0f, out.data.vecPosition.fY, 0.01f);
     EXPECT_FLOAT_EQ(10.0f, out.data.vecPosition.fZ);
-    EXPECT_NEAR(1000.0f, out.data.fHealth, 0.6f);
+    EXPECT_NEAR(1000.0f, out.data.fHealth, 2.6f);
 }
 
 // SUnoccupiedVehicleSync with velocity enabled: exercises the SVelocitySync
@@ -364,7 +364,7 @@ TEST(SUnoccupiedVehicleSync, RoundTrip_WithVelocity)
     EXPECT_NEAR(5.0f, out.data.vecVelocity.fX, 0.05f);
     EXPECT_NEAR(10.0f, out.data.vecVelocity.fY, 0.05f);
     EXPECT_NEAR(-2.0f, out.data.vecVelocity.fZ, 0.05f);
-    EXPECT_NEAR(800.0f, out.data.fHealth, 0.6f);
+    EXPECT_NEAR(800.0f, out.data.fHealth, 2.6f);
 }
 
 // ============================================================================
