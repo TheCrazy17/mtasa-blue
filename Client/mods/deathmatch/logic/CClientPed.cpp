@@ -2202,11 +2202,12 @@ bool CClientPed::SetCurrentWeaponSlot(eWeaponSlot weaponSlot)
             {
                 if (weaponSlot == WEAPONSLOT_TYPE_UNARMED)
                 {
-                    eWeaponSlot currentSlot = GetCurrentWeaponSlot();
-                    CWeapon*    oldWeapon = GetWeapon(currentSlot);
-                    DWORD       ammoInClip = oldWeapon->GetAmmoInClip();
-                    DWORD       ammoInTotal = oldWeapon->GetAmmoTotal();
-                    eWeaponType weaponType = oldWeapon->GetType();
+                    eWeaponSlot  currentSlot = GetCurrentWeaponSlot();
+                    CWeapon*     oldWeapon = GetWeapon(currentSlot);
+                    DWORD        ammoInClip = oldWeapon->GetAmmoInClip();
+                    DWORD        ammoInTotal = oldWeapon->GetAmmoTotal();
+                    eWeaponType  weaponType = oldWeapon->GetType();
+                    eWeaponState weaponState = oldWeapon->GetState();
 
                     bool isGoggles = currentSlot == WEAPONSLOT_TYPE_PARACHUTE && (weaponType == WEAPONTYPE_NIGHTVISION || weaponType == WEAPONTYPE_INFRARED);
                     if (!isGoggles)
@@ -2219,8 +2220,14 @@ bool CClientPed::SetCurrentWeaponSlot(eWeaponSlot weaponSlot)
                     if (!isGoggles)
                     {
                         CWeapon* newWeapon = GiveWeapon(weaponType, ammoInTotal);
-                        newWeapon->SetAmmoInClip(ammoInClip);
                         newWeapon->SetAmmoTotal(ammoInTotal);
+
+                        // Giving the weapon back already refills its clip from the total ammo we just gave it.
+                        // Only overwrite that with our captured clip count if we weren't mid reload, since back then
+                        // the clip was captured empty and forcing that stale zero back on would leave the weapon
+                        // with no ammo in the clip at all (and no way to reload it) once switched back to.
+                        if (weaponState != WEAPONSTATE_RELOADING)
+                            newWeapon->SetAmmoInClip(ammoInClip);
                     }
 
                     // Don't allow doing gang driveby while unarmed
