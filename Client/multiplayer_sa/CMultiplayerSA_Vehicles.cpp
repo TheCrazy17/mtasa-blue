@@ -297,6 +297,135 @@ static void __declspec(naked) HOOK_CAutomobile__HydraulicControl()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// CMonsterTruck::Constructor, seeding m_wheelPosition fully extended
+//
+// Issue #5168: a freshly spawned monster truck shows flat, generic body lighting for its first
+// moments, then the correct ground reflected lighting suddenly cuts in.
+//
+// SetupSuspensionLines (0x6C7FB0), called once from the constructor, seeds m_wheelPosition to a
+// value it derives from the truck's own suspension travel rather than to the fully extended end of
+// that travel. CMonsterTruck::ProcessEntityCollision (0x6C8AE0) only ever accepts a new wheel
+// touching point when it represents more compression than whatever m_wheelPosition already holds,
+// with no separate guard for "nothing has touched yet"; ordinary cars avoid the equivalent problem
+// by seeding their own m_wheelRatios to 1.0, the fully relaxed end of their travel, which is why
+// every real touch beats it on the very first collision test. Monster trucks get no such guarantee,
+// so on the first tick or two after creation a genuine ground touch can arrive already less
+// compressed than the constructor's seed and be rejected outright. Until a touch is finally
+// accepted, m_anCollisionLighting keeps whatever CVehicle's own constructor put there (a fixed,
+// generic mid brightness), so CalculateLightingFromCollision has nothing but that placeholder to
+// average, and the truck reads as flatly, generically lit instead of reflecting the ground under it.
+//
+// Reseeding m_wheelPosition to m_aSuspensionLineLength (the fully extended limit SetupSuspensionLines
+// itself just computed, and the exact value CMonsterTruck::ResetSuspension already treats as the
+// correct "not touching anything yet" baseline elsewhere in this same class) closes that gap the
+// same way the stock automobile seed does: any real touch is guaranteed to be more compressed than
+// fully extended, so it always wins on the first attempt. The only visible effect is that the wheels
+// briefly render at full droop before the first real collision test corrects them, which is the same
+// startup look every ordinary vehicle already has; nothing here touches how the suspension behaves
+// once that first touch lands.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6C8DC2 | 8A 86 68 08 00 00 | mov     al, byte ptr [esi + 0x868]
+//     0x6C8DC8 | 8B 4C 24 08       | mov     ecx, dword ptr [esp + 0x8]
+#define HOOKPOS_CMonsterTruck__Constructor_SeedWheelPosition  0x6C8DC2
+#define HOOKSIZE_CMonsterTruck__Constructor_SeedWheelPosition 6
+static const DWORD CONTINUE_CMonsterTruck__Constructor_SeedWheelPosition = 0x6C8DC8;
+
+static void __fastcall SeedMonsterTruckWheelPositionExtended(CAutomobileSAInterface* vehicle)
+{
+    for (int i = 0; i < MAX_WHEELS; i++)
+        vehicle->m_wheelPosition[i] = vehicle->m_aSuspensionLineLength[i];
+}
+
+static void __declspec(naked) HOOK_CMonsterTruck__Constructor_SeedWheelPosition()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    SeedMonsterTruckWheelPositionExtended
+
+        // Replaced instruction, run after our own so it isn't clobbered by the call above
+        mov     al, byte ptr [esi + 0x868]
+
+        jmp     CONTINUE_CMonsterTruck__Constructor_SeedWheelPosition
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// CVehicle::PreRender, smoothing a monster truck's contact lighting
+//
+// Issue #5168: a monster truck's body paint flickers, alternating brighter and darker, whenever its
+// wheels are bouncing, whether or not the truck itself is free to move.
+//
+// CalculateLightingFromCollision (0x6D0CF0) averages the four wheels' ground polygon lighting values
+// and snaps m_fLighting straight to the result, every single frame, for every vehicle type; that is
+// native behaviour, not something broken by this codebase. Ordinary cars never show it because their
+// suspension travel is short enough that all four wheels are almost always resting on the same
+// polygon or ones with near identical baked lighting. CAutomobile::HydraulicControl above exists
+// precisely because a monster truck's suspension travels far more than a normal car's, and that same
+// long travel means its four wheels routinely settle on ground far enough apart to carry very
+// different baked lighting; the identical instant per-frame snap that is invisible on a normal car
+// reads as the whole body flickering as the wheels bounce between polygons.
+//
+// CalculateLightingFromCollision is only ever called from this one site (confirmed via Ghidra cross
+// reference), so hooking the call site instead of the callee lets this call straight through to the
+// original for every vehicle and only post-process the result for monster trucks, identified by
+// vtable the same way HydraulicControl above does. The original always runs first and unmodified, so
+// the averaging itself, and every other vehicle type's behaviour, is completely unchanged; only a
+// monster truck's m_fLighting gets eased toward that same result instead of snapped to it.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6D648D | E8 5E A8 FF FF | call    0x006d0cf0
+//     0x6D6492 | 8B CE          | mov     ecx, esi
+#define HOOKPOS_CVehicle__PreRender_MonsterTruckLightingSmooth  0x6D648D
+#define HOOKSIZE_CVehicle__PreRender_MonsterTruckLightingSmooth 5
+static const DWORD         CONTINUE_CVehicle__PreRender_MonsterTruckLightingSmooth = 0x6D6492;
+static const DWORD         FUNC_CVehicle__CalculateLightingFromCollision = 0x6D0CF0;
+static const std::uint32_t CTimer__ms_fTimeStep = 0xB7CB5C;
+
+// Time constant, in real seconds, for how quickly a monster truck's contact lighting eases toward a
+// freshly averaged value instead of snapping straight to it. Short enough that a genuine lighting
+// change, driving off tarmac onto grass, say, still catches up quickly; long enough to smooth away
+// the frame to frame noise from the wheels bouncing between polygons of different baked brightness.
+static constexpr float MONSTERTRUCK_LIGHTING_SMOOTH_TAU = 0.12f;
+
+static void __fastcall SmoothMonsterTruckContactLighting(CVehicleSAInterface* vehicle)
+{
+    if (*reinterpret_cast<const DWORD*>(vehicle) != MONSTERTRUCK_VTABLE)
+    {
+        reinterpret_cast<void(__thiscall*)(CVehicleSAInterface*)>(FUNC_CVehicle__CalculateLightingFromCollision)(vehicle);
+        return;
+    }
+
+    const float previous = vehicle->m_fLighting;
+    reinterpret_cast<void(__thiscall*)(CVehicleSAInterface*)>(FUNC_CVehicle__CalculateLightingFromCollision)(vehicle);
+    const float target = vehicle->m_fLighting;
+
+    // CTimer::ms_fTimeStep reads 1.0 at a steady 50 FPS, so dividing by 50 gives real elapsed seconds
+    // regardless of the current frame rate.
+    const float dtSeconds = *reinterpret_cast<const float*>(CTimer__ms_fTimeStep) / 50.0f;
+    const float alpha = 1.0f - std::exp(-dtSeconds / MONSTERTRUCK_LIGHTING_SMOOTH_TAU);
+    vehicle->m_fLighting = previous + (target - previous) * alpha;
+}
+
+static void __declspec(naked) HOOK_CVehicle__PreRender_MonsterTruckLightingSmooth()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        call    SmoothMonsterTruckContactLighting
+        jmp     CONTINUE_CVehicle__PreRender_MonsterTruckLightingSmooth
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 //
 // The Cement Truck's drum on custom vehicle models
 //
@@ -4210,6 +4339,8 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CBike__ProcessControl_SteerRatio);
     EZHookInstall(CBike__ProcessControl_LeanRatio);
     EZHookInstall(CAutomobile__HydraulicControl);
+    EZHookInstall(CMonsterTruck__Constructor_SeedWheelPosition);
+    EZHookInstall(CVehicle__PreRender_MonsterTruckLightingSmooth);
     EZHookInstall(CAutomobile__ProcessControl_CementAngleReset);
     EZHookInstall(CAutomobile__ProcessControl_CementMiscGate);
     EZHookInstall(CAutomobile__MovingCollisionSpeed_Cement);
