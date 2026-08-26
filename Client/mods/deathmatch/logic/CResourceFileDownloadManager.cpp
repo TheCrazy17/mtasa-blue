@@ -311,6 +311,17 @@ void CResourceFileDownloadManager::DownloadFinished(const SHttpDownloadResult& r
     {
         CDownloadableResource::EndChecksumBatch();
         CChecksum checksum = pResourceFile->GenerateClientChecksum();
+
+        // A zero checksum here almost always means the file couldn't be read yet rather than a genuine
+        // mismatch (a failed or timed out read falls back to a default CChecksum). Give it a few short
+        // retries before treating it as a real failure; this matters most right after joining a server,
+        // when a lot of files are being written to disk at the same time.
+        for (int iAttempt = 1; iAttempt < 4 && checksum == CChecksum() && checksum != pResourceFile->GetServerChecksum(); iAttempt++)
+        {
+            Sleep(100 * iAttempt);
+            checksum = pResourceFile->GenerateClientChecksum();
+        }
+
         if (checksum != pResourceFile->GetServerChecksum())
         {
             // Checksum failed - Try download on next server
