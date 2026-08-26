@@ -772,6 +772,11 @@ void CClientPed::Spawn(const CVector& vecPosition, float fRotation, unsigned sho
         m_pPlayerPed->SetHealth(m_fHealth);
         m_bUsesCollision = true;
         m_pPlayerPed->SetLanding(false);
+
+        // A vehicle exploding under a ped leaves it marked scorched, which makes the renderer skip
+        // createLight and any other point light; since we skip the resurrection call above, nothing
+        // else clears that mark when the new skin is the same as the old one.
+        m_pPlayerPed->SetRenderScorched(false);
     }
     else
     {

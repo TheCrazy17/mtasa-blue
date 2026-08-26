@@ -69,7 +69,7 @@ public:
     uint32 b0x4000000 : 1;
     uint32 bTouchingWater : 1;
     uint32 bEnableCollision : 1;
-    uint32 bDestroyed : 1;
+    uint32 bRenderScorched : 1;  // flat burnt ambient light, skips CPointLights; set when a vehicle explosion kills the entity
     uint32 b0x40000000 : 1;
     uint32 b0x80000000 : 1;
 
@@ -162,4 +162,5 @@ public:
     void  SetLighting(float fLighting);
 
     void SetFrozen(bool bFrozen);
+    void SetRenderScorched(bool bScorched);
 };

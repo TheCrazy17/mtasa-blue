@@ -382,3 +382,9 @@ void CPhysicalSA::SetFrozen(bool bFrozen)
     // Don't enable friction for static objects
     pInterface->bDisableFriction = (bFrozen || pInterface->m_fMass >= PHYSICAL_MAXMASS);
 }
+
+void CPhysicalSA::SetRenderScorched(bool bScorched)
+{
+    CPhysicalSAInterface* pInterface = (CPhysicalSAInterface*)GetInterface();
+    pInterface->bRenderScorched = bScorched;
+}

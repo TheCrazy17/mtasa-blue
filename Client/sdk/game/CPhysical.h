@@ -55,4 +55,7 @@ public:
     virtual void  SetLighting(float fLighting) = 0;
 
     virtual void SetFrozen(bool bFrozen) = 0;
+
+    // While set, the renderer skips point lights on this entity and draws it under a flat scorched ambient instead.
+    virtual void SetRenderScorched(bool bScorched) = 0;
 };
