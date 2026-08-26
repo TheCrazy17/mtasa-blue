@@ -898,6 +898,67 @@ void CMultiplayerSA::SetRapidVehicleStopFixEnabled(bool enabled)
     m_isRapidVehicleStopFixEnabled = enabled;
 }
 
+// Fixes a small residual amount of fall damage that can still occur when finishing a climb close to the handhold
+// target on certain objects (GitHub Issue #4924).
+//
+// CTaskSimpleClimb::ProcessPed has two branches that turn the remaining distance to the handhold ("delta") into
+// ped->m_vecMoveSpeed: one used while still far from the target, which scales delta by 0.25 and then clamps the
+// resulting velocity to a magnitude of 0.2 before using it; and one used once delta is already small (squared
+// magnitude below 0.1), which computes the same kind of velocity but never clamps it. The Issue #602 fix above
+// stopped that unclamped division from blowing up on high FPS or low game speed by pointing it at a fixed
+// timeStep, which is why it no longer kills the player, but it did not add the clamp the other branch already
+// had. So a climb that ends with most of its remaining delta on the Z axis can still leave m_vecMoveSpeed.z just
+// past the -0.25/-0.375 safe-landing threshold CPed::ProcessEntityCollision checks (confirmed via decompilation
+// of 0x5E2530), which is enough to trigger its proportional WEAPON_FALL damage formula without reaching the -0.6
+// cutoff that forces lethal damage. Clamping this branch the same way its neighbour already is closes that gap.
+#define HOOKPOS_CTaskSimpleClimb__ProcessPed_ClampNearSpeed  0x681212
+#define HOOKSIZE_CTaskSimpleClimb__ProcessPed_ClampNearSpeed 0x7
+static const unsigned int     RETURN_CTaskSimpleClimb__ProcessPed_ClampNearSpeed = 0x681219;
+static void __declspec(naked) HOOK_CTaskSimpleClimb__ProcessPed_ClampNearSpeed()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // Original instruction displaced by the jump; must run first so esp is correct below.
+        add esp, 0x0C
+
+        pushad
+
+        lea ecx, [edi+0x44]         // &ped->m_vecMoveSpeed
+        mov eax, 0x4082C0           // CVector::Magnitude
+        call eax                    // result left in st(0)
+
+        fcom ds:[0x858CC4]          // 0.2f
+        fnstsw ax
+        test ah, 0x41
+        jnz noclamp
+
+        lea ecx, [edi+0x44]         // &ped->m_vecMoveSpeed (this for operator*=)
+        fld ds:[0x858CC4]           // st(0) = 0.2f, st(1) = magnitude
+        push ecx                    // reserve stack space for the operator*= argument
+        fdiv st(0), st(1)           // st(0) = 0.2f / magnitude
+        fstp dword ptr [esp]        // store the scale factor as the argument
+        fstp st(0)                  // discard the leftover magnitude
+        mov eax, 0x40FEF0           // CVector::operator*=(float)
+        call eax                    // pops its own stack argument
+        jmp clampdone
+
+    noclamp:
+        fstp st(0)                  // discard the unused magnitude
+
+    clampdone:
+        popad
+
+        // Original instruction displaced by the jump.
+        lea edx, [esp+0x48]
+
+        jmp RETURN_CTaskSimpleClimb__ProcessPed_ClampNearSpeed
+    }
+    // clang-format on
+}
+
 void CMultiplayerSA::InitHooks_FrameRateFixes()
 {
     EZHookInstall(CTaskSimpleUseGun__SetMoveAnim);
@@ -921,6 +982,11 @@ void CMultiplayerSA::InitHooks_FrameRateFixes()
     MemPut(0x6811E9, &kOriginalTimeStep);
     MemPut(0x68128A, &kOriginalTimeStep);
     MemPut(0x68131B, &kOriginalTimeStep);
+
+    // Fixes a small residual amount of fall damage still being taken when finishing a climb close to the
+    // handhold target on certain objects, on top of the Issue #602 fix above.
+    // GitHub Issue #4924
+    EZHookInstall(CTaskSimpleClimb__ProcessPed_ClampNearSpeed);
 
     // CTimer::m_FrameCounter fixes
     EZHookInstall(CTimer__Update);
