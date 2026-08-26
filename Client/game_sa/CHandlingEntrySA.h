@@ -14,6 +14,7 @@
 #include <game/CHandlingEntry.h>
 
 #define FUNC_HandlingDataMgr_ConvertDataToGameUnits 0x6F5080
+#define FUNC_Transmission_InitGearRatios            0x6D0460
 
 // https://www.gtamodding.com/index.php?title=Handling.cfg#GTA_San_Andreas
 // https://www.gtamodding.com/index.php?title=Memory_Addresses_%28SA%29#Handling
@@ -21,20 +22,25 @@
 class CTransmissionSAInterface
 {
 public:
-    float fUnknown[18];  // +40
+    float fUnknown[18];  // +44
 
-    unsigned char ucDriveType : 8;      // +112
-    unsigned char ucEngineType : 8;     // +113
-    unsigned char ucNumberOfGears : 8;  // +114
-    unsigned char ucUnknown : 8;        // +115
+    unsigned char ucDriveType : 8;      // +116
+    unsigned char ucEngineType : 8;     // +117
+    unsigned char ucNumberOfGears : 8;  // +118
+    unsigned char ucUnknown : 8;        // +119
 
-    unsigned int uiHandlingFlags;  // +116
+    unsigned int uiHandlingFlags;  // +120
 
-    float fEngineAcceleration;  // +120     (value in handling.cfg * 0x86A950)
-    float fEngineInertia;       // +124
-    float fMaxVelocity;         // +128
+    float fEngineAcceleration;  // +124     (value in handling.cfg * 0x86A950)
+    float fEngineInertia;       // +128
+    float fMaxVelocity;         // +132
 
-    float fUnknown2[3];  // +132
+    // These three aren't read from handling.cfg; CHandlingDataMgr::ConvertDataToGameUnits works
+    // them out from fMaxVelocity (and drag) whenever the handling data gets recalculated, and
+    // CTransmission::CalculateDriveAcceleration reads them back to cap forward and reverse speed.
+    float fMaxFlatVelocity;     // +136, forward top speed cap
+    float fMaxReverseVelocity;  // +140, reverse top speed cap
+    float fVelocity;            // +144, current speed, updated by the game every frame
 };
 
 struct tHandlingDataSA
