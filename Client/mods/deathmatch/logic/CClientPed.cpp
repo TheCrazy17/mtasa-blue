@@ -4959,9 +4959,14 @@ bool CClientPed::GetShotData(CVector* pvecOrigin, CVector* pvecTarget, CVector* 
                 {
                     if (bCollision)
                     {
-                        CVector vecBullet = pCollision->GetPosition() - vecOrigin;
-                        vecBullet.Normalize();
-                        vecTarget = vecOrigin + (vecBullet * fRange);
+                        // Stay on the camera's aim ray rather than rebuilding the direction from the gun
+                        // muzzle. The muzzle sits off to the side of the camera during a driveby, so a ray
+                        // rebuilt from it only lines up with the crosshair exactly at the hit point and drifts
+                        // further away from it the closer that hit is, which is what made getPedTargetEnd
+                        // diverge from the visible aim when shooting at something close to the vehicle.
+                        CVector vecRayDirection = vecTarget - mat.vPos;
+                        vecRayDirection.Normalize();
+                        vecTarget = pCollision->GetPosition() + (vecRayDirection * 0.5f);
                     }
                     pCollision->Destroy();
                 }
