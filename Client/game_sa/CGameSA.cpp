@@ -425,6 +425,15 @@ float CGameSA::GetGravity()
 
 void CGameSA::SetGravity(float fGravity)
 {
+    // A number of native physics routines (ped/vehicle buoyancy, train collision response)
+    // divide by an expression built from this value; passing exactly 0 turns that into a
+    // real division by zero, and the resulting Inf/NaN goes on to corrupt ped poses, vehicle
+    // visibility and even the screen colour. Nudge it away from zero instead, since gravity
+    // this small isn't distinguishable from zero for gameplay purposes anyway.
+    constexpr float MIN_GRAVITY_MAGNITUDE = 0.00001f;
+    if (fGravity > -MIN_GRAVITY_MAGNITUDE && fGravity < MIN_GRAVITY_MAGNITUDE)
+        fGravity = fGravity < 0.0f ? -MIN_GRAVITY_MAGNITUDE : MIN_GRAVITY_MAGNITUDE;
+
     MemPut<float>(0x863984, fGravity);
 }
 
