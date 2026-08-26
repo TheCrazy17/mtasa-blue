@@ -95,8 +95,15 @@ void CIplStoreSA::SetDynamicIplStreamingEnabled(bool state)
     // Now enable/disable streaming for all IPLs
     if (!state)
     {
+        m_streamingDisabledBackup.clear();
+
         for (int iplId : iplIds)
+        {
+            if (auto ipl = pool->GetObject(iplId))
+                m_streamingDisabledBackup[iplId] = ipl->bDisabledStreaming;
+
             UnloadAndDisableStreaming(iplId);
+        }
 
         if (*gIplQuadTree)
             (*gIplQuadTree)->RemoveAllItems();
@@ -104,7 +111,19 @@ void CIplStoreSA::SetDynamicIplStreamingEnabled(bool state)
     else
     {
         for (int iplId : iplIds)
+        {
+            // Skip IPLs that were already disabled before we touched them. Most IPLs are
+            // dynamically streamed based on position, but some (like cut content IPLs)
+            // are meant to stay disabled forever, and blindly enabling all of them here
+            // makes their objects pop in near their bounding box for the rest of the session.
+            auto it = m_streamingDisabledBackup.find(iplId);
+            if (it != m_streamingDisabledBackup.end() && it->second)
+                continue;
+
             EnableStreaming(iplId);
+        }
+
+        m_streamingDisabledBackup.clear();
     }
 
     m_isStreamingEnabled = state;
@@ -136,8 +155,15 @@ void CIplStoreSA::SetDynamicIplStreamingEnabled(bool state, std::function<bool(C
     // Apply the streaming state change
     if (!state)
     {
+        m_streamingDisabledBackup.clear();
+
         for (int iplId : iplIds)
+        {
+            if (auto ipl = pool->GetObject(iplId))
+                m_streamingDisabledBackup[iplId] = ipl->bDisabledStreaming;
+
             UnloadAndDisableStreaming(iplId);
+        }
 
         if (*gIplQuadTree)
             (*gIplQuadTree)->RemoveAllItems();
@@ -145,7 +171,17 @@ void CIplStoreSA::SetDynamicIplStreamingEnabled(bool state, std::function<bool(C
     else
     {
         for (int iplId : iplIds)
+        {
+            // Same reasoning as the overload above: only bring back IPLs that were
+            // actually streaming before, not everything the filter lets through.
+            auto it = m_streamingDisabledBackup.find(iplId);
+            if (it != m_streamingDisabledBackup.end() && it->second)
+                continue;
+
             EnableStreaming(iplId);
+        }
+
+        m_streamingDisabledBackup.clear();
     }
 
     m_isStreamingEnabled = state;

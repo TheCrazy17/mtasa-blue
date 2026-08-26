@@ -15,6 +15,7 @@
 #include "CPoolsSA.h"
 #include <game/CIplStore.h>
 #include <functional>
+#include <unordered_map>
 
 class CIplStoreSA : public CIplStore
 {
@@ -33,4 +34,9 @@ private:
     CPoolSAInterface<CIplSAInterface>** m_ppIplPoolInterface;
 
     bool m_isStreamingEnabled;
+
+    // Remembers which IPLs actually had streaming enabled right before we forced everything
+    // off, so re-enabling can bring back only those and leave IPLs that are normally always
+    // disabled (like cut content such as carter.ipl and crack.ipl) exactly as they were.
+    std::unordered_map<int, bool> m_streamingDisabledBackup;
 };
