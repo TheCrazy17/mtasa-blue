@@ -2263,6 +2263,13 @@ void CClientVehicle::StreamedInPulse()
                     pDamageManager->SetLightStatus(static_cast<eLights>(i), m_ucLightStates[i]);
             }
 
+            // Re-apply the door open ratio for the same reason as above.
+            // Create() already restores this right after the native vehicle is spawned, but
+            // whatever resets the door/panel RwFrames a moment later also swings any opened
+            // door shut again; setting it once more here is what makes it actually stick.
+            for (unsigned char i = 0; i < 6; ++i)
+                SetDoorOpenRatio(i, m_fDoorOpenRatio[i], 0, true);
+
             m_bJustStreamedIn = false;
         }
 
