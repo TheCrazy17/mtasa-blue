@@ -479,4 +479,13 @@ void CMultiplayerSA::InitHooks_VehicleDamage()
     EZHookInstallChecked(CPlane_VehicleDamage2);
     EZHookInstallChecked(CBike_VehicleDamage1);
     EZHookInstallChecked(CBike_VehicleDamage2);
+
+    // CVehicle::InflictDamage has a native check that exempts a vehicle from all damage
+    // (including explosions) when the local player is both the damage source and currently
+    // attached to that same vehicle (CPed::m_pAttachedEntity == vehicle). It's meant for rare
+    // vanilla cases like a ragdolled ped resting on a car roof, but attachElements lets a
+    // script glue a player to a vehicle the same way on purpose, which then leaves that
+    // vehicle immune to the player's own satchels and other self inflicted damage. NOP the
+    // jump so an attached player no longer makes their vehicle undamageable (fix for #493)
+    MemSet((void*)0x6D12F9, 0x90, 2);
 }
