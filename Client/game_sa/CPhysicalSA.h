@@ -73,23 +73,23 @@ public:
     uint32 b0x40000000 : 1;
     uint32 b0x80000000 : 1;
 
-    CVector                   m_vecLinearVelocity;              // 68
-    CVector                   m_vecAngularVelocity;             // 80
-    CVector                   m_vecCollisionLinearVelocity;     // 92
-    CVector                   m_vecCollisionAngularVelocity;    // 104
-    CVector                   m_vecOffsetUnk5;                  // 116
-    CVector                   m_vecOffsetUnk6;                  // 128
-    float                     m_fMass;                          // 140
-    float                     m_fTurnMass;                      // 144
-    float                     m_pad1;                           // 148
-    float                     m_fAirResistance;                 // 152
-    float                     m_fElasticity;                    // 156
-    float                     m_fBuoyancyConstant;              // 160
-    CVector                   m_vecCenterOfMass;                // 164
-    uint32*                   m_pCollisionList;                 // 176
-    uint32*                   m_pMovingList;                    // 180
-    uint8                     m_ucColFlag1;                     // 184
-    uint8                     m_ucCollisionState;               // 185
+    CVector                   m_vecLinearVelocity;            // 68
+    CVector                   m_vecAngularVelocity;           // 80
+    CVector                   m_vecCollisionLinearVelocity;   // 92
+    CVector                   m_vecCollisionAngularVelocity;  // 104
+    CVector                   m_vecOffsetUnk5;                // 116
+    CVector                   m_vecOffsetUnk6;                // 128
+    float                     m_fMass;                        // 140
+    float                     m_fTurnMass;                    // 144
+    float                     m_pad1;                         // 148
+    float                     m_fAirResistance;               // 152
+    float                     m_fElasticity;                  // 156
+    float                     m_fBuoyancyConstant;            // 160
+    CVector                   m_vecCenterOfMass;              // 164
+    uint32*                   m_pCollisionList;               // 176
+    uint32*                   m_pMovingList;                  // 180
+    uint8                     m_ucIdlePhysicsFrames;  // 184 CAutomobile/CBike::ProcessControl idle timer; past 10 they skip gravity/buoyancy until nudged
+    uint8                     m_ucCollisionState;     // 185
     uint8                     m_ucCollisionContactSurfaceType;  // 186
     uint8                     m_ucColFlag4;                     // 187
     CEntity*                  pLastContactedEntity[4];          // 188

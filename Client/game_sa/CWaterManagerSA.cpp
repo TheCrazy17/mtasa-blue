@@ -13,8 +13,12 @@
 #include <core/CCoreInterface.h>
 #include <multiplayer/CMultiplayer.h>
 #include "CWaterManagerSA.h"
+#include "CGameSA.h"
+#include "CPoolsSA.h"
+#include "CVehicleSA.h"
 
 extern CCoreInterface* g_pCore;
+extern CGameSA*        pGame;
 
 extern int ms_iNumNonDefaultAndNonZeroVertices;
 
@@ -785,6 +789,7 @@ bool CWaterManagerSA::SetWorldWaterLevel(float fLevel, void* pChangeSource, bool
     if (bIncludeOutsideWorldLevel)
         SetOutsideWorldWaterLevel(fLevel);
 
+    WakeSleepingBikes();
     return true;
 }
 
@@ -797,7 +802,20 @@ bool CWaterManagerSA::SetPolyWaterLevel(CWaterPoly* pPoly, float fLevel, void* p
         vecVertexPos.fZ = fLevel;
         pPoly->GetVertex(i)->SetPosition(vecVertexPos, pChangeSource);
     }
+
+    WakeSleepingBikes();
     return true;
+}
+
+void CWaterManagerSA::WakeSleepingBikes()
+{
+    CPools* pPools = pGame->GetPools();
+    for (size_t i = 0; i < MAX_VEHICLES; i++)
+    {
+        SClientEntity<CVehicleSA>* pVehicleEntity = pPools->GetVehicle(i);
+        if (pVehicleEntity && pVehicleEntity->pEntity)
+            pVehicleEntity->pEntity->WakeSleepingBike();
+    }
 }
 
 void CWaterManagerSA::SetOutsideWorldWaterLevel(float fLevel)
@@ -1010,6 +1028,7 @@ void CWaterManagerSA::ResetWorldWaterLevel()
             m_Vertices[i].Reset();
 
     SetOutsideWorldWaterLevel(DEFAULT_WATER_LEVEL);
+    WakeSleepingBikes();
 }
 
 void CWaterManagerSA::Reset()

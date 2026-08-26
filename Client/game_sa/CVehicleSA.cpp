@@ -488,6 +488,34 @@ void CVehicleSA::SetMoveSpeed(const CVector& vecMoveSpeed) noexcept
 #endif
 }
 
+void CVehicleSA::WakeSleepingBike()
+{
+    // CBike::ProcessControl puts a motionless bike to sleep after it's been sitting still for
+    // more than ten frames, skipping gravity and buoyancy entirely until a collision perturbs it.
+    // CAutomobile::ProcessControl has the same idle timer, but exempts a vehicle that's submerged
+    // in water and close to the camera, so a floating car never actually falls asleep. CBike has
+    // no such exemption, so a bike resting on water sleeps exactly like one parked on dry land.
+    // Dropping the water level out from under a sleeping bike never wakes it, since setWaterLevel
+    // never touches the vehicle itself, so it's left floating at its old resting height forever.
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo || !pModelInfo->IsBike())
+        return;
+
+    GetVehicleInterface()->m_ucIdlePhysicsFrames = 0;
+
+    CVector vecMoveSpeed;
+    GetMoveSpeed(&vecMoveSpeed);
+    if (vecMoveSpeed.fX == 0.0f && vecMoveSpeed.fY == 0.0f && vecMoveSpeed.fZ == 0.0f)
+    {
+        // A resting bike also has to clear the idle timer's own "not moving at all" check, which
+        // looks at the speed directly rather than the timer above. The nudge is only there to fail
+        // that check for one frame; real gravity and buoyancy take over as soon as ProcessControl
+        // runs normally again.
+        vecMoveSpeed.fZ = -0.001f;
+        SetMoveSpeed(vecMoveSpeed);
+    }
+}
+
 CTrainSAInterface* CVehicleSA::GetNextCarriageInTrain()
 {
     return (CTrainSAInterface*)*(DWORD*)((DWORD)GetInterface() + 1492);

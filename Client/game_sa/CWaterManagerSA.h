@@ -179,6 +179,11 @@ public:
     void UpdateRenderOrderRequirement();
 
 private:
+    // Bikes resting on water can fall asleep exactly like a parked car, but unlike a car, nothing
+    // wakes them back up when the water is pulled out from under them. Called after every water
+    // level change so a sleeping bike gets a chance to notice and fall. See CVehicleSA::WakeSleepingBike.
+    void WakeSleepingBikes();
+
     CWaterVertexSA   m_Vertices[NUM_NewWaterVertices];
     CWaterQuadSA     m_Quads[NUM_NewWaterQuads];
     CWaterTriangleSA m_Triangles[NUM_NewWaterTriangles];
