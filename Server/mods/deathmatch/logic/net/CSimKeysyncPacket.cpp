@@ -135,6 +135,9 @@ bool CSimKeysyncPacket::Read(NetBitStreamInterface& BitStream)
 
             m_sharedControllerState.RightStickX = sRightStickX;
             m_sharedControllerState.RightStickY = sRightStickY;
+
+            if (!BitStream.ReadBit(m_Cache.bHydraulicsRaised))
+                return false;
         }
 
         if (m_bVehicleIsPlaneOrHeli)
@@ -208,6 +211,7 @@ bool CSimKeysyncPacket::Write(NetBitStreamInterface& BitStream) const
         {
             BitStream.Write(m_sharedControllerState.RightStickX);
             BitStream.Write(m_sharedControllerState.RightStickY);
+            BitStream.WriteBit(m_Cache.bHydraulicsRaised);
         }
 
         if (m_bVehicleIsPlaneOrHeli)

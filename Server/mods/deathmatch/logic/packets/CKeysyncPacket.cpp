@@ -140,7 +140,7 @@ bool CKeysyncPacket::Read(NetBitStreamInterface& BitStream)
         {
             ReadVehicleSpecific(pVehicle, BitStream);
 
-            if (pVehicle->GetUpgrades()->HasUpgrade(1087))  // Hydraulics?
+            if (pVehicle->GetUpgrades()->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS) || pVehicle->GetVehicleType() == VEHICLE_MONSTERTRUCK)
             {
                 short sRightStickX, sRightStickY;
                 if (!BitStream.Read(sRightStickX) || !BitStream.Read(sRightStickY))
@@ -148,6 +148,18 @@ bool CKeysyncPacket::Read(NetBitStreamInterface& BitStream)
 
                 ControllerState.RightStickX = sRightStickX;
                 ControllerState.RightStickY = sRightStickY;
+
+                bool bHydraulicsRaised;
+                if (!BitStream.ReadBit(bHydraulicsRaised))
+                    return false;
+
+                pVehicle->SetHydraulicsRaised(bHydraulicsRaised);
+
+                // The stance cache freezes once the driver starts stepping out; the stick reads
+                // released during the exit, and a client streaming the vehicle in later should
+                // reproduce the stance it was actually left in, not a level one.
+                if (pSourcePlayer->GetVehicleAction() == CPed::VEHICLEACTION_NONE)
+                    pVehicle->SetHydraulicsStick(sRightStickX, sRightStickY, ControllerState.ShockButtonR != 0);
             }
 
             if (pVehicle->GetVehicleType() == VEHICLE_PLANE || pVehicle->GetVehicleType() == VEHICLE_HELI)
@@ -244,10 +256,11 @@ bool CKeysyncPacket::Write(NetBitStreamInterface& BitStream) const
         {
             WriteVehicleSpecific(pVehicle, BitStream);
 
-            if (pVehicle->GetUpgrades()->HasUpgrade(1087))  // Hydraulics?
+            if (pVehicle->GetUpgrades()->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS) || pVehicle->GetVehicleType() == VEHICLE_MONSTERTRUCK)
             {
                 BitStream.Write(ControllerState.RightStickX);
                 BitStream.Write(ControllerState.RightStickY);
+                BitStream.WriteBit(pVehicle->IsHydraulicsRaised());
             }
 
             if (pVehicle->GetVehicleType() == VEHICLE_PLANE || pVehicle->GetVehicleType() == VEHICLE_HELI)

@@ -3463,6 +3463,19 @@ retry:
                     bool bIsDerailable = bitStream.ReadBit();
                     bool bTrainDirection = bitStream.ReadBit();
                     bool bTaxiLightState = bitStream.ReadBit();
+                    bool bHydraulicsRaised = bitStream.ReadBit();
+
+                    // The stick tilt behind the hydraulics suspension stance rides along only for a
+                    // vehicle actually carrying the upgrade, matching the server's write.
+                    short sHydraulicsStickX = 0;
+                    short sHydraulicsStickY = 0;
+                    bool  bHydraulicsShockButtonR = false;
+                    if (pUpgrades && pUpgrades->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS))
+                    {
+                        bitStream.Read(sHydraulicsStickX);
+                        bitStream.Read(sHydraulicsStickY);
+                        bHydraulicsShockButtonR = bitStream.ReadBit();
+                    }
 
                     // If the vehicle has a landing gear, set landing gear state
                     if (CClientVehicleManager::HasLandingGears(usModel))
@@ -3478,6 +3491,9 @@ retry:
                     // Set the general vehicle flags
                     pVehicle->SetCanShootPetrolTank(bPetrolTankWeak);
                     pVehicle->SetEngineOn(bEngineOn);
+                    pVehicle->SetHydraulicsRaised(bHydraulicsRaised);
+                    if (pUpgrades && pUpgrades->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS))
+                        pVehicle->SetHydraulicsSuspensionStance(sHydraulicsStickX, sHydraulicsStickY, bHydraulicsShockButtonR);
                     pVehicle->SetDoorsLocked(bLocked);
                     pVehicle->SetDoorsUndamageable(bDoorsUndamageable);
                     pVehicle->SetScriptCanBeDamaged(!bDamageProof);

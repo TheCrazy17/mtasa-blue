@@ -271,6 +271,9 @@ public:
     bool  IsLandingGearDown();
     void  SetLandingGearDown(bool bLandingGearDown);
 
+    void SetHydraulicsRaised(bool bRaised);
+    void SetHydraulicsSuspensionStance(short sStickX, short sStickY, bool bShockButtonR);
+
     bool           HasAdjustableProperty() { return m_bHasAdjustableProperty; };
     unsigned short GetAdjustablePropertyValue();
     void           SetAdjustablePropertyValue(unsigned short usValue);
@@ -607,6 +610,10 @@ protected:
     bool                         m_bEngineBroken;
     bool                         m_bSireneOrAlarmActive;
     bool                         m_bLandingGearDown;
+    bool                         m_bHydraulicsRaised;
+    short                        m_sHydraulicsStickX;
+    short                        m_sHydraulicsStickY;
+    bool                         m_bHydraulicsShockButtonR;
     bool                         m_bHasAdjustableProperty;
     unsigned short               m_usAdjustablePropertyValue;
     std::map<eDoors, CTickCount> m_AutoReallowDoorRatioMap;

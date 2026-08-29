@@ -32,6 +32,9 @@ public:
         m_bAkimboTargetUp = false;
         m_bProcessPlayerWeapon = false;
         m_shotSyncData.m_bRemoteBulletSyncVectorsValid = false;
+        m_bHydraulicsRaised = false;
+        m_bHydraulicsRaisedKnown = false;
+        m_pHydraulicsVehicle = nullptr;
     }
 
     CControllerState* CurrentControllerState() { return &m_pad.NewState; }
@@ -50,6 +53,28 @@ public:
     void SetAkimboTarget(const CVector& vecTarget) { m_vecAkimboTarget = vecTarget; }
     void SetAkimboTargetUp(bool bUp) { m_bAkimboTargetUp = bUp; }
 
+    // Driver's hydraulics raised state, synced as a level rather than the horn press that toggles
+    // it; replayed edges can drift over unreliable keysync, while a level self corrects.
+    bool GetHydraulicsRaised() { return m_bHydraulicsRaised; }
+    void SetHydraulicsRaised(bool bRaised)
+    {
+        m_bHydraulicsRaised = bRaised;
+        m_bHydraulicsRaisedKnown = true;
+    }
+
+    // Treats the raised state as unknown until this driver has sent a keysync for this specific
+    // vehicle, so a default or stale value from an earlier vehicle is never applied to a new one.
+    bool RefreshHydraulicsVehicle(void* pVehicle)
+    {
+        if (m_pHydraulicsVehicle != pVehicle)
+        {
+            m_pHydraulicsVehicle = pVehicle;
+            m_bHydraulicsRaisedKnown = false;
+        }
+
+        return m_bHydraulicsRaisedKnown;
+    }
+
     // The player's pad
     CPadSAInterface m_pad;
     float           m_fCameraRotation;
@@ -59,6 +84,9 @@ public:
     CStatsData      m_stats;
     float           m_fGravity;
     bool            m_bProcessPlayerWeapon;
+    bool            m_bHydraulicsRaised;
+    bool            m_bHydraulicsRaisedKnown;
+    void*           m_pHydraulicsVehicle;
 };
 
 class CRemoteDataSA

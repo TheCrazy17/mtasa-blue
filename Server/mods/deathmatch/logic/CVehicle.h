@@ -264,6 +264,22 @@ public:
     bool IsLandingGearDown() { return m_bLandingGearDown; };
     void SetLandingGearDown(bool bLandingGearDown) { m_bLandingGearDown = bLandingGearDown; };
 
+    bool IsHydraulicsRaised() { return m_bHydraulicsRaised; };
+    void SetHydraulicsRaised(bool bRaised) { m_bHydraulicsRaised = bRaised; };
+
+    // Last stick input a driver sent for this vehicle's hydraulics; kept after they leave so a
+    // client streaming the vehicle in later can reproduce the same suspension stance, not just
+    // whether it's raised.
+    short GetHydraulicsStickX() { return m_sHydraulicsStickX; };
+    short GetHydraulicsStickY() { return m_sHydraulicsStickY; };
+    bool  GetHydraulicsShockButtonR() { return m_bHydraulicsShockButtonR; };
+    void  SetHydraulicsStick(short sStickX, short sStickY, bool bShockButtonR)
+    {
+        m_sHydraulicsStickX = sStickX;
+        m_sHydraulicsStickY = sStickY;
+        m_bHydraulicsShockButtonR = bShockButtonR;
+    };
+
     unsigned short GetAdjustableProperty() { return m_usAdjustableProperty; };
     void           SetAdjustableProperty(unsigned short usAdjustable) { m_usAdjustableProperty = usAdjustable; };
 
@@ -485,6 +501,10 @@ private:
     bool           m_bSirenActive;
     bool           m_bTaxiLightState;
     bool           m_bLandingGearDown;
+    bool           m_bHydraulicsRaised;
+    short          m_sHydraulicsStickX;
+    short          m_sHydraulicsStickY;
+    bool           m_bHydraulicsShockButtonR;
     unsigned short m_usAdjustableProperty;
     bool           m_bCollisionsEnabled;
 

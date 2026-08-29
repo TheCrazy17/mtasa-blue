@@ -185,6 +185,8 @@ public:
     virtual bool                    GetAkimboTargetUp() = 0;
     virtual void                    SetAkimboTarget(const CVector& vecTarget) = 0;
     virtual void                    SetAkimboTargetUp(bool bUp) = 0;
+    virtual bool                    GetHydraulicsRaised() = 0;
+    virtual void                    SetHydraulicsRaised(bool bRaised) = 0;
 };
 
 /**

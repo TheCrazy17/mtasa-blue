@@ -150,6 +150,10 @@ CClientVehicle::CClientVehicle(CClientManager* pManager, ElementID ID, unsigned 
     m_bEngineBroken = false;
     m_bSireneOrAlarmActive = false;
     m_bLandingGearDown = true;
+    m_bHydraulicsRaised = false;
+    m_sHydraulicsStickX = 0;
+    m_sHydraulicsStickY = 0;
+    m_bHydraulicsShockButtonR = false;
     m_usAdjustablePropertyValue = 0;
     for (unsigned int i = 0; i < 6; ++i)
     {
@@ -1368,6 +1372,30 @@ void CClientVehicle::SetLandingGearDown(bool bLandingGearDown)
     }
 }
 
+// Establishes the initial suspension state at stream in; from then on the native hydraulics
+// control keeps a driven vehicle correct, locally and over keysync on every watching client.
+void CClientVehicle::SetHydraulicsRaised(bool bRaised)
+{
+    if (m_pVehicle)
+    {
+        if (auto* pAutomobile = dynamic_cast<CAutomobile*>(m_pVehicle))
+            pAutomobile->SetHydraulicsRaised(bRaised);
+    }
+
+    m_bHydraulicsRaised = bRaised;
+}
+
+// Cached for the next stream in only; the game vehicle usually doesn't exist yet when this
+// arrives and is destroyed on every stream out. Never pushed to a live vehicle: multiplayer_sa
+// maintains that itself off the driver's pad, so a keysync arriving mid exit (stick already
+// released) can't overwrite the stance the driver actually left it in.
+void CClientVehicle::SetHydraulicsSuspensionStance(short sStickX, short sStickY, bool bShockButtonR)
+{
+    m_sHydraulicsStickX = sStickX;
+    m_sHydraulicsStickY = sStickY;
+    m_bHydraulicsShockButtonR = bShockButtonR;
+}
+
 // The checks below compare against standard model IDs, so a custom model has to be read as the
 // model it was cloned from. The model info is looked up fresh rather than through m_pModelInfo,
 // since SetModelBlocking calls in here before that pointer has been updated.
@@ -2261,6 +2289,15 @@ void CClientVehicle::StreamedInPulse()
                     pDamageManager->SetPanelStatus(static_cast<ePanels>(i), m_ucPanelStates[i], flyingComponents);
                 for (int i = 0; i < MAX_LIGHTS; i++)
                     pDamageManager->SetLightStatus(static_cast<eLights>(i), m_ucLightStates[i]);
+            }
+
+            // Same reason as the door and panel states above; the suspension geometry derives from
+            // the model's wheel dummies, which Create() cannot rely on being ready yet.
+            SetHydraulicsRaised(m_bHydraulicsRaised);
+            if (m_sHydraulicsStickX != 0 || m_sHydraulicsStickY != 0 || m_bHydraulicsShockButtonR)
+            {
+                if (auto* pAutomobile = dynamic_cast<CAutomobile*>(m_pVehicle))
+                    pAutomobile->SetHydraulicsSuspensionStance(m_sHydraulicsStickX, m_sHydraulicsStickY, m_bHydraulicsShockButtonR);
             }
 
             m_bJustStreamedIn = false;

@@ -53,5 +53,6 @@ public:
         uchar ucDriveByDirection;
 
         SVehicleTurretSync turretSync;
+        bool               bHydraulicsRaised;  // Only valid if m_bVehicleHasHydraulics
     } m_Cache;
 };

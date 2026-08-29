@@ -699,6 +699,18 @@ bool CVehicleUpgrades::RemoveUpgrade(unsigned short usUpgrade)
             if (ucSlot == 12)
                 m_pVehicle->ResetWheelScale();
 
+            // Removing hydraulics lowers the suspension, so forget the raised state and restore the
+            // stance; the native removal only rebuilds the suspension geometry for a vehicle holding
+            // a special collision slot, which a monster truck never claims, while recalculating the
+            // handling reruns SetupSuspensionLines either way.
+            if (usUpgrade == VEHICLEUPGRADE_HYDRAULICS)
+            {
+                m_pVehicle->SetHydraulicsRaised(false);
+
+                if (pVehicle)
+                    pVehicle->RecalculateHandling();
+            }
+
             return true;
         }
     }

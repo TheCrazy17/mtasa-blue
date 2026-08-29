@@ -32,6 +32,49 @@ bool CAutomobileSA::IsAnyWheelTouchingGround() const
            autoInterface->m_wheelRatios[3] < 1.0f;
 }
 
+// CAutomobile::HydraulicControl keeps m_wMiscComponentAngle at or above this while raised.
+static constexpr std::uint16_t HYDRAULICS_RAISED_MISC_ANGLE = 500;
+
+// What a lowering horn press leaves the angle at; the native control creeps it down to 0 from there.
+static constexpr std::uint16_t HYDRAULICS_SETTLING_MISC_ANGLE = 60;
+
+bool CAutomobileSA::IsHydraulicsRaised() const
+{
+    CAutomobileSAInterface* autoInterface = GetAutomobileInterface();
+    if (!autoInterface)
+        return false;
+
+    return autoInterface->m_wMiscComponentAngle >= HYDRAULICS_RAISED_MISC_ANGLE;
+}
+
+// Writes the state HydraulicControl keys off; the suspension geometry follows on its next tick.
+// Skips when the state already matches, leaving the native transition counters undisturbed.
+void CAutomobileSA::SetHydraulicsRaised(bool bRaised)
+{
+    CAutomobileSAInterface* autoInterface = GetAutomobileInterface();
+    if (!autoInterface)
+        return;
+
+    if ((autoInterface->m_wMiscComponentAngle >= HYDRAULICS_RAISED_MISC_ANGLE) == bRaised)
+        return;
+
+    autoInterface->m_wMiscComponentAngle = bRaised ? HYDRAULICS_RAISED_MISC_ANGLE : HYDRAULICS_SETTLING_MISC_ANGLE;
+}
+
+// Roughly a second of frames restocking the stance into the native control's one shot mailbox,
+// enough for the chassis to settle onto the rebuilt geometry before the vehicle parks on it.
+static constexpr unsigned char HYDRAULICS_STANCE_SETTLE_FRAMES = 50;
+
+// Captured from the driver's own pad every driven frame by multiplayer_sa, or restocked from sync
+// when the vehicle streams in; refreshing it re-arms the settle budget either way.
+void CAutomobileSA::SetHydraulicsSuspensionStance(short sStickX, short sStickY, bool bShockButtonR)
+{
+    m_sHydraulicsStickX = sStickX;
+    m_sHydraulicsStickY = sStickY;
+    m_bHydraulicsShockButtonR = bShockButtonR;
+    m_ucHydraulicsStanceSettleFrames = HYDRAULICS_STANCE_SETTLE_FRAMES;
+}
+
 void CAutomobileSAInterface::SetPanelDamage(std::uint8_t panelId, bool breakGlass, bool spawnFlyingComponent)
 {
     int nodeId = CDamageManagerSA::GetCarNodeIndexFromPanel(panelId);

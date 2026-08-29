@@ -23,4 +23,10 @@ public:
     virtual ~CAutomobile() {};
 
     virtual bool IsAnyWheelTouchingGround() const = 0;
+    virtual bool IsHydraulicsRaised() const = 0;
+    virtual void SetHydraulicsRaised(bool bRaised) = 0;
+
+    // The tilt a driver holds on the hydraulics stick; restocked from sync at stream in so
+    // multiplayer_sa can reproduce the stance on a driverless vehicle.
+    virtual void SetHydraulicsSuspensionStance(short sStickX, short sStickY, bool bShockButtonR) = 0;
 };

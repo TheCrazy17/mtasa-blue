@@ -41,6 +41,10 @@ CVehicle::CVehicle(CVehicleManager* pVehicleManager, CElement* pParent, unsigned
     m_fTurretPositionY = 0;
     m_bSirenActive = false;
     m_bLandingGearDown = true;
+    m_bHydraulicsRaised = false;
+    m_sHydraulicsStickX = 0;
+    m_sHydraulicsStickY = 0;
+    m_bHydraulicsShockButtonR = false;
     m_usAdjustableProperty = 0;
     m_bIsFrozen = false;
     m_bUnoccupiedSyncable = true;

@@ -16,6 +16,7 @@
 #include <game/CWeaponStatManager.h>
 #include <game/CTaskManager.h>
 #include <game/Task.h>
+#include <game/CAutomobile.h>
 #include <enums/VehicleType.h>
 
 extern CClientGame* g_pClientGame;
@@ -476,6 +477,25 @@ bool CNetAPI::IsSmallKeySyncNeeded(CClientPed* pPlayerModel)
             return true;
     }
 
+    // Hydraulics stick change? Keysync is the only packet carrying it, so without this the release
+    // back to centre never clears the remote copy. Monster trucks tilt off the same stick.
+    if (pVehicle && ((pVehicle->GetUpgrades() && pVehicle->GetUpgrades()->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS)) ||
+                     pVehicle->GetVehicleType() == CLIENTVEHICLE_MONSTERTRUCK))
+    {
+        const bool bCentred = ControllerState.RightStickX == 0 && ControllerState.RightStickY == 0;
+        const bool bWasCentred = LastControllerState.RightStickX == 0 && LastControllerState.RightStickY == 0;
+        if (bCentred != bWasCentred)
+            return true;
+
+        if (!bCentred && m_TimeSinceMouseOrAnalogStateSent.Get() >= g_TickRateSettings.iKeySyncAnalogMove)
+        {
+            auto RightStickXDelta = static_cast<short>(abs(ControllerState.RightStickX - LastControllerState.RightStickX));
+            auto RightStickYDelta = static_cast<short>(abs(ControllerState.RightStickY - LastControllerState.RightStickY));
+            if (RightStickXDelta > 8 || RightStickYDelta > 8)
+                return true;
+        }
+    }
+
     // Compare the parts we sync
     if (ControllerState.LeftShoulder1 != LastControllerState.LeftShoulder1 || ControllerState.RightShoulder1 != LastControllerState.RightShoulder1 ||
         ControllerState.ButtonSquare != LastControllerState.ButtonSquare || ControllerState.ButtonCross != LastControllerState.ButtonCross ||
@@ -568,6 +588,16 @@ bool CNetAPI::IsCameraSyncNeeded()
     }
 
     return false;
+}
+
+// Caches the stance so streaming the vehicle back in later restores what the driver last reported.
+// Frozen once the exit starts: the stick reads released during it, and caching that would restore a
+// level suspension instead of the one the vehicle was actually left in.
+static void CacheHydraulicsSuspensionStance(CClientPed* pPlayerModel, CClientVehicle* pVehicle, const CControllerState& ControllerState, bool bRaised)
+{
+    pVehicle->SetHydraulicsRaised(bRaised);
+    if (!pPlayerModel->IsLeavingVehicle() && !pPlayerModel->IsGettingOutOfVehicle())
+        pVehicle->SetHydraulicsSuspensionStance(ControllerState.RightStickX, ControllerState.RightStickY, ControllerState.ShockButtonR != 0);
 }
 
 void CNetAPI::ReadKeysync(CClientPlayer* pPlayer, NetBitStreamInterface& BitStream)
@@ -685,14 +715,22 @@ void CNetAPI::ReadKeysync(CClientPlayer* pPlayer, NetBitStreamInterface& BitStre
         // Eventually read vehicle specific keysync data
         ReadSmallVehicleSpecific(pVehicle, BitStream, pVehicle->GetModel());
 
-        if (pVehicle->GetUpgrades()->HasUpgrade(1087))  // Hydraulics?
+        if (pVehicle->GetUpgrades()->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS) || pVehicle->GetVehicleType() == CLIENTVEHICLE_MONSTERTRUCK)
         {
             short sRightStickX, sRightStickY;
             BitStream.Read(sRightStickX);
             BitStream.Read(sRightStickY);
 
-            ControllerState.RightStickX = sRightStickX;
-            ControllerState.RightStickY = sRightStickY;
+            // Clamp like the local producer does; an out of range value pins every wheel to full extend.
+            ControllerState.RightStickX = Clamp<short>(-128, sRightStickX, 128);
+            ControllerState.RightStickY = Clamp<short>(-128, sRightStickY, 128);
+
+            bool bRaised = false;
+            BitStream.ReadBit(bRaised);
+            if (CRemoteDataStorage* pRemoteData = pPlayer->GetRemoteData())
+                pRemoteData->SetHydraulicsRaised(bRaised);
+
+            CacheHydraulicsSuspensionStance(pPlayer, pVehicle, ControllerState, bRaised);
         }
 
         // Jax: temp fix for rhino firing, CPlayerInfo::m_LastTimeBigGunFired needs to be context-switched
@@ -810,10 +848,20 @@ void CNetAPI::WriteKeysync(CClientPed* pPlayerModel, NetBitStreamInterface& BitS
         CVehicleUpgrades* pUpgrades = pVehicle->GetUpgrades();
         if (pUpgrades)
         {
-            if (pUpgrades->HasUpgrade(1087))  // Hydraulics?
+            if (pUpgrades->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS) || pVehicle->GetVehicleType() == CLIENTVEHICLE_MONSTERTRUCK)
             {
                 BitStream.Write(ControllerState.RightStickX);
                 BitStream.Write(ControllerState.RightStickY);
+
+                // Read back from the game rather than tracking a separate toggle; the native
+                // control already applies the horn press with nothing to desync.
+                auto*      pAutomobile = dynamic_cast<CAutomobile*>(pVehicle->GetGameVehicle());
+                const bool bRaised = pAutomobile && pAutomobile->IsHydraulicsRaised();
+                BitStream.WriteBit(bRaised);
+
+                // ReadKeysync only caches for clients watching a remote driver, leaving the driver's
+                // own client to restream a stale stance without this.
+                CacheHydraulicsSuspensionStance(pPlayerModel, pVehicle, ControllerState, bRaised);
             }
         }
 
@@ -1308,6 +1356,14 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
 
     // Read out the keysync
     CControllerState ControllerState;
+
+    // Puresync carries no hydraulics stick, so carry the last keysynced one over; otherwise every
+    // puresync drops the tilt back to centre for a frame.
+    CControllerState LastControllerState;
+    pPlayer->GetControllerState(LastControllerState);
+    ControllerState.RightStickX = LastControllerState.RightStickX;
+    ControllerState.RightStickY = LastControllerState.RightStickY;
+
     ReadFullKeysync(ControllerState, BitStream);
 
     // Jax: temp fix for rhino firing, CPlayerInfo::m_LastTimeBigGunFired needs to be context-switched

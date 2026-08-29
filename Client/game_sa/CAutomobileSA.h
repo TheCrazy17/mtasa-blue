@@ -145,4 +145,35 @@ public:
     CAutomobileSAInterface* GetAutomobileInterface() const { return reinterpret_cast<CAutomobileSAInterface*>(GetInterface()); }
 
     bool IsAnyWheelTouchingGround() const override;
+    bool IsHydraulicsRaised() const override;
+    void SetHydraulicsRaised(bool bRaised) override;
+
+    void SetHydraulicsSuspensionStance(short sStickX, short sStickY, bool bShockButtonR) override;
+
+    // Inline rather than exported, so multiplayer_sa can drive this directly on the CAutomobileSA the
+    // pools hand back, without widening the CMultiplayer interface. Native HydraulicControl reads the
+    // per wheel suspension as a one shot mailbox and zeroes it every run, so the settle frames below
+    // budget how long multiplayer_sa keeps restocking it for a driverless vehicle before parking it
+    // on whatever geometry that built.
+    bool TakeHydraulicsStanceSettleFrame(short& sStickX, short& sStickY, bool& bShockButtonR)
+    {
+        if (!HasHydraulicsSuspensionStance() || m_ucHydraulicsStanceSettleFrames == 0)
+            return false;
+
+        --m_ucHydraulicsStanceSettleFrames;
+        sStickX = m_sHydraulicsStickX;
+        sStickY = m_sHydraulicsStickY;
+        bShockButtonR = m_bHydraulicsShockButtonR;
+        return true;
+    }
+
+    bool HasSettledHydraulicsSuspensionStance() const { return HasHydraulicsSuspensionStance() && m_ucHydraulicsStanceSettleFrames == 0; }
+
+private:
+    bool HasHydraulicsSuspensionStance() const { return m_sHydraulicsStickX != 0 || m_sHydraulicsStickY != 0 || m_bHydraulicsShockButtonR; }
+
+    short         m_sHydraulicsStickX = 0;
+    short         m_sHydraulicsStickY = 0;
+    bool          m_bHydraulicsShockButtonR = false;
+    unsigned char m_ucHydraulicsStanceSettleFrames = 0;
 };

@@ -13,6 +13,7 @@
 #include <cmath>
 #include <numbers>
 #include <enums/VehicleType.h>
+#include "CRemoteDataSA.h"
 
 static bool __fastcall AreVehicleDoorsUndamageable(CVehicleSAInterface* vehicle)
 {
@@ -180,71 +181,119 @@ static DWORD CONTINUE_CAutomobile__HydraulicControl = 0x6A07A6;
 // control parks there for the same purpose. The only monster truck that puts the field to another
 // use is the dumper, and CAutomobile::ProcessControl sends that one to UpdateMovingCollision instead
 // of ever reaching hydraulics.
-static constexpr std::uint16_t MONSTERTRUCK_HYDRAULICS_RAISED = 500;
+static constexpr std::uint16_t HYDRAULICS_RAISED_MISC_ANGLE = 500;
+
+// Where the native raised maintenance parks the angle after counting up from 500.
+static constexpr std::uint16_t HYDRAULICS_RAISED_SETTLED_MISC_ANGLE = 504;
+
+// What a horn release leaves the angle at; the native maintenance creeps it down to 0 from there.
+static constexpr std::uint16_t HYDRAULICS_SETTLING_MISC_ANGLE = 60;
+
+// eAudioEvents values HydraulicControl plays on the same transitions; a monster truck never reaches
+// that native code, so they have to be played manually.
+static constexpr int AE_SUSPENSION_TRIGGER = 109;    // horn raises the hydraulics
+static constexpr int AE_SUSPENSION_HYDRAULIC = 107;  // horn lowers the hydraulics
+static constexpr int AE_SUSPENSION_ON = 110;         // idle bounce engages while pulling away
+static constexpr int AE_SUSPENSION_OFF = 111;        // idle bounce disengages once fully stopped
 
 // Fraction of the truck's own suspension travel a fully raised wheel gives up. The native control
 // shifts a car by a flat 0.2, roughly half the travel of a stock car; taking a proportion instead
 // keeps the lift in scale with a monster truck's far longer suspension.
 static constexpr float MONSTERTRUCK_HYDRAULICS_RAISE_RATIO = 0.5f;
 
+// Fraction of that same travel a wheel has to move in one frame to be worth a sound; a stick held
+// steady reapplies the same geometry every frame and stays silent.
+static constexpr float MONSTERTRUCK_HYDRAULICS_SOUND_SHIFT = 0.02f;
+
 static const std::uint32_t CModelInfo__ms_modelInfoPtrs = 0xA9B0C8;
 static const std::uint32_t FUNC_CVehicleModelInfo__GetWheelPosn = 0x4C7D20;
 
-// Recreates the native control scheme against CMonsterTruck's own suspension, so the horn raises and
-// lowers the truck, the hydraulic jump button hops every wheel at once and the right stick tilts it.
-// Only ever reached for the vehicle the local player is driving, matching the STATUS_PLAYER gate the
-// native control applies before it reads any pad input.
-static void __fastcall MonsterTruckHydraulicControl(CAutomobileSAInterface* vehicle)
+// CVehicle::GetSpecialColModel, thiscall bool(void); claims one of the four shared suspension slots
+// if one is free. m_nSpecialColModel holds the claimed index, or 0xFF read as a signed byte for none.
+static constexpr std::uintptr_t FUNC_CVehicle__GetSpecialColModel = 0x6DF3D0;
+
+static bool HasSpecialColModel(const CAutomobileSAInterface* vehicle)
 {
-    if (!vehicle || vehicle->nStatus != STATUS_PLAYER)
+    return static_cast<std::int8_t>(vehicle->m_nSpecialColModel) >= 0;
+}
+
+static bool ClaimSpecialColModel(CAutomobileSAInterface* vehicle)
+{
+    return reinterpret_cast<bool(__thiscall*)(void*)>(FUNC_CVehicle__GetSpecialColModel)(vehicle);
+}
+
+// CVehicle::m_aSpecialColVehicle, the four owners of those slots, and CAutomobile's own
+// SetupSuspensionLines, which rebuilds the stock per wheel suspension from the handling.
+static constexpr std::uintptr_t ARRAY_SpecialColVehicle = 0xC1CC08;
+static constexpr std::uintptr_t FUNC_CAutomobile__SetupSuspensionLines = 0x6A65D0;
+
+// Hands a slot back the way RemoveVehicleUpgrade's hydraulics path does. Only four exist game
+// wide and every parked stance or raised park must keep holding one to keep its lines, so a
+// vehicle parking level returns its slot here; without this a handful of parked lowriders
+// permanently starves every other one of hydraulics entirely, the native driver control included.
+static void ReleaseSpecialColModel(CAutomobileSAInterface* vehicle)
+{
+    const auto colIndex = static_cast<std::int8_t>(vehicle->m_nSpecialColModel);
+    if (colIndex < 0)
         return;
 
-    const auto* handling = vehicle->pHandlingData;
-    if (!handling)
+    reinterpret_cast<void**>(ARRAY_SpecialColVehicle)[colIndex] = nullptr;
+    vehicle->m_nSpecialColModel = 0xFF;
+    reinterpret_cast<void(__thiscall*)(void*)>(FUNC_CAutomobile__SetupSuspensionLines)(vehicle);
+}
+
+// CVehicle::m_aSpecialHydraulicData, the four tHydraulicData slots GetSpecialColModel claims into;
+// m_aWheelSuspension is its trailing float[4], the per wheel suspension input HydraulicControl's
+// STATUS_PHYSICS branch consumes and then zeroes at the end of every run.
+static constexpr std::uintptr_t ARRAY_SpecialHydraulicData = 0xC1CB60;
+static constexpr std::uint32_t  SIZE_tHydraulicData = 0x28;
+static constexpr std::uint32_t  OFFSET_tHydraulicData_WheelSuspension = 0x18;
+
+// The diagonal tilt HydraulicControl's own driver branch derives from the right stick.
+static void ComputeHydraulicsSuspensionChange(short sStickX, short sStickY, bool bShockButtonR, float (&outSuspensionChange)[MAX_WHEELS])
+{
+    std::ranges::fill(outSuspensionChange, 1.0f);
+
+    // GetHydraulicJump held natively skips the tilt read entirely, leaving every wheel at the 1.0
+    // fill above.
+    if (bShockButtonR)
         return;
 
-    auto* modelInfo = reinterpret_cast<void**>(CModelInfo__ms_modelInfoPtrs)[vehicle->m_nModelIndex];
-    if (!modelInfo)
+    const float leftRight = static_cast<float>(sStickX);
+    const float upDown = static_cast<float>(sStickY);
+    const float factor = std::sqrt(upDown * upDown + leftRight * leftRight) * 1.5f / 128.0f;
+    const float angle = std::atan2(leftRight, upDown) - std::numbers::pi_v<float> / 4.0f;
+    const float rearRight = std::cos(angle) * factor;
+    const float frontRight = std::sin(angle) * factor;
+
+    outSuspensionChange[FRONT_LEFT_WHEEL] = std::max(0.0f, -rearRight);
+    outSuspensionChange[REAR_LEFT_WHEEL] = std::max(0.0f, -frontRight);
+    outSuspensionChange[FRONT_RIGHT_WHEEL] = std::max(0.0f, frontRight);
+    outSuspensionChange[REAR_RIGHT_WHEEL] = std::max(0.0f, rearRight);
+}
+
+static void WriteHydraulicsWheelSuspension(const CAutomobileSAInterface* vehicle, const float (&suspensionChange)[MAX_WHEELS])
+{
+    const auto colIndex = static_cast<std::int8_t>(vehicle->m_nSpecialColModel);
+    if (colIndex < 0)
         return;
 
-    auto*            pad = pGameInterface->GetPad();
-    CControllerState state, lastState;
-    pad->GetCurrentControllerState(&state);
-    pad->GetLastControllerState(&lastState);
+    auto* wheelSuspension = reinterpret_cast<float*>(ARRAY_SpecialHydraulicData + colIndex * SIZE_tHydraulicData + OFFSET_tHydraulicData_WheelSuspension);
+    std::ranges::copy(suspensionChange, wheelSuspension);
+}
 
-    // The horn is the raise and lower toggle, which is what the native control reads through
-    // CPad::HornJustDown; in the default control mode that button is ShockButtonL, the one MTA maps
-    // its horn control to. The game already silences the horn itself on any vehicle carrying the
-    // upgrade, so without this the key would do nothing at all.
-    if (state.ShockButtonL && !lastState.ShockButtonL)
-        vehicle->m_wMiscComponentAngle = vehicle->m_wMiscComponentAngle < MONSTERTRUCK_HYDRAULICS_RAISED ? MONSTERTRUCK_HYDRAULICS_RAISED : 0;
+// The CAutomobileSA wrapper carrying the vehicle's captured hydraulics stance.
+static CAutomobileSA* GetHydraulicsStanceWrapper(CAutomobileSAInterface* vehicle)
+{
+    SClientEntity<CVehicleSA>* pair = pGameInterface->GetPools()->GetVehicle((DWORD*)vehicle);
+    return pair ? dynamic_cast<CAutomobileSA*>(pair->pEntity) : nullptr;
+}
 
-    const bool raised = vehicle->m_wMiscComponentAngle >= MONSTERTRUCK_HYDRAULICS_RAISED;
-
-    float suspensionChange[MAX_WHEELS] = {};
-
-    if (state.ShockButtonR)
-    {
-        std::ranges::fill(suspensionChange, 1.0f);
-    }
-    else if (state.RightStickX != 0 || state.RightStickY != 0)
-    {
-        // The diagonal tilt the native control derives from this same stick, read straight from
-        // CControllerState rather than through CPad::GetCarGunLeftRight and GetCarGunUpDown, which
-        // return these two fields anyway in every common control mode.
-        const float leftRight = static_cast<float>(state.RightStickX);
-        const float upDown = static_cast<float>(state.RightStickY);
-        const float factor = std::sqrt(upDown * upDown + leftRight * leftRight) * 1.5f / 128.0f;
-        const float angle = std::atan2(leftRight, upDown) - std::numbers::pi_v<float> / 4.0f;
-        const float rearRight = std::cos(angle) * factor;
-        const float frontRight = std::sin(angle) * factor;
-
-        suspensionChange[FRONT_LEFT_WHEEL] = std::max(0.0f, -rearRight);
-        suspensionChange[REAR_LEFT_WHEEL] = std::max(0.0f, -frontRight);
-        suspensionChange[FRONT_RIGHT_WHEEL] = std::max(0.0f, frontRight);
-        suspensionChange[REAR_RIGHT_WHEEL] = std::max(0.0f, rearRight);
-    }
-
+// Writes suspensionChange into the truck's own spring and line length fields for the given raised
+// state; returns the widest per wheel spring length shift made, for the caller's sound decision.
+static float ApplyMonsterTruckSuspensionGeometry(CAutomobileSAInterface* vehicle, const tHandlingDataSA* handling, void* modelInfo,
+                                                 const float suspensionChange[MAX_WHEELS], bool raised)
+{
     // Raising slides the whole travel window down relative to the chassis, the same move the native
     // control makes when it drops both of its limits by an equal amount. The spring keeps its length
     // and only the window it works in relocates, so the wheel settles that much further from the
@@ -253,6 +302,8 @@ static void __fastcall MonsterTruckHydraulicControl(CAutomobileSAInterface* vehi
     // rendering, so the physics and the visible wheel both follow the window down.
     const auto  GetWheelPosn = reinterpret_cast<void(__thiscall*)(void*, int, CVector*, bool)>(FUNC_CVehicleModelInfo__GetWheelPosn);
     const float travel = handling->fSuspensionUpperLimit - handling->fSuspensionLowerLimit;
+
+    float widestShift = 0.0f;
 
     for (int i = 0; i < MAX_WHEELS; i++)
     {
@@ -269,9 +320,263 @@ static void __fastcall MonsterTruckHydraulicControl(CAutomobileSAInterface* vehi
         CVector wheelPosition;
         GetWheelPosn(modelInfo, i, &wheelPosition, false);
 
-        vehicle->m_aSuspensionSpringLength[i] = wheelPosition.fZ + handling->fSuspensionUpperLimit - drop;
+        const float springLength = wheelPosition.fZ + handling->fSuspensionUpperLimit - drop;
+        const float shift = springLength - vehicle->m_aSuspensionSpringLength[i];
+        if (std::fabs(shift) > std::fabs(widestShift))
+            widestShift = shift;
+
+        vehicle->m_aSuspensionSpringLength[i] = springLength;
         vehicle->m_aSuspensionLineLength[i] = wheelPosition.fZ + handling->fSuspensionLowerLimit - drop;
     }
+
+    return widestShift;
+}
+
+// The native control plays these off how far its geometry moved in a frame, making the stick and
+// the hydraulic jump audible too; a wheel lifting shortens the spring, so a negative shift pushes up.
+static void PlayMonsterTruckSuspensionSound(CAutomobileSAInterface* vehicle, const tHandlingDataSA* handling, float widestShift)
+{
+    const float travel = handling->fSuspensionUpperLimit - handling->fSuspensionLowerLimit;
+    if (travel > 0.0f && std::fabs(widestShift) > travel * MONSTERTRUCK_HYDRAULICS_SOUND_SHIFT)
+        vehicle->m_VehicleAudioEntity.AddAudioEvent(widestShift < 0.0f ? AE_SUSPENSION_TRIGGER : AE_SUSPENSION_HYDRAULIC, 0.0f);
+}
+
+// A vehicle with no driver never reaches MonsterTruckHydraulicControl below, which requires
+// STATUS_PLAYER to read a driver's pad; apply a static snapshot of the raised state instead.
+static void ApplyUnoccupiedMonsterTruckHydraulics(CAutomobileSAInterface* vehicle, bool raised)
+{
+    const auto* handling = vehicle->pHandlingData;
+    if (!handling)
+        return;
+
+    auto* modelInfo = reinterpret_cast<void**>(CModelInfo__ms_modelInfoPtrs)[vehicle->m_nModelIndex];
+    if (!modelInfo)
+        return;
+
+    const float suspensionChange[MAX_WHEELS] = {};
+    const float widestShift = ApplyMonsterTruckSuspensionGeometry(vehicle, handling, modelInfo, suspensionChange, raised);
+    PlayMonsterTruckSuspensionSound(vehicle, handling, widestShift);
+}
+
+// Same idle bounce ratchet HydraulicControl runs on m_wMiscComponentAngle ahead of its raise and
+// lower logic: it counts down toward 0 once stopped, playing AE_SUSPENSION_OFF as it settles, and
+// jumps back up the moment the truck pulls away, playing AE_SUSPENSION_ON. Bounded to the 1 to 60
+// range, so it never touches the raised flag at 500 and above.
+static constexpr float         MONSTERTRUCK_IDLE_BOUNCE_STOPPED_SPEED_SQUARED = 0.0001f;  // 0.01 units/frame, squared
+static constexpr float         MONSTERTRUCK_IDLE_BOUNCE_SETTLED_SPEED_SQUARED = 0.0004f;  // 0.02 units/frame, squared
+static constexpr std::uint16_t MONSTERTRUCK_IDLE_BOUNCE_ON_ANGLE = 20;
+static constexpr std::uint16_t MONSTERTRUCK_IDLE_BOUNCE_MAX_ANGLE = 60;
+
+static void TickMonsterTruckIdleBounceSound(CAutomobileSAInterface* vehicle)
+{
+    const std::uint16_t angle = vehicle->m_wMiscComponentAngle;
+    if (angle >= HYDRAULICS_RAISED_MISC_ANGLE)
+        return;
+
+    const float speedSquared = vehicle->m_vecLinearVelocity.LengthSquared();
+    const bool  bStopped = speedSquared < MONSTERTRUCK_IDLE_BOUNCE_STOPPED_SPEED_SQUARED;
+
+    if (angle >= MONSTERTRUCK_IDLE_BOUNCE_ON_ANGLE || speedSquared < MONSTERTRUCK_IDLE_BOUNCE_SETTLED_SPEED_SQUARED || vehicle->m_fGasPedal == 0.0f)
+    {
+        if (angle > 0 && angle <= MONSTERTRUCK_IDLE_BOUNCE_MAX_ANGLE && bStopped)
+        {
+            vehicle->m_wMiscComponentAngle = angle - 1;
+            if (vehicle->m_wMiscComponentAngle == 1)
+                vehicle->m_VehicleAudioEntity.AddAudioEvent(AE_SUSPENSION_OFF, 0.0f);
+        }
+    }
+    else if (angle)
+    {
+        vehicle->m_wMiscComponentAngle = angle + 1;
+    }
+    else
+    {
+        vehicle->m_wMiscComponentAngle = MONSTERTRUCK_IDLE_BOUNCE_ON_ANGLE;
+        vehicle->m_VehicleAudioEntity.AddAudioEvent(AE_SUSPENSION_ON, 0.0f);
+    }
+}
+
+// Recreates the native control scheme against CMonsterTruck's own suspension, so the horn raises and
+// lowers the truck, the hydraulic jump button hops every wheel at once and the right stick tilts it.
+// Reached for both the local player's own truck and one someone else is driving, via the same synced
+// pad swap the native control relies on for a regular car.
+static void __fastcall MonsterTruckHydraulicControl(CAutomobileSAInterface* vehicle)
+{
+    if (!vehicle || vehicle->nStatus != STATUS_PLAYER)
+        return;
+
+    const auto* handling = vehicle->pHandlingData;
+    if (!handling)
+        return;
+
+    auto* modelInfo = reinterpret_cast<void**>(CModelInfo__ms_modelInfoPtrs)[vehicle->m_nModelIndex];
+    if (!modelInfo)
+        return;
+
+    TickMonsterTruckIdleBounceSound(vehicle);
+
+    auto*            pad = pGameInterface->GetPad();
+    CControllerState state, lastState;
+    pad->GetCurrentControllerState(&state);
+    pad->GetLastControllerState(&lastState);
+
+    // The horn is the raise and lower toggle, which is what the native control reads through
+    // CPad::HornJustDown; in the default control mode that button is ShockButtonL, the one MTA maps
+    // its horn control to. The game already silences the horn itself on any vehicle carrying the
+    // upgrade, so without this the key would do nothing at all.
+    //
+    // A remote driver's edge is unreliable over the wire; SyncRemoteHydraulicsRaisedState below
+    // applies their synced state as a level instead, so the edge is only honoured for the local
+    // player, the one driver GetRemoteDataStorage has no entry for.
+    bool hornToggled = false;
+    if (!CRemoteDataSA::GetRemoteDataStorage(vehicle->pDriver) && state.ShockButtonL && !lastState.ShockButtonL)
+    {
+        const bool bRaising = vehicle->m_wMiscComponentAngle < HYDRAULICS_RAISED_MISC_ANGLE;
+        vehicle->m_wMiscComponentAngle = bRaising ? HYDRAULICS_RAISED_MISC_ANGLE : 0;
+        vehicle->m_VehicleAudioEntity.AddAudioEvent(bRaising ? AE_SUSPENSION_TRIGGER : AE_SUSPENSION_HYDRAULIC, 0.0f);
+        hornToggled = true;
+    }
+
+    const bool raised = vehicle->m_wMiscComponentAngle >= HYDRAULICS_RAISED_MISC_ANGLE;
+
+    // Read straight from CControllerState rather than through CPad::GetCarGunLeftRight and
+    // GetCarGunUpDown, which return these two fields anyway in every common control mode.
+    float suspensionChange[MAX_WHEELS];
+    ComputeHydraulicsSuspensionChange(state.RightStickX, state.RightStickY, state.ShockButtonR != 0, suspensionChange);
+
+    const float widestShift = ApplyMonsterTruckSuspensionGeometry(vehicle, handling, modelInfo, suspensionChange, raised);
+
+    // The horn already played its own sound above; this covers the stick and the hydraulic jump.
+    if (!hornToggled)
+        PlayMonsterTruckSuspensionSound(vehicle, handling, widestShift);
+}
+
+// For a vehicle someone else is driving, CPad::GetPad(0) holds a copy of their last received
+// controller state, so replaying the horn press edge locally drifts whenever keysync, unreliable
+// sequenced, drops or coalesces a packet. Applying the driver's synced raised state as a level
+// instead is self correcting: whatever the latest received update carries is applied outright.
+static void __fastcall SyncRemoteHydraulicsRaisedState(CAutomobileSAInterface* vehicle)
+{
+    if (!vehicle)
+        return;
+
+    // The native body only maintains suspension geometry for STATUS_PLAYER, or for a STATUS_PHYSICS
+    // vehicle already holding a special collision slot; an unoccupied vehicle otherwise parks at
+    // STATUS_ABANDONED with neither, the same gap CanProcessFlyingCarStuff closes for driverless
+    // rotors. A monster truck has no slot at all, so its geometry is applied directly below instead.
+    const bool bIsMonsterTruck = *reinterpret_cast<std::uint32_t*>(vehicle) == MONSTERTRUCK_VTABLE;
+
+    if (!vehicle->pDriver)
+    {
+        const std::uint16_t angle = vehicle->m_wMiscComponentAngle;
+        const bool          bRaised = angle >= HYDRAULICS_RAISED_MISC_ANGLE;
+
+        if (bIsMonsterTruck)
+        {
+            ApplyUnoccupiedMonsterTruckHydraulics(vehicle, bRaised);
+            return;
+        }
+
+        // The native control consumes the per wheel suspension array as a one shot mailbox, zeroed at
+        // the end of every run; nothing native persists a tilt on its own, so a vacated vehicle levels
+        // the instant anything runs the control again. Restocking the array from the stance the
+        // wrapper carries, captured below or restocked from sync at stream in, reproduces the tilt for
+        // a budget of frames; the lines it builds are persistent, so once the chassis settles the
+        // vehicle parks on them with the control inert, matching a native exit's own freeze.
+        short sStickX, sStickY;
+        bool  bShockButtonR;
+        if (CAutomobileSA* wrapper = GetHydraulicsStanceWrapper(vehicle))
+        {
+            if (wrapper->TakeHydraulicsStanceSettleFrame(sStickX, sStickY, bShockButtonR))
+            {
+                if (!HasSpecialColModel(vehicle))
+                    ClaimSpecialColModel(vehicle);
+
+                if (HasSpecialColModel(vehicle))
+                {
+                    float suspensionChange[MAX_WHEELS];
+                    ComputeHydraulicsSuspensionChange(sStickX, sStickY, bShockButtonR, suspensionChange);
+                    WriteHydraulicsWheelSuspension(vehicle, suspensionChange);
+                    vehicle->nStatus = STATUS_PHYSICS;
+                    return;
+                }
+            }
+            else if (wrapper->HasSettledHydraulicsSuspensionStance())
+            {
+                // The stance is baked into the lines; keep the vehicle parked on them.
+                vehicle->m_wMiscComponentAngle = bRaised ? HYDRAULICS_RAISED_SETTLED_MISC_ANGLE : 0;
+                if (vehicle->nStatus != STATUS_ABANDONED)
+                    vehicle->nStatus = STATUS_ABANDONED;
+
+                return;
+            }
+        }
+
+        if (angle == 0 || angle == HYDRAULICS_RAISED_SETTLED_MISC_ANGLE)
+        {
+            if (vehicle->nStatus == STATUS_PHYSICS)
+                vehicle->nStatus = STATUS_ABANDONED;
+
+            // A level park has nothing left to preserve in the special col lines, so its slot goes
+            // back to the pool; a raised park keeps holding, its lifted geometry lives in them. A
+            // parked stance never reaches here, the settled stance branch above returns first.
+            if (angle == 0)
+                ReleaseSpecialColModel(vehicle);
+
+            return;
+        }
+
+        if (!HasSpecialColModel(vehicle))
+            ClaimSpecialColModel(vehicle);
+
+        if (vehicle->nStatus != STATUS_PLAYER && vehicle->nStatus != STATUS_PHYSICS)
+            vehicle->nStatus = STATUS_PHYSICS;
+
+        return;
+    }
+
+    if (vehicle->nStatus != STATUS_PLAYER)
+        return;
+
+    CRemoteDataStorageSA* data = CRemoteDataSA::GetRemoteDataStorage(vehicle->pDriver);
+
+    // Captures the stance the native driver branch is about to apply, from the same pad it reads:
+    // the remote storage pad for a synced driver, the game pad for the local player. Gated on
+    // actually driving rather than just having a driver, since the exit task releases the stick a
+    // few frames before the ped detaches; capturing those would overwrite the held stance with a
+    // centred one. A monster truck reads its pad directly and builds no persistent geometry, so
+    // there is nothing to capture.
+    if (!bIsMonsterTruck && vehicle->pDriver->pedState == static_cast<int>(PedState::PED_DRIVING))
+    {
+        const CControllerState* state = nullptr;
+        CControllerState        localState;
+        if (data)
+            state = data->CurrentControllerState();
+        else if (vehicle->pDriver == *reinterpret_cast<void**>(0xB7CD98))  // CWorld::Players[0].m_pPed, the local player
+        {
+            pGameInterface->GetPad()->GetCurrentControllerState(&localState);
+            state = &localState;
+        }
+
+        if (state)
+        {
+            if (CAutomobileSA* wrapper = GetHydraulicsStanceWrapper(vehicle))
+                wrapper->SetHydraulicsSuspensionStance(state->RightStickX, state->RightStickY, state->ShockButtonR != 0);
+        }
+    }
+
+    if (!data || !data->RefreshHydraulicsVehicle(vehicle))
+        return;
+
+    const bool bRaising = data->GetHydraulicsRaised();
+    if (bRaising == (vehicle->m_wMiscComponentAngle >= HYDRAULICS_RAISED_MISC_ANGLE))
+        return;
+
+    vehicle->m_wMiscComponentAngle = bRaising ? HYDRAULICS_RAISED_MISC_ANGLE : (bIsMonsterTruck ? 0 : HYDRAULICS_SETTLING_MISC_ANGLE);
+
+    // Native HydraulicControl would play this itself for a car; it never runs for a monster truck.
+    if (bIsMonsterTruck)
+        vehicle->m_VehicleAudioEntity.AddAudioEvent(bRaising ? AE_SUSPENSION_TRIGGER : AE_SUSPENSION_HYDRAULIC, 0.0f);
 }
 
 static void __declspec(naked) HOOK_CAutomobile__HydraulicControl()
@@ -281,6 +586,10 @@ static void __declspec(naked) HOOK_CAutomobile__HydraulicControl()
     // clang-format off
     __asm
     {
+        push    ecx                          // vehicle, needed below and by the native continuation
+        call    SyncRemoteHydraulicsRaisedState
+        pop     ecx
+
         cmp     dword ptr [ecx], MONSTERTRUCK_VTABLE
         jne     continueGameCodeLocation
 

@@ -158,7 +158,8 @@ void CSimPlayerManager::UpdateSimPlayer(CPlayer* pPlayer)
             pSim->m_fBulletSyncRangeHighest[slot] =
                 g_pGame->GetWeaponStatManager()->GetWeaponRangeFromSkillLevel(static_cast<eWeaponType>(pSim->m_WeaponTypes[slot]), 1000.0f);
     }
-    pSim->m_bVehicleHasHydraulics = pVehicle ? pVehicle->GetUpgrades()->HasUpgrade(1087) : false;
+    pSim->m_bVehicleHasHydraulics =
+        pVehicle ? pVehicle->GetUpgrades()->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS) || pVehicle->GetVehicleType() == VEHICLE_MONSTERTRUCK : false;
     pSim->m_bVehicleIsPlaneOrHeli = pVehicle ? pVehicle->GetVehicleType() == VEHICLE_PLANE || pVehicle->GetVehicleType() == VEHICLE_HELI : false;
     pSim->m_sharedControllerState.Copy(pPlayer->GetPad()->GetCurrentControllerState());
     if (pVehicle)

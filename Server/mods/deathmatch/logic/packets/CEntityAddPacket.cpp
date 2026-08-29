@@ -582,6 +582,16 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     BitStream.WriteBit(pVehicle->IsDerailable());
                     BitStream.WriteBit(pVehicle->GetTrainDirection());
                     BitStream.WriteBit(pVehicle->IsTaxiLightOn());
+                    BitStream.WriteBit(pVehicle->IsHydraulicsRaised());
+
+                    // The stick tilt behind the hydraulics suspension stance rides along only for a
+                    // vehicle actually carrying the upgrade, matching the client's read.
+                    if (pVehicle->GetUpgrades()->HasUpgrade(VEHICLEUPGRADE_HYDRAULICS))
+                    {
+                        BitStream.Write(pVehicle->GetHydraulicsStickX());
+                        BitStream.Write(pVehicle->GetHydraulicsStickY());
+                        BitStream.WriteBit(pVehicle->GetHydraulicsShockButtonR());
+                    }
 
                     // Write alpha
                     SEntityAlphaSync alpha;
