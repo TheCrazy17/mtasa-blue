@@ -572,6 +572,10 @@ public:
     CTaskSimpleSwim* GetSwimmingTask() const;
     void             RunSwimTask() const;
 
+    bool          IsKnockedDown() const;
+    unsigned char GetKnockedDownDirection() const;
+    void          RunFallAndGetUpTask(unsigned char ucDirection) const;
+
 protected:
     // This constructor is for peds managed by a player. These are unknown to the ped manager.
     CClientPed(CClientManager* pManager, unsigned long ulModelID, ElementID ID, bool bIsLocalPlayer);

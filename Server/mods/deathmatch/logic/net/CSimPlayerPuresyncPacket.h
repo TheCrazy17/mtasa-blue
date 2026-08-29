@@ -62,6 +62,7 @@ public:
     {
         uchar                ucTimeContext;
         SPlayerPuresyncFlags flags;
+        uchar                ucFallDirection;  // Only valid if flags.data.bKnockedDown
         ElementID            ContactElementID;
         CVector              Position;
         float                fRotation;

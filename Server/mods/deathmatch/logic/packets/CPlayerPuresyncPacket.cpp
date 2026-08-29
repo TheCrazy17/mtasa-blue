@@ -67,6 +67,15 @@ bool CPlayerPuresyncPacket::Read(NetBitStreamInterface& BitStream)
             pSourcePlayer->SetAnimationData({});
 
         pSourcePlayer->SetHanging(flags.data.hangingDuringClimb);
+        pSourcePlayer->SetKnockedDown(flags.data.bKnockedDown);
+
+        if (flags.data.bKnockedDown)
+        {
+            SIntegerSync<unsigned char, 2> fallDirection;
+            if (!BitStream.Read(&fallDirection))
+                return false;
+            pSourcePlayer->SetKnockedDownDirection(fallDirection);
+        }
 
         // Contact element
         CElement* pContactElement = NULL;
@@ -386,6 +395,7 @@ bool CPlayerPuresyncPacket::Write(NetBitStreamInterface& BitStream) const
         flags.data.bStealthAiming = (pSourcePlayer->IsStealthAiming() == true);
         flags.data.isReloadingWeapon = pSourcePlayer->IsReloadingWeapon();
         flags.data.hangingDuringClimb = pSourcePlayer->IsHanging();
+        flags.data.bKnockedDown = pSourcePlayer->IsKnockedDown();
 
         CVector vecPosition = pSourcePlayer->GetPosition();
         if (pContactElement)
@@ -400,6 +410,12 @@ bool CPlayerPuresyncPacket::Write(NetBitStreamInterface& BitStream) const
         WriteFullKeysync(ControllerState, BitStream);
 
         BitStream.Write(&flags);
+
+        if (flags.data.bKnockedDown)
+        {
+            SIntegerSync<unsigned char, 2> fallDirection(pSourcePlayer->GetKnockedDownDirection());
+            BitStream.Write(&fallDirection);
+        }
 
         if (pContactElement)
             BitStream.Write(pContactElement->GetID());

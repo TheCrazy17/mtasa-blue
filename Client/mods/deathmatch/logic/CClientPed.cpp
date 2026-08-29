@@ -1462,7 +1462,8 @@ void CClientPed::WarpIntoVehicle(CClientVehicle* pVehicle, unsigned int uiSeat)
         // check our physical response task
         if (pTaskPhysicalResponse && strcmp(pTaskPhysicalResponse->GetTaskName(), "TASK_COMPLEX_FALL_AND_GET_UP") == 0)
         {
-            m_pTaskManager->RemoveTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
+            // RemoveTask alone leaves the fall animation stuck playing; KillTask blends it out first.
+            KillTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
         }
     }
 
@@ -1643,7 +1644,8 @@ CClientVehicle* CClientPed::RemoveFromVehicle(bool bSkipWarpIfGettingOut)
                 bSkipWarpIfGettingOut = false;
 
             // Jax: this should be safe, doesn't remove the player if he's getting dragged out already (fix for getting stuck on back after being jacked)
-            if (!bSkipWarpIfGettingOut || (!IsGettingOutOfVehicle()))
+            // IsGettingOutOfVehicle misses a jack victim (different task); also check IsGettingJacked.
+            if (!bSkipWarpIfGettingOut || (!IsGettingOutOfVehicle() && !IsGettingJacked()))
             {
                 // Warp the player out
                 InternalRemoveFromVehicle(pGameVehicle);
@@ -2045,7 +2047,7 @@ void CClientPed::SetFrozen(bool bFrozen)
 
                 // Let's let them choke too
                 if (!IsChoking())
-                    m_pTaskManager->RemoveTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
+                    KillTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
             }
 
             // Always use the client's cached matrix, it's already updated by SetCurrentRotation
@@ -4722,6 +4724,9 @@ bool CClientPed::SetHasJetPack(bool bHasJetPack)
                     pTask->Destroy();
                     m_pTaskManager->RemoveTask(TASK_PRIORITY_EVENT_RESPONSE_NONTEMP);
                 }
+
+                // A leftover fight task would keep driving the aggressive walk animation
+                KillTaskSecondary(TASK_SECONDARY_ATTACK);
 
                 // Kill choking state now so it doesn't stay on (#9522#c26644)
                 if (IsChoking())
@@ -7428,4 +7433,41 @@ void CClientPed::RunSwimTask() const
     m_pPlayerPed->SetInWaterFlags(true);
 
     inWaterTask->SetAsPedTask(m_pPlayerPed, TASK_PRIORITY_EVENT_RESPONSE_NONTEMP, true);
+}
+
+bool CClientPed::IsKnockedDown() const
+{
+    if (!m_pPlayerPed)
+        return false;
+
+    CTask* pTask = const_cast<CTaskManager*>(GetTaskManager())->GetTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
+    return pTask && pTask->GetTaskType() == TASK_COMPLEX_FALL_AND_GET_UP;
+}
+
+unsigned char CClientPed::GetKnockedDownDirection() const
+{
+    if (!m_pPlayerPed)
+        return 0;
+
+    CTask* pTask = const_cast<CTaskManager*>(GetTaskManager())->GetTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
+    if (!pTask || pTask->GetTaskType() != TASK_COMPLEX_FALL_AND_GET_UP)
+        return 0;
+
+    auto* pFallTask = dynamic_cast<CTaskComplexFallAndGetUp*>(pTask);
+    return pFallTask ? static_cast<unsigned char>(pFallTask->GetFallDirection()) : 0;
+}
+
+void CClientPed::RunFallAndGetUpTask(unsigned char ucDirection) const
+{
+    if (!m_pPlayerPed || IsKnockedDown())
+        return;
+
+    // Matches the down time GTA uses for melee knockdowns (CTaskSimpleFall clamps players to 500ms on the ground anyway)
+    constexpr int FALL_TIME_MS = 1000;
+
+    CTaskComplexFallAndGetUp* fallTask = g_pGame->GetTasks()->CreateTaskComplexFallAndGetUp(ucDirection, FALL_TIME_MS);
+    if (!fallTask)
+        return;
+
+    fallTask->SetAsPedTask(m_pPlayerPed, TASK_PRIORITY_PHYSICAL_RESPONSE, true);
 }

@@ -43,6 +43,7 @@ class CTaskSimpleStealthKill;
 class CTaskSimpleTriggerLookAt;
 class CTaskSimpleUseGun;
 class CTaskComplexInWater;
+class CTaskComplexFallAndGetUp;
 
 class CTasksSA : public CTasks
 {
@@ -82,6 +83,8 @@ public:
                                                           const bool bOffsetPed = false, const bool bHoldLastFrame = false);
 
     CTaskComplexInWater* CreateTaskComplexInWater();
+
+    CTaskComplexFallAndGetUp* CreateTaskComplexFallAndGetUp(int nDir, int nFallDownTime);
 
     CTaskComplexDie*        CreateTaskComplexDie(const eWeaponType eMeansOfDeath = WEAPONTYPE_UNARMED, const AssocGroupId animGroup = 0 /*ANIM_STD_PED*/,
                                                  const AnimationId anim = 0 /*ANIM_STD_KO_FRONT*/, const float fBlendDelta = 4.0f, const float fAnimSpeed = 0.0f,

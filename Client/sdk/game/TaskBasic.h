@@ -101,3 +101,12 @@ class CTaskComplexInWater : public virtual CTaskComplex
 public:
     virtual ~CTaskComplexInWater() {};
 };
+
+// nDir: 0 skid forward, 1 spin right, 2 skid backward, 3 spin left.
+class CTaskComplexFallAndGetUp : public virtual CTaskComplex
+{
+public:
+    virtual ~CTaskComplexFallAndGetUp() {};
+
+    virtual int GetFallDirection() const = 0;
+};

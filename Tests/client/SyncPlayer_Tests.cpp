@@ -20,7 +20,7 @@
 // Player puresync flags
 // ============================================================================
 
-// 15 individual bit-flags packed into a single sync structure.
+// 16 individual bit-flags packed into a single sync structure.
 // Verify that setting specific flags doesn't bleed into others.
 TEST(SPlayerPuresyncFlags, RoundTrip)
 {
@@ -31,8 +31,9 @@ TEST(SPlayerPuresyncFlags, RoundTrip)
     sync.data.bIsDucked = true;
     sync.data.bHasAWeapon = true;
     sync.data.hangingDuringClimb = true;
+    sync.data.bKnockedDown = true;
     sync.Write(bs);
-    EXPECT_EQ(15, bs.GetNumberOfBitsUsed());
+    EXPECT_EQ(16, bs.GetNumberOfBitsUsed());
     bs.ResetReadPointer();
     SPlayerPuresyncFlags out;
     std::memset(&out.data, 0, sizeof(out.data));
@@ -42,6 +43,7 @@ TEST(SPlayerPuresyncFlags, RoundTrip)
     EXPECT_TRUE(out.data.bIsDucked);
     EXPECT_TRUE(out.data.bHasAWeapon);
     EXPECT_TRUE(out.data.hangingDuringClimb);
+    EXPECT_TRUE(out.data.bKnockedDown);
     EXPECT_FALSE(out.data.bIsOnFire);
 }
 

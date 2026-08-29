@@ -312,6 +312,12 @@ public:
     void SetHanging(bool hanging) noexcept { m_hanging = hanging; }
     bool IsHanging() const noexcept { return m_hanging; }
 
+    void SetKnockedDown(bool knockedDown) noexcept { m_knockedDown = knockedDown; }
+    bool IsKnockedDown() const noexcept { return m_knockedDown; }
+
+    void          SetKnockedDownDirection(unsigned char direction) noexcept { m_knockedDownDirection = direction; }
+    unsigned char GetKnockedDownDirection() const noexcept { return m_knockedDownDirection; }
+
 protected:
     bool ReadSpecialData(const int iLine) override;
 
@@ -353,7 +359,9 @@ protected:
     CVehicle*                            m_pJackingVehicle;
     SPlayerAnimData                      m_animData{};
     float                                m_cameraRotation{};
-    bool                                 m_hanging{false};  // Is the player hanging during a climb task?
+    bool                                 m_hanging{false};           // Is the player hanging during a climb task?
+    bool                                 m_knockedDown{false};       // Is the player knocked down on the ground?
+    unsigned char                        m_knockedDownDirection{0};  // Direction the player fell towards (0..3)
 
     CVehicle*    m_pVehicle;
     unsigned int m_uiVehicleSeat;

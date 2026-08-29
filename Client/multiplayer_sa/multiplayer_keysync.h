@@ -78,3 +78,5 @@ VOID HOOK_CHeli__ProcessControl();
 #define CODE_SetTargetRotation 0x535851
 
 #define VAR_CameraRotation 0xB6F178
+#define VAR_Cam0FrontX     0xB6F32C  // TheCamera.m_aCams[0].m_vecFront
+#define VAR_Cam0FrontY     0xB6F330

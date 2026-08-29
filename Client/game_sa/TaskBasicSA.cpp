@@ -12,6 +12,7 @@
 #include "StdInc.h"
 #include "TaskBasicSA.h"
 #include "CPedSA.h"
+#include <game/CAnimBlendAssocGroup.h>
 
 CTaskSimpleRunNamedAnimSAInterface* CTaskSimpleRunNamedAnimSA::GetAnimationInterface() noexcept
 {
@@ -274,4 +275,25 @@ CTaskComplexInWaterSA::CTaskComplexInWaterSA()
 
     // Call the constructor
     ((void(__thiscall*)(CTaskComplexInWaterSAInterface*))0x6350D0)(static_cast<CTaskComplexInWaterSAInterface*>(GetInterface()));
+}
+
+CTaskComplexFallAndGetUpSA::CTaskComplexFallAndGetUpSA(int nDir, int nFallDownTime)
+{
+    CreateTaskInterface(sizeof(CTaskComplexFallAndGetUpSAInterface));
+    if (!IsValid())
+        return;
+
+    // Call the constructor
+    ((void(__thiscall*)(CTaskComplexFallAndGetUpSAInterface*, int, int))FUNC_CTaskComplexFallAndGetUp__Constructor)(
+        static_cast<CTaskComplexFallAndGetUpSAInterface*>(GetInterface()), nDir, nFallDownTime);
+}
+
+int CTaskComplexFallAndGetUpSA::GetFallDirection() const
+{
+    // The direction constructor maps 0..3 to ANIM_ID_KO_SKID_FRONT..ANIM_ID_KO_SPIN_L; any other fall anim plays as a forward fall
+    const int animId = GetTaskInterface()->m_nFallAnimId;
+    if (animId < static_cast<int>(eAnimID::ANIM_ID_KO_SKID_FRONT) || animId > static_cast<int>(eAnimID::ANIM_ID_KO_SPIN_L))
+        return 0;
+
+    return animId - static_cast<int>(eAnimID::ANIM_ID_KO_SKID_FRONT);
 }

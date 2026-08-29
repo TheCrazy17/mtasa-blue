@@ -29,6 +29,7 @@ class CObjectSAInterface;
 #define FUNC_CTaskComplexSunbathe__Constructor       0x631F80
 #define FUNC_CTASKSimplePlayerOnFoot__Constructor    0x685750
 #define FUNC_CTASKComplexFacial__Constructor         0x690D20
+#define FUNC_CTaskComplexFallAndGetUp__Constructor   0x678700
 #define VTBL_CTaskSimpleCarFallOut                   0x86EFD0
 
 ///////////////////////
@@ -261,4 +262,23 @@ class CTaskComplexInWaterSA : public virtual CTaskComplexSA, public virtual CTas
 {
 public:
     CTaskComplexInWaterSA();
+};
+
+class CTaskComplexFallAndGetUpSAInterface : public CTaskComplexSAInterface
+{
+public:
+    int m_nFallAnimId;
+    int m_nFallAnimGroup;
+    int m_nFallDownTime;
+};
+
+class CTaskComplexFallAndGetUpSA : public virtual CTaskComplexSA, public virtual CTaskComplexFallAndGetUp
+{
+public:
+    CTaskComplexFallAndGetUpSA() {};
+    CTaskComplexFallAndGetUpSA(int nDir, int nFallDownTime);
+
+    const CTaskComplexFallAndGetUpSAInterface* GetTaskInterface() const { return static_cast<const CTaskComplexFallAndGetUpSAInterface*>(GetInterface()); }
+
+    int GetFallDirection() const override;
 };

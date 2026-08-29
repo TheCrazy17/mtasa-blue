@@ -27,6 +27,9 @@ bool bMouseLookEnabled = true;
 bool bInfraredVisionEnabled = false;
 bool bNightVisionEnabled = false;
 
+static float fLocalPlayerCamFrontX = 0.0f;
+static float fLocalPlayerCamFrontY = 0.0f;
+
 extern CStatsData localStatsData;
 extern bool       bLocalStatsStatic;
 extern float      fLocalPlayerCameraRotation;
@@ -234,6 +237,8 @@ VOID ReturnContextToLocalPlayer()
         pGameInterface->GetPad()->Restore();
 
         MemPutFast<float>(VAR_CameraRotation, fLocalPlayerCameraRotation);
+        MemPutFast<float>(VAR_Cam0FrontX, fLocalPlayerCamFrontX);
+        MemPutFast<float>(VAR_Cam0FrontY, fLocalPlayerCamFrontY);
 
         bNotInLocalContext = false;
 
@@ -333,6 +338,13 @@ void SwitchContext(CPed* thePed)
                     fLocalPlayerCameraRotation = *(float*)VAR_CameraRotation;
                     MemPutFast<float>(VAR_CameraRotation, data->m_fCameraRotation);
 
+                    // CTaskSimpleFight::ProcessPed derives the fight strafe heading from cam 0's front vector
+                    // (read unindexed at 0x62A054, no camera mode check), so it needs this player's camera too
+                    fLocalPlayerCamFrontX = *(float*)VAR_Cam0FrontX;
+                    fLocalPlayerCamFrontY = *(float*)VAR_Cam0FrontY;
+                    MemPutFast<float>(VAR_Cam0FrontX, std::sin(data->m_fCameraRotation));
+                    MemPutFast<float>(VAR_Cam0FrontY, std::cos(data->m_fCameraRotation));
+
                     // Change the gravity to the remote player's
                     pGameInterface->SetGravity(data->m_fGravity);
 
@@ -348,9 +360,10 @@ void SwitchContext(CPed* thePed)
                         }
                     }
 
-                    // Disable mouse look if they're not in a fight task and not aiming (strafing)
+                    // Disable mouse look if not aiming (strafing) in a fight task; every melee fire type weapon
+                    // (fists, melee slot, gifts, cane, parachute) drives the same fight task as bare hands.
                     // Fix GitHub Issue #395
-                    if (thePed->GetCurrentWeaponSlot() == eWeaponSlot::WEAPONSLOT_TYPE_UNARMED && data->m_pad.NewState.RightShoulder1 != 0 &&
+                    if (pWeaponStat && pWeaponStat->GetFireType() == FIRETYPE_MELEE && data->m_pad.NewState.RightShoulder1 != 0 &&
                         thePed->GetPedIntelligence()->GetFightTask())
                         bDisableMouseLook = false;
 

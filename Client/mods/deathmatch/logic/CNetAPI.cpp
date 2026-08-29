@@ -853,6 +853,15 @@ void CNetAPI::ReadPlayerPuresync(CClientPlayer* pPlayer, NetBitStreamInterface& 
     SPlayerPuresyncFlags flags;
     BitStream.Read(&flags);
 
+    // Direction the player fell towards, present while knocked down
+    unsigned char ucFallDirection = 0;
+    if (flags.data.bKnockedDown)
+    {
+        SIntegerSync<unsigned char, 2> fallDirection;
+        BitStream.Read(&fallDirection);
+        ucFallDirection = fallDirection;
+    }
+
     // Set the jetpack and google states
     if (flags.data.bHasJetPack != pPlayer->HasJetPack())
         pPlayer->SetHasJetPack(flags.data.bHasJetPack);
@@ -1008,6 +1017,11 @@ void CNetAPI::ReadPlayerPuresync(CClientPlayer* pPlayer, NetBitStreamInterface& 
     if (flags.data.bIsInWater && !pPlayer->IsInWater())
         pPlayer->RunSwimTask();
 
+    // Edge triggered so a remote task that ends early doesn't restart while the victim is still down
+    if (flags.data.bKnockedDown && !pPlayer->WasKnockedDownOnLastSync() && !pPlayer->IsKnockedDown())
+        pPlayer->RunFallAndGetUpTask(ucFallDirection);
+    pPlayer->SetKnockedDownOnLastSync(flags.data.bKnockedDown);
+
     // Remember now as the last puresync time
     pPlayer->SetLastPuresyncTime(CClientTime::GetTime());
     pPlayer->SetLastPuresyncPosition(position.data.vecPosition);
@@ -1115,13 +1129,11 @@ void CNetAPI::WritePlayerPuresync(CClientPlayer* pPlayerModel, NetBitStreamInter
     CControllerState ControllerState;
     pPlayerModel->GetControllerState(ControllerState);
 
-    // The aim/fire buttons may still be held from before we received our current weapon.
-    // GTA:SA only starts TASK_SIMPLE_USE_GUN on a fresh button press, so clear stale bits
-    // here to keep the aim sync below consistent with our own pose.
+    // Stale aim bits from before our weapon changed; GTA:SA only sets these on a fresh press.
     if (ControllerState.RightShoulder1 || ControllerState.ButtonCircle)
     {
         CTask* pAttackTask = pPlayerModel->GetTaskManager()->GetTaskSecondary(TASK_SECONDARY_ATTACK);
-        if (!pAttackTask || pAttackTask->GetTaskType() != TASK_SIMPLE_USE_GUN)
+        if (!pAttackTask || (pAttackTask->GetTaskType() != TASK_SIMPLE_USE_GUN && pAttackTask->GetTaskType() != TASK_SIMPLE_FIGHT))
         {
             ControllerState.RightShoulder1 = 0;
             ControllerState.ButtonCircle = 0;
@@ -1154,6 +1166,7 @@ void CNetAPI::WritePlayerPuresync(CClientPlayer* pPlayerModel, NetBitStreamInter
     flags.data.isReloadingWeapon = (pPlayerModel->IsReloadingWeapon() == true);
     flags.data.animInterrupted = pPlayerModel->HasSyncedAnim() && (!pPlayerModel->IsRunningAnimation() || pPlayerModel->m_animationOverridedByClient);
     flags.data.hangingDuringClimb = pPlayerModel->GetMovementState() == eMovementState::MOVEMENTSTATE_HANGING;
+    flags.data.bKnockedDown = pPlayerModel->IsKnockedDown();
 
     // The animation has been overwritten or interrupted by the client
     if (flags.data.animInterrupted)
@@ -1166,6 +1179,12 @@ void CNetAPI::WritePlayerPuresync(CClientPlayer* pPlayerModel, NetBitStreamInter
         flags.data.bHasAWeapon = false;
 
     BitStream.Write(&flags);
+
+    if (flags.data.bKnockedDown)
+    {
+        SIntegerSync<unsigned char, 2> fallDirection(pPlayerModel->GetKnockedDownDirection());
+        BitStream.Write(&fallDirection);
+    }
 
     // Player position
     CVector vecActualPosition;

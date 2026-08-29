@@ -167,6 +167,13 @@ CTaskComplexInWater* CTasksSA::CreateTaskComplexInWater()
     return task;
 }
 
+CTaskComplexFallAndGetUp* CTasksSA::CreateTaskComplexFallAndGetUp(int nDir, int nFallDownTime)
+{
+    CTaskComplexFallAndGetUpSA* task = NewTask<CTaskComplexFallAndGetUpSA>(nDir, nFallDownTime);
+    m_pTaskManagementSystem->AddTask(task);
+    return task;
+}
+
 CTaskComplexDie* CTasksSA::CreateTaskComplexDie(const eWeaponType eMeansOfDeath, const AssocGroupId animGroup, const AnimationId anim, const float fBlendDelta,
                                                 const float fAnimSpeed, const bool bBeingKilledByStealth, const bool bFallingToDeath, const int iFallToDeathDir,
                                                 const bool bFallToDeathOverRailing)

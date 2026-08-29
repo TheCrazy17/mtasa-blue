@@ -254,6 +254,9 @@ CTaskSA* CTaskManagementSystemSA::CreateAppropriateTask(CTaskSAInterface* pTaskI
         case TASK_SIMPLE_CHOKING:
             pTaskSA = new CTaskSimpleChokingSA;
             break;
+        case TASK_COMPLEX_FALL_AND_GET_UP:
+            pTaskSA = new CTaskComplexFallAndGetUpSA;
+            break;
 
         // Secondary
         case TASK_SIMPLE_DUCK:

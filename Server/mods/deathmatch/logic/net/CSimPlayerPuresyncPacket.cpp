@@ -51,6 +51,15 @@ bool CSimPlayerPuresyncPacket::Read(NetBitStreamInterface& BitStream)
     if (!BitStream.Read(&m_Cache.flags))
         return false;
 
+    // Direction the player fell towards, present while knocked down
+    if (m_Cache.flags.data.bKnockedDown)
+    {
+        SIntegerSync<uchar, 2> fallDirection;
+        if (!BitStream.Read(&fallDirection))
+            return false;
+        m_Cache.ucFallDirection = fallDirection;
+    }
+
     // Contact element
     if (m_Cache.flags.data.bHasContact)
     {
@@ -197,6 +206,12 @@ bool CSimPlayerPuresyncPacket::Write(NetBitStreamInterface& BitStream) const
     WriteFullKeysync(m_sharedControllerState, BitStream);
 
     BitStream.Write(&m_Cache.flags);
+
+    if (m_Cache.flags.data.bKnockedDown)
+    {
+        SIntegerSync<uchar, 2> fallDirection(m_Cache.ucFallDirection);
+        BitStream.Write(&fallDirection);
+    }
 
     if (m_Cache.flags.data.bHasContact)
         BitStream.Write(m_Cache.ContactElementID);
