@@ -7435,6 +7435,29 @@ void CClientPed::RunSwimTask() const
     inWaterTask->SetAsPedTask(m_pPlayerPed, TASK_PRIORITY_EVENT_RESPONSE_NONTEMP, true);
 }
 
+void CClientPed::RemoveStaleAimButtons(CControllerState& ControllerState)
+{
+    CWeapon*          pWeapon = GetWeapon();
+    const eWeaponType currentWeapon = pWeapon ? pWeapon->GetType() : WEAPONTYPE_UNARMED;
+    const bool        bAimButtonsHeld = ControllerState.RightShoulder1 || ControllerState.ButtonCircle;
+
+    // GTA:SA only starts aiming/attacking on a fresh press, so buttons still held from before a
+    // weapon change would pose remote players without posing us; drop them until released.
+    if (currentWeapon != m_staleAimWeaponType)
+    {
+        m_staleAimWeaponType = currentWeapon;
+        m_bStaleAimButtons = bAimButtonsHeld;
+    }
+    else if (!bAimButtonsHeld)
+        m_bStaleAimButtons = false;
+
+    if (m_bStaleAimButtons)
+    {
+        ControllerState.RightShoulder1 = 0;
+        ControllerState.ButtonCircle = 0;
+    }
+}
+
 bool CClientPed::IsKnockedDown() const
 {
     if (!m_pPlayerPed)

@@ -464,6 +464,7 @@ bool CNetAPI::IsSmallKeySyncNeeded(CClientPed* pPlayerModel)
     // Grab the current and the old controllerstate
     CControllerState ControllerState;
     pPlayerModel->GetControllerState(ControllerState);
+    pPlayerModel->RemoveStaleAimButtons(ControllerState);
 
     CControllerState LastControllerState;
     float            fLastCameraRotation, fLastAimY;
@@ -731,6 +732,7 @@ void CNetAPI::WriteKeysync(CClientPed* pPlayerModel, NetBitStreamInterface& BitS
     // Grab the local controllerstates
     CControllerState ControllerState;
     pPlayerModel->GetControllerState(ControllerState);
+    pPlayerModel->RemoveStaleAimButtons(ControllerState);
     CClientVehicle* pVehicle = pPlayerModel->GetOccupiedVehicle();
 
     // Write them to the bitstream
@@ -1128,17 +1130,7 @@ void CNetAPI::WritePlayerPuresync(CClientPlayer* pPlayerModel, NetBitStreamInter
     // Write the full player keys
     CControllerState ControllerState;
     pPlayerModel->GetControllerState(ControllerState);
-
-    // Stale aim bits from before our weapon changed; GTA:SA only sets these on a fresh press.
-    if (ControllerState.RightShoulder1 || ControllerState.ButtonCircle)
-    {
-        CTask* pAttackTask = pPlayerModel->GetTaskManager()->GetTaskSecondary(TASK_SECONDARY_ATTACK);
-        if (!pAttackTask || (pAttackTask->GetTaskType() != TASK_SIMPLE_USE_GUN && pAttackTask->GetTaskType() != TASK_SIMPLE_FIGHT))
-        {
-            ControllerState.RightShoulder1 = 0;
-            ControllerState.ButtonCircle = 0;
-        }
-    }
+    pPlayerModel->RemoveStaleAimButtons(ControllerState);
 
     WriteFullKeysync(ControllerState, BitStream);
 

@@ -572,6 +572,8 @@ public:
     CTaskSimpleSwim* GetSwimmingTask() const;
     void             RunSwimTask() const;
 
+    void RemoveStaleAimButtons(CControllerState& ControllerState);
+
     bool          IsKnockedDown() const;
     unsigned char GetKnockedDownDirection() const;
     void          RunFallAndGetUpTask(unsigned char ucDirection) const;
@@ -750,6 +752,8 @@ public:
     SLastSyncedPedData*                      m_LastSyncedData;
     bool                                     m_bSpeechEnabled;
     bool                                     m_bStealthAiming;
+    bool                                     m_bStaleAimButtons{false};
+    eWeaponType                              m_staleAimWeaponType{WEAPONTYPE_UNARMED};
     float                                    m_fLighting;
     unsigned char                            m_ucEnteringDoor;
     unsigned char                            m_ucLeavingDoor;
