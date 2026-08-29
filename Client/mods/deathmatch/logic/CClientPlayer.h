@@ -77,6 +77,8 @@ public:
     void           SetLastPuresyncType(ePuresyncType LastPuresyncType) { m_LastPuresyncType = LastPuresyncType; }
     bool           WasKnockedDownOnLastSync() const { return m_bLastSyncKnockedDown; }
     void           SetKnockedDownOnLastSync(bool bKnockedDown) { m_bLastSyncKnockedDown = bKnockedDown; }
+    unsigned char  GetKnockedDownDenials() const { return m_ucKnockedDownDenials; }
+    void           SetKnockedDownDenials(unsigned char ucDenials) { m_ucKnockedDownDenials = ucDenials; }
     void           SetLightsyncCalcedVelocity(const CVector& vecVelocity) { m_vecLightsyncCalcedVelocity = vecVelocity; }
     const CVector& GetLightsyncCalcedVelocity() { return m_vecLightsyncCalcedVelocity; }
     void           IncrementPlayerSync() { ++m_uiPlayerSyncCount; }
@@ -151,6 +153,7 @@ private:
     CVector       m_vecLastPuresyncPosition;
     bool          m_bHasConnectionTrouble;
     bool          m_bLastSyncKnockedDown{false};
+    unsigned char m_ucKnockedDownDenials{0};
 
     CClientTeam* m_pTeam;
 

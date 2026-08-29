@@ -1024,6 +1024,17 @@ void CNetAPI::ReadPlayerPuresync(CClientPlayer* pPlayer, NetBitStreamInterface& 
         pPlayer->RunFallAndGetUpTask(ucFallDirection);
     pPlayer->SetKnockedDownOnLastSync(flags.data.bKnockedDown);
 
+    if (flags.data.bKnockedDown || !pPlayer->IsKnockedDown())
+        pPlayer->SetKnockedDownDenials(0);
+    else
+    {
+        // A locally simulated knockdown the victim keeps denying is a ghost; the strike connected
+        // here but not on the victim's client. Blend it out once the confirmation had time to arrive.
+        pPlayer->SetKnockedDownDenials(pPlayer->GetKnockedDownDenials() + 1);
+        if (pPlayer->GetKnockedDownDenials() >= 5)
+            pPlayer->KillTask(TASK_PRIORITY_PHYSICAL_RESPONSE);
+    }
+
     // Remember now as the last puresync time
     pPlayer->SetLastPuresyncTime(CClientTime::GetTime());
     pPlayer->SetLastPuresyncPosition(position.data.vecPosition);
