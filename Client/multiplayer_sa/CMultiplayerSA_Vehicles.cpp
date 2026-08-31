@@ -4830,8 +4830,10 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessControl_PackerMiscGate()
     // clang-format on
 }
 
-// The force the container applies to whatever it pushes, part one. ax isn't needed past the skip
-// target's own compare, so it's reloaded fresh there rather than preserved across the call.
+// The force the container applies to whatever it pushes, part one. ax has to survive the call: if
+// this vehicle has nothing attached, CONTINUE falls through into a further cmp ax, 0x212 (Forklift)
+// a few instructions later, so a match without ax restored would compare garbage there instead of
+// the real model id.
 // >>> 0x6A1845  cmp     ax, 0x1BB
 // >>> 0x6A1849  jnz     0x6A186D
 //     0x6A184B  cmp     dword ptr [edi + 0x698], ebx
@@ -4847,9 +4849,11 @@ static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerA()
     // clang-format off
     __asm
     {
+        push    eax
         mov     ecx, edi
         call    IsPackerOrClone
         test    al, al
+        pop     eax
         jnz     isPacker
 
         mov     ax, word ptr [edi + 0x22]
@@ -4895,7 +4899,9 @@ static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerB()
 
 // Part three, a small standalone helper (thiscall, ecx = vehicle for the whole function, confirmed
 // by its own pop ecx/ret epilogue) reached with ecx already holding the vehicle, so no setup mov is
-// needed; the skip target's own chain needs ax reloaded fresh though.
+// needed; the skip target's own chain needs ax reloaded fresh. ecx is restored for that reload, and
+// edx has to survive the call too: on a match, CONTINUE's first instruction is movzx ecx, dx, using
+// a value this helper received from its own caller that has nothing to do with the vehicle pointer.
 // >>> 0x6A218A  cmp     ax, 0x1BB
 // >>> 0x6A218E  jnz     0x6A21A4
 //     0x6A2190  movzx   ecx, dx
@@ -4912,8 +4918,10 @@ static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerC()
     __asm
     {
         push    ecx
+        push    edx
         call    IsPackerOrClone
         test    al, al
+        pop     edx
         pop     ecx
         jnz     isPacker
 
@@ -4926,7 +4934,10 @@ static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerC()
     // clang-format on
 }
 
-// CAutomobile::PreRender, tipping the container; the skip target's own chain needs ax reloaded fresh
+// CAutomobile::PreRender, tipping the container; the skip target's own chain needs ax reloaded
+// fresh. ecx has to survive the call too: on a match, the block ends by pushing ecx as an argument
+// for a tail-called function, and that ecx has nothing to do with the vehicle pointer we pass to
+// IsPackerOrClone in the same register.
 // >>> 0x6AC4D9  cmp     ax, 0x1BB
 // >>> 0x6AC4DD  jnz     0x6AC507
 //     0x6AC4DF  movzx   edx, word ptr [esi + 0x86C]
@@ -4942,9 +4953,11 @@ static void __declspec(naked) HOOK_CAutomobile__PreRender_PackerTip()
     // clang-format off
     __asm
     {
+        push    ecx
         mov     ecx, esi
         call    IsPackerOrClone
         test    al, al
+        pop     ecx
         jnz     isPacker
 
         mov     ax, word ptr [esi + 0x22]
