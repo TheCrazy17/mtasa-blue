@@ -1611,25 +1611,33 @@ std::vector<std::string> CResource::GetFilePaths(const char* szFilename)
     return vecFiles;
 }
 
-// Return true if file name is used by this resource
+// Return true if file name is used by this resource. Was an O(n) scan called once per file while
+// reading a resource's file list, i.e. O(n^2); a lower cased name cache is now kept incrementally
+// instead. Resuming from the last processed element rather than a stored end() matters, since
+// end() is a fixed sentinel that stays "reached" even after push_back adds more real elements.
 bool CResource::IsFilenameUsed(const SString& strFilename, bool bClient)
 {
-    for (CResourceFile* pResourceFile : m_ResourceFiles)
-    {
-        if (strFilename.CompareI(pResourceFile->GetName()))
-        {
-            bool bIsClientFile = (pResourceFile->GetType() == CResourceFile::RESOURCE_FILE_TYPE_CLIENT_SCRIPT ||
-                                  pResourceFile->GetType() == CResourceFile::RESOURCE_FILE_TYPE_CLIENT_CONFIG ||
-                                  pResourceFile->GetType() == CResourceFile::RESOURCE_FILE_TYPE_CLIENT_FILE);
+    std::list<CResourceFile*>::const_iterator it = m_bFilenameCacheStarted ? std::next(m_FilenameCacheLast) : m_ResourceFiles.begin();
 
-            if (bIsClientFile == bClient)
-            {
-                return true;
-            }
-        }
+    for (; it != m_ResourceFiles.end(); ++it)
+    {
+        CResourceFile* pResourceFile = *it;
+        const bool     bIsClientFile = (pResourceFile->GetType() == CResourceFile::RESOURCE_FILE_TYPE_CLIENT_SCRIPT ||
+                                        pResourceFile->GetType() == CResourceFile::RESOURCE_FILE_TYPE_CLIENT_CONFIG ||
+                                        pResourceFile->GetType() == CResourceFile::RESOURCE_FILE_TYPE_CLIENT_FILE);
+
+        std::string strLowerName = pResourceFile->GetName();
+        std::transform(strLowerName.begin(), strLowerName.end(), strLowerName.begin(), SharedUtil::tolower<unsigned char>);
+
+        std::unordered_set<std::string>& cache = bIsClientFile ? m_UsedClientFilenamesLower : m_UsedServerFilenamesLower;
+        cache.insert(std::move(strLowerName));
+
+        m_FilenameCacheLast = it;
+        m_bFilenameCacheStarted = true;
     }
 
-    return false;
+    const std::unordered_set<std::string>& lookup = bClient ? m_UsedClientFilenamesLower : m_UsedServerFilenamesLower;
+    return lookup.count(strFilename.ToLower()) != 0;
 }
 
 bool CResource::ReadIncludedHTML(CXMLNode* pRoot)

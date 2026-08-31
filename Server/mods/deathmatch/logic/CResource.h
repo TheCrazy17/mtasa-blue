@@ -21,6 +21,7 @@
 #include <list>
 #include <vector>
 #include <functional>
+#include <unordered_set>
 #include "httpd/Types.h"
 #include <time.h>
 
@@ -432,6 +433,12 @@ private:
     std::list<CIncludedResources*> m_IncludedResources;  // we store them here temporarily, then read them once all the resources are loaded
     std::list<CResourceFile*>      m_ResourceFiles;
     std::map<std::string, int>     m_ResourceFilesCountPerDir;
+
+    // Incremental lower cased name cache for IsFilenameUsed; see its definition for details.
+    std::list<CResourceFile*>::const_iterator m_FilenameCacheLast;
+    bool                                      m_bFilenameCacheStarted = false;
+    std::unordered_set<std::string>           m_UsedClientFilenamesLower;
+    std::unordered_set<std::string>           m_UsedServerFilenamesLower;
     std::list<CResource*>          m_Dependents;  // resources that have "included" or loaded this one
     std::list<CExportedFunction>   m_ExportedFunctions;
     std::list<CResource*>          m_TemporaryIncludes;  // started by startResource script command
