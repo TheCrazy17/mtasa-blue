@@ -4747,6 +4747,247 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessEntityCollision_ForkliftC
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// The Packer's container on custom vehicle models
+//
+// Same split as the Dozer's blade and the Forklift's forks: ProcessControl decides whether to
+// reset/move the container and reach the code that works out the force it applies, and PreRender
+// decides whether to draw it tipped, all through separate model index checks a clone never matches.
+//////////////////////////////////////////////////////////////////////////////////////////
+static bool __fastcall IsPackerOrClone(CVehicleSAInterface* vehicle)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(VehicleType::VT_PACKER))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_PACKER);
+}
+
+// CAutomobile::ProcessControl, resetting the container's previous angle for this tick. cx is a
+// long-lived cached model id reused by several more compares further down this same function
+// (confirmed via the fall-through chain), so it has to survive the call; the interleaved store is
+// an unconditional accumulator reset unrelated to the model check.
+// >>> 0x6A1486  cmp     cx, 0x1BB
+//     0x6A148B  mov     dword ptr [esp + 0x10], esi
+// >>> 0x6A148F  jz      0x6A14B4
+//     0x6A1491  cmp     cx, 0x1E6
+#define HOOKPOS_CAutomobile__ProcessControl_PackerAngleReset  0x6A1486
+#define HOOKSIZE_CAutomobile__ProcessControl_PackerAngleReset 11
+static const DWORD CONTINUE_CAutomobile__ProcessControl_PackerAngleReset = 0x6A14B4;
+static const DWORD SKIP_CAutomobile__ProcessControl_PackerAngleReset = 0x6A1491;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_PackerAngleReset()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        mov     ecx, edi
+        call    IsPackerOrClone
+        test    al, al
+        pop     ecx
+        mov     dword ptr [esp + 0x10], esi
+        jz      notPacker
+
+        jmp     CONTINUE_CAutomobile__ProcessControl_PackerAngleReset
+
+        notPacker:
+        jmp     SKIP_CAutomobile__ProcessControl_PackerAngleReset
+    }
+    // clang-format on
+}
+
+// Same function, same cached cx, letting the container into the block that moves it this tick
+// >>> 0x6A14ED  cmp     cx, 0x1BB
+// >>> 0x6A14F2  jz      0x6A155C
+//     0x6A14F4  cmp     cx, 0x1E6
+#define HOOKPOS_CAutomobile__ProcessControl_PackerMiscGate  0x6A14ED
+#define HOOKSIZE_CAutomobile__ProcessControl_PackerMiscGate 7
+static const DWORD CONTINUE_CAutomobile__ProcessControl_PackerMiscGate = 0x6A155C;
+static const DWORD SKIP_CAutomobile__ProcessControl_PackerMiscGate = 0x6A14F4;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_PackerMiscGate()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        mov     ecx, edi
+        call    IsPackerOrClone
+        test    al, al
+        pop     ecx
+        jz      notPacker
+
+        jmp     CONTINUE_CAutomobile__ProcessControl_PackerMiscGate
+
+        notPacker:
+        jmp     SKIP_CAutomobile__ProcessControl_PackerMiscGate
+    }
+    // clang-format on
+}
+
+// The force the container applies to whatever it pushes, part one. ax isn't needed past the skip
+// target's own compare, so it's reloaded fresh there rather than preserved across the call.
+// >>> 0x6A1845  cmp     ax, 0x1BB
+// >>> 0x6A1849  jnz     0x6A186D
+//     0x6A184B  cmp     dword ptr [edi + 0x698], ebx
+#define HOOKPOS_CAutomobile__MovingCollisionSpeed_PackerA  0x6A1845
+#define HOOKSIZE_CAutomobile__MovingCollisionSpeed_PackerA 6
+static const DWORD CONTINUE_CAutomobile__MovingCollisionSpeed_PackerA = 0x6A184B;
+static const DWORD SKIP_CAutomobile__MovingCollisionSpeed_PackerA = 0x6A186D;
+
+static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerA()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, edi
+        call    IsPackerOrClone
+        test    al, al
+        jnz     isPacker
+
+        mov     ax, word ptr [edi + 0x22]
+        jmp     SKIP_CAutomobile__MovingCollisionSpeed_PackerA
+
+        isPacker:
+        jmp     CONTINUE_CAutomobile__MovingCollisionSpeed_PackerA
+    }
+    // clang-format on
+}
+
+// Part two, a different span of the same function; esi holds the vehicle here instead of edi, and
+// cx is once again a long-lived cached value reused by the skip target's own chain
+// >>> 0x6A1F88  cmp     cx, 0x1BB
+// >>> 0x6A1F8D  jnz     0x6A1FB6
+//     0x6A1F8F  mov     edx, dword ptr [0x8D3174]
+#define HOOKPOS_CAutomobile__MovingCollisionSpeed_PackerB  0x6A1F88
+#define HOOKSIZE_CAutomobile__MovingCollisionSpeed_PackerB 7
+static const DWORD CONTINUE_CAutomobile__MovingCollisionSpeed_PackerB = 0x6A1F8F;
+static const DWORD SKIP_CAutomobile__MovingCollisionSpeed_PackerB = 0x6A1FB6;
+
+static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerB()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        mov     ecx, esi
+        call    IsPackerOrClone
+        test    al, al
+        pop     ecx
+        jnz     isPacker
+
+        jmp     SKIP_CAutomobile__MovingCollisionSpeed_PackerB
+
+        isPacker:
+        jmp     CONTINUE_CAutomobile__MovingCollisionSpeed_PackerB
+    }
+    // clang-format on
+}
+
+// Part three, a small standalone helper (thiscall, ecx = vehicle for the whole function, confirmed
+// by its own pop ecx/ret epilogue) reached with ecx already holding the vehicle, so no setup mov is
+// needed; the skip target's own chain needs ax reloaded fresh though.
+// >>> 0x6A218A  cmp     ax, 0x1BB
+// >>> 0x6A218E  jnz     0x6A21A4
+//     0x6A2190  movzx   ecx, dx
+#define HOOKPOS_CAutomobile__MovingCollisionSpeed_PackerC  0x6A218A
+#define HOOKSIZE_CAutomobile__MovingCollisionSpeed_PackerC 6
+static const DWORD CONTINUE_CAutomobile__MovingCollisionSpeed_PackerC = 0x6A2190;
+static const DWORD SKIP_CAutomobile__MovingCollisionSpeed_PackerC = 0x6A21A4;
+
+static void __declspec(naked) HOOK_CAutomobile__MovingCollisionSpeed_PackerC()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        push    ecx
+        call    IsPackerOrClone
+        test    al, al
+        pop     ecx
+        jnz     isPacker
+
+        mov     ax, word ptr [ecx + 0x22]
+        jmp     SKIP_CAutomobile__MovingCollisionSpeed_PackerC
+
+        isPacker:
+        jmp     CONTINUE_CAutomobile__MovingCollisionSpeed_PackerC
+    }
+    // clang-format on
+}
+
+// CAutomobile::PreRender, tipping the container; the skip target's own chain needs ax reloaded fresh
+// >>> 0x6AC4D9  cmp     ax, 0x1BB
+// >>> 0x6AC4DD  jnz     0x6AC507
+//     0x6AC4DF  movzx   edx, word ptr [esi + 0x86C]
+#define HOOKPOS_CAutomobile__PreRender_PackerTip  0x6AC4D9
+#define HOOKSIZE_CAutomobile__PreRender_PackerTip 6
+static const DWORD CONTINUE_CAutomobile__PreRender_PackerTip = 0x6AC4DF;
+static const DWORD SKIP_CAutomobile__PreRender_PackerTip = 0x6AC507;
+
+static void __declspec(naked) HOOK_CAutomobile__PreRender_PackerTip()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsPackerOrClone
+        test    al, al
+        jnz     isPacker
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     SKIP_CAutomobile__PreRender_PackerTip
+
+        isPacker:
+        jmp     CONTINUE_CAutomobile__PreRender_PackerTip
+    }
+    // clang-format on
+}
+
+// CAutomobile::ProcessControl, the model switch that reaches UpdateMovingCollision at all; the skip
+// target's own chain needs ax reloaded fresh, same as the other sites above
+// >>> 0x6B1F8F  cmp     ax, 0x1BB
+// >>> 0x6B1F93  jz      0x6B200F
+//     0x6B1F95  cmp     ax, 0x1E6
+#define HOOKPOS_CAutomobile__ProcessControl_PackerDispatch  0x6B1F8F
+#define HOOKSIZE_CAutomobile__ProcessControl_PackerDispatch 6
+static const DWORD CONTINUE_CAutomobile__ProcessControl_PackerDispatch = 0x6B200F;
+static const DWORD SKIP_CAutomobile__ProcessControl_PackerDispatch = 0x6B1F95;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_PackerDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        mov     ecx, esi
+        call    IsPackerOrClone
+        test    al, al
+        jnz     isPacker
+
+        mov     ax, word ptr [esi + 0x22]
+        jmp     SKIP_CAutomobile__ProcessControl_PackerDispatch
+
+        isPacker:
+        jmp     CONTINUE_CAutomobile__ProcessControl_PackerDispatch
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 //
 // CMultiplayerSA::InitHooks_Vehicles
 //
@@ -4771,6 +5012,13 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CObject__ProcessControl_ForkliftCanCarry);
     EZHookInstall(CObject__ObjectDamage_ForkliftImmune);
     EZHookInstall(CAutomobile__ProcessEntityCollision_ForkliftColPointDrop);
+    EZHookInstall(CAutomobile__ProcessControl_PackerAngleReset);
+    EZHookInstall(CAutomobile__ProcessControl_PackerMiscGate);
+    EZHookInstall(CAutomobile__MovingCollisionSpeed_PackerA);
+    EZHookInstall(CAutomobile__MovingCollisionSpeed_PackerB);
+    EZHookInstall(CAutomobile__MovingCollisionSpeed_PackerC);
+    EZHookInstall(CAutomobile__PreRender_PackerTip);
+    EZHookInstall(CAutomobile__ProcessControl_PackerDispatch);
     EZHookInstall(CBike__ProcessControl_SteerRatio);
     EZHookInstall(CBike__ProcessControl_LeanRatio);
     EZHookInstall(CAutomobile__HydraulicControl);
