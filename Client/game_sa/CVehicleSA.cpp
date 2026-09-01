@@ -1591,8 +1591,19 @@ void CVehicleSA::RecalculateSwingingChassis()
     auto&               chassis = static_cast<CAutomobileSAInterface*>(GetVehicleInterface())->m_swingingChassis;
     const std::uint16_t modelID = GetModelIndex();
 
-    // The Firela's ladder reuses this same slot for its own animation, so it must never be overridden by the swinging chassis flag.
-    if (modelID == static_cast<std::uint16_t>(VehicleType::VT_FIRELA))
+    // The Firela's ladder reuses this same slot for its own animation, so it must never be
+    // overridden by the swinging chassis flag. A Firela cloned via engineRequestModel never runs
+    // the game's own constructor setup for model 544 (CAutomobile's ctor switches on the literal
+    // index), so resolving it back to its origin here too keeps a clone's ladder working instead
+    // of falling through to the generic branch below.
+    bool isFirelaOrClone = modelID == static_cast<std::uint16_t>(VehicleType::VT_FIRELA);
+    if (!isFirelaOrClone)
+    {
+        CModelInfo* modelInfo = pGame->GetModelInfo(modelID);
+        isFirelaOrClone = modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(VehicleType::VT_FIRELA);
+    }
+
+    if (isFirelaOrClone)
     {
         chassis.m_fOpenAngle = 0.1f * PI;
         chassis.m_fClosedAngle = -0.1f * PI;

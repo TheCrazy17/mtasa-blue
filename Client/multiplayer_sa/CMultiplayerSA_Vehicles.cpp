@@ -4747,6 +4747,182 @@ static void __declspec(naked) HOOK_CAutomobile__ProcessEntityCollision_ForkliftC
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+// The Rhino's turret rotation and the Firetruck's water cannon on custom vehicle models
+//
+// Both read the aim stick through the same generic pad axes into the same pair of fields
+// (m_fDoomVerticalRotation/m_fDoomHorizontalRotation, named for whichever internal placeholder
+// Rockstar never renamed), but neither was ever reached at all for a clone: ProcessControl's
+// model switch that calls TankControl/FireTruckControl in the first place gates on the raw model
+// index, same as every other vehicle dispatched from that same switch in this file.
+//
+// The Rhino's own firing is left out on purpose. TankControl reuses its one "is this the Rhino"
+// check for both the rotation and the firing further down, so letting a clone past that check
+// would let it fire too. A second, narrower hook right at the firing trigger keeps that
+// literal-Rhino-only without touching the rotation.
+//////////////////////////////////////////////////////////////////////////////////////////
+// vehicle/targetType generic in place of a dedicated IsXxxOrClone per vehicle; takes targetType
+// in edx (__fastcall's second argument register), so a caller only needs one extra mov before the
+// call instead of a whole extra function.
+static bool __fastcall IsVehicleOrClone(CVehicleSAInterface* vehicle, VehicleType targetType)
+{
+    const std::uint32_t modelId = static_cast<std::uint32_t>(vehicle->m_nModelIndex);
+    if (modelId == static_cast<std::uint32_t>(targetType))
+        return true;
+
+    CModelInfo* modelInfo = pGameInterface->GetModelInfo(modelId);
+    return modelInfo && modelInfo->GetParentID() == static_cast<unsigned int>(targetType);
+}
+
+// A scoped enum can't be named directly from __asm, hence these; passed to IsVehicleOrClone's edx.
+static const DWORD MODEL_ID_RHINO = static_cast<DWORD>(VehicleType::VT_RHINO);
+static const DWORD MODEL_ID_FIRETRUK = static_cast<DWORD>(VehicleType::VT_FIRETRUK);
+
+// CPad::CarGunJustDown, called again below to replay the Rhino firing trigger untouched
+static const DWORD FUNC_CPad__CarGunJustDown = 0x0053FFE0;
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// CAutomobile::ProcessControl, the model switch that reaches FireTruckControl at all
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6B1F4F | 66 3D 97 01 | cmp     ax, 0x197
+// >>> 0x6B1F53 | 74 06       | jz      0x6B1F5B
+//     0x6B1F55 | 66 3D 59 02 | cmp     ax, 0x259
+#define HOOKPOS_CAutomobile__ProcessControl_FiretruckDispatch  0x6B1F4F
+#define HOOKSIZE_CAutomobile__ProcessControl_FiretruckDispatch 6
+static const DWORD CONTINUE_CAutomobile__ProcessControl_FiretruckDispatch = 0x6B1F5B;
+static const DWORD SKIP_CAutomobile__ProcessControl_FiretruckDispatch = 0x6B1F55;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_FiretruckDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // ax must survive to the skip target, which compares it again against the swat van id
+        push    eax
+        mov     ecx, esi
+        mov     edx, MODEL_ID_FIRETRUK
+        call    IsVehicleOrClone
+        test    al, al
+        pop     eax
+        jz      notFiretruck
+
+        jmp     CONTINUE_CAutomobile__ProcessControl_FiretruckDispatch
+
+        notFiretruck:
+        jmp     SKIP_CAutomobile__ProcessControl_FiretruckDispatch
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// CAutomobile::ProcessControl, the model switch that reaches TankControl at all
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6B1F7B | 66 3D B0 01       | cmp     ax, 0x1b0
+// >>> 0x6B1F7F | 0F 84 A1 00 00 00 | jz      0x6B2026
+//     0x6B1F85 | 66 3D 34 02       | cmp     ax, 0x234
+#define HOOKPOS_CAutomobile__ProcessControl_RhinoDispatch  0x6B1F7B
+#define HOOKSIZE_CAutomobile__ProcessControl_RhinoDispatch 10
+static const DWORD CONTINUE_CAutomobile__ProcessControl_RhinoDispatch = 0x6B2026;
+static const DWORD SKIP_CAutomobile__ProcessControl_RhinoDispatch = 0x6B1F85;
+
+static void __declspec(naked) HOOK_CAutomobile__ProcessControl_RhinoDispatch()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // ax must survive to the skip target, which compares it again against the rc tiger id
+        push    eax
+        mov     ecx, esi
+        mov     edx, MODEL_ID_RHINO
+        call    IsVehicleOrClone
+        test    al, al
+        pop     eax
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__ProcessControl_RhinoDispatch
+
+        notRhino:
+        jmp     SKIP_CAutomobile__ProcessControl_RhinoDispatch
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// CAutomobile::TankControl, the "is this actually the Rhino" gate ahead of the turret rotation
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6AE9C9 | 66 3D B0 01       | cmp     ax, 0x1b0
+// >>> 0x6AE9CD | 0F 85 27 07 00 00 | jnz     0x6AF0FA
+//     0x6AE9D3 | A0 B0 A8 96 00    | mov     al, byte ptr [0x0096A8B0]
+#define HOOKPOS_CAutomobile__TankControl_RhinoGate  0x6AE9C9
+#define HOOKSIZE_CAutomobile__TankControl_RhinoGate 10
+static const DWORD CONTINUE_CAutomobile__TankControl_RhinoGate = 0x6AE9D3;
+static const DWORD SKIP_CAutomobile__TankControl_RhinoGate = 0x6AF0FA;
+
+static void __declspec(naked) HOOK_CAutomobile__TankControl_RhinoGate()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // ax is dead either way past here: the continue target immediately overwrites al, and the
+        // skip target is just the function's own epilogue
+        mov     ecx, esi
+        mov     edx, MODEL_ID_RHINO
+        call    IsVehicleOrClone
+        test    al, al
+        jz      notRhino
+
+        jmp     CONTINUE_CAutomobile__TankControl_RhinoGate
+
+        notRhino:
+        jmp     SKIP_CAutomobile__TankControl_RhinoGate
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// CAutomobile::TankControl, the turret firing trigger, kept literal-Rhino-only on purpose
+//
+// The rotation gate above now lets a clone all the way into this same function, which would let
+// it fire too if left alone; this hook re-checks the real model index (not the clone's origin,
+// so a clone of the Rhino is treated the same as a clone of anything else) right at the firing
+// trigger, so only an actual Rhino ever reaches it, same as before this PR.
+//////////////////////////////////////////////////////////////////////////////////////////
+// >>> 0x6AECDF | 8B CF          | mov     ecx, edi
+// >>> 0x6AECE1 | E8 FA 12 E9 FF | call    0x0053FFE0
+//     0x6AECE6 | 66 85 C0       | test    ax, ax
+#define HOOKPOS_CAutomobile__TankControl_RhinoFireGate  0x6AECDF
+#define HOOKSIZE_CAutomobile__TankControl_RhinoFireGate 7
+static const DWORD CONTINUE_CAutomobile__TankControl_RhinoFireGate = 0x6AECE6;
+static const DWORD SKIP_CAutomobile__TankControl_RhinoFireGate = 0x6AF0FA;
+
+static void __declspec(naked) HOOK_CAutomobile__TankControl_RhinoFireGate()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        // esi is still this (never reassigned since function entry); a clone's real model index
+        // never literally matches the Rhino's, whatever it was cloned from
+        cmp     word ptr [esi + 0x22], 0x1b0
+        jnz     notRhino
+
+        mov     ecx, edi
+        call    FUNC_CPad__CarGunJustDown
+        jmp     CONTINUE_CAutomobile__TankControl_RhinoFireGate
+
+        notRhino:
+        jmp     SKIP_CAutomobile__TankControl_RhinoFireGate
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 //
 // CMultiplayerSA::InitHooks_Vehicles
 //
@@ -4904,4 +5080,8 @@ void CMultiplayerSA::InitHooks_Vehicles()
     EZHookInstall(CVehicle__UpdateTrailerLink_TowTruck);
     EZHookInstall(CVehicle__UpdateTractorLink_TowTruck);
     EZHookInstall(CAutomobile__Constructor_TowTruckBouncingPanel);
+    EZHookInstall(CAutomobile__ProcessControl_FiretruckDispatch);
+    EZHookInstall(CAutomobile__ProcessControl_RhinoDispatch);
+    EZHookInstall(CAutomobile__TankControl_RhinoGate);
+    EZHookInstall(CAutomobile__TankControl_RhinoFireGate);
 }
