@@ -51,6 +51,7 @@ CClientManager::CClientManager()
     m_pWeaponManager = new CClientWeaponManager(this);
     m_pEffectManager = new CClientEffectManager(this);
     m_pPointLightsManager = new CClientPointLightsManager(this);
+    m_pGlassPanelManager = new CClientGlassPanelManager(this);
     m_pModelManager = new CClientModelManager();
     m_pPacketRecorder = new CClientPacketRecorder(this);
     m_pImgManager = new CClientIMGManager(this);
@@ -173,6 +174,11 @@ CClientManager::~CClientManager()
     delete m_pPointLightsManager;
     m_pPointLightsManager = NULL;
 
+    // Deleted before the model manager: destroying a panel can release the custom model slot it
+    // used for collision, which needs the model manager to still be alive.
+    delete m_pGlassPanelManager;
+    m_pGlassPanelManager = NULL;
+
     delete m_pModelManager;
     m_pModelManager = nullptr;
 
@@ -218,6 +224,7 @@ void CClientManager::DoPulse(bool bDoStandardPulses, bool bDoVehicleManagerPulse
             m_pColManager->DoPulse();
             m_pGUIManager->DoPulse();
             m_pWeaponManager->DoPulse();
+            m_pGlassPanelManager->DoPulse();
         }
         else
         {

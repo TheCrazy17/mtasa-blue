@@ -4115,6 +4115,62 @@ CClientObject* CStaticFunctionDefinitions::CreateObject(CResource& Resource, uns
     return nullptr;
 }
 
+CClientGlassPanel* CStaticFunctionDefinitions::CreateGlassPanel(CResource& Resource, const CVector& vecPosition, float fWidth, float fHeight)
+{
+    if (fWidth <= 0.0f || fHeight <= 0.0f)
+        return nullptr;
+
+    CClientGlassPanel* pPanel = m_pManager->GetGlassPanelManager()->Create(INVALID_ELEMENT_ID);
+    if (!pPanel)
+        return nullptr;
+
+    pPanel->SetParent(Resource.GetResourceDynamicEntity());
+    pPanel->SetPosition(vecPosition);
+    pPanel->SetSize(fWidth, fHeight);
+
+    return pPanel;
+}
+
+bool CStaticFunctionDefinitions::SetGlassPanelSize(CClientGlassPanel& Panel, float fWidth, float fHeight)
+{
+    if (fWidth <= 0.0f || fHeight <= 0.0f)
+        return false;
+
+    Panel.SetSize(fWidth, fHeight);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::SetGlassPanelThickness(CClientGlassPanel& Panel, float fThickness)
+{
+    if (fThickness <= 0.0f)
+        return false;
+
+    Panel.SetThickness(fThickness);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::SetGlassPanelColor(CClientGlassPanel& Panel, const SColor color)
+{
+    Panel.SetColor(color);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::SetGlassPanelBreakable(CClientGlassPanel& Panel, bool bBreakable)
+{
+    Panel.SetBreakable(bBreakable);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::SetGlassPanelCollisionEnabled(CClientGlassPanel& Panel, bool bEnabled)
+{
+    return Panel.SetCollisionEnabled(bEnabled);
+}
+
+bool CStaticFunctionDefinitions::BreakGlassPanel(CClientGlassPanel& Panel, const CVector& vecForce, unsigned char ucGranularity)
+{
+    return Panel.Break(vecForce, ucGranularity);
+}
+
 bool CStaticFunctionDefinitions::GetObjectScale(CClientObject& Object, CVector& vecScale)
 {
     Object.GetScale(vecScale);

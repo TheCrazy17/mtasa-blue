@@ -88,6 +88,8 @@
 #include <CClientRenderElement.h>
 #include <CClientDxFont.h>
 #include <CClientGuiFont.h>
+#include <CClientGlassPanel.h>
+#include <CClientGlassPanelManager.h>
 #include <CClientMaterial.h>
 #include <CClientTexture.h>
 #include <CClientShader.h>
@@ -147,6 +149,7 @@
 #include <luadefs/CLuaWeaponDefs.h>
 #include <luadefs/CLuaWorldDefs.h>
 #include <luadefs/CLuaBuildingDefs.h>
+#include <luadefs/CLuaGlassPanelDefs.h>
 #include <CRemoteCalls.h>
 
 // Shared includes

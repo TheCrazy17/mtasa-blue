@@ -278,6 +278,14 @@ public:
 
     // Object get funcs
     static CClientObject* CreateObject(CResource& Resource, unsigned short usModelID, const CVector& vecPosition, const CVector& vecRotation, bool bLowLod);
+
+    static CClientGlassPanel* CreateGlassPanel(CResource& Resource, const CVector& vecPosition, float fWidth, float fHeight);
+    static bool                SetGlassPanelSize(CClientGlassPanel& Panel, float fWidth, float fHeight);
+    static bool                SetGlassPanelThickness(CClientGlassPanel& Panel, float fThickness);
+    static bool                SetGlassPanelColor(CClientGlassPanel& Panel, const SColor color);
+    static bool                SetGlassPanelBreakable(CClientGlassPanel& Panel, bool bBreakable);
+    static bool                SetGlassPanelCollisionEnabled(CClientGlassPanel& Panel, bool bEnabled);
+    static bool                BreakGlassPanel(CClientGlassPanel& Panel, const CVector& vecForce, unsigned char ucGranularity);
     static bool           GetObjectScale(CClientObject& Object, CVector& vecScale);
     static bool           IsObjectBreakable(CClientObject& Object, bool& bBreakable);
     static bool           IsObjectMoving(CClientEntity& Entity);

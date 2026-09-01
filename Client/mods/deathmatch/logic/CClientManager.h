@@ -41,6 +41,7 @@ class CClientManager;
 #include "CClientWeaponManager.h"
 #include "CClientEffectManager.h"
 #include "CClientPointLightsManager.h"
+#include "CClientGlassPanelManager.h"
 #include "CClientModelManager.h"
 #include "CClientIMGManager.h"
 #include "CClientBuildingManager.h"
@@ -98,6 +99,7 @@ public:
     CClientPointLightsManager*   GetPointLightsManager() { return m_pPointLightsManager; }
     CClientIMGManager*           GetIMGManager() { return m_pImgManager; }
     CClientBuildingManager*      GetBuildingManager() const noexcept { return m_pBuildingManager; }
+    CClientGlassPanelManager*    GetGlassPanelManager() { return m_pGlassPanelManager; }
 
     bool IsGameLoaded()
     {
@@ -150,6 +152,7 @@ private:
     CClientWeaponManager*        m_pWeaponManager;
     CClientEffectManager*        m_pEffectManager;
     CClientPointLightsManager*   m_pPointLightsManager;
+    CClientGlassPanelManager*    m_pGlassPanelManager;
     CClientModelManager*         m_pModelManager;
     CClientIMGManager*           m_pImgManager;
     CClientPacketRecorder*       m_pPacketRecorder;

@@ -469,4 +469,10 @@ public:
 
     virtual unsigned int EntryInfoNodePool_NoOfUsedSpaces() const noexcept = 0;
     virtual unsigned int PtrNodeDoubleLinkPool_NoOfUsedSpaces() const noexcept = 0;
+
+    // Native glass shard effect for a script-owned glass panel. vecCorner/vecUp/vecRight describe
+    // the pane the same way the game's own window-breaking code does: one corner plus the two full
+    // edge vectors spanning it, not a center and half-extents.
+    virtual void ShatterGlassPanel(const CVector& vecCorner, const CVector& vecUp, const CVector& vecRight, const CVector& vecVelocity,
+                                    const CVector& vecCenter, unsigned char ucGranularity) = 0;
 };

@@ -81,6 +81,7 @@ enum eClientEntityType
     CCLIENTUNKNOWN,
     CCLIENTIMG,
     CCLIENTBUILDING,
+    CCLIENTGLASSPANEL,
 };
 
 class CEntity;
@@ -146,6 +147,7 @@ enum eCClientEntityClassTypes
     CLASS_CClientSearchLight,
     CLASS_CClientIMG,
     CLASS_CClientBuilding,
+    CLASS_CClientGlassPanel,
 };
 
 class CClientEntity : public CClientEntityBase

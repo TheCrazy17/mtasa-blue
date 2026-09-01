@@ -370,6 +370,9 @@ public:
     unsigned int EntryInfoNodePool_NoOfUsedSpaces() const noexcept override;
     unsigned int PtrNodeDoubleLinkPool_NoOfUsedSpaces() const noexcept override;
 
+    void ShatterGlassPanel(const CVector& vecCorner, const CVector& vecUp, const CVector& vecRight, const CVector& vecVelocity, const CVector& vecCenter,
+                            unsigned char ucGranularity) override;
+
     CVector      m_vecAkimboTarget;
     bool         m_bAkimboTargetUp;
     static char* ms_PlayerImgCachePtr;
