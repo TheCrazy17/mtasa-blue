@@ -69,14 +69,18 @@ namespace
         const uint32_t uiZero = 0;
         const uint32_t uiOne = 1;
 
+        // Sphere count, then line count (always zero, GTA:SA never generates line collisions)
         SString strPayload;
         strPayload.append(reinterpret_cast<const char*>(&bounds), sizeof(bounds));
-        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));            // sphere count
-        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));            // line count
-        strPayload.append(reinterpret_cast<const char*>(&uiOne), sizeof(uiOne));               // box count
+        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));
+        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));
+
+        strPayload.append(reinterpret_cast<const char*>(&uiOne), sizeof(uiOne));
         strPayload.append(reinterpret_cast<const char*>(&box), sizeof(box));
-        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));            // vertex count
-        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));            // triangle count
+
+        // Vertex count, then triangle count; both zero since the shape is just the one box above
+        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));
+        strPayload.append(reinterpret_cast<const char*>(&uiZero), sizeof(uiZero));
 
         SColFileHeader header{};
         memcpy(header.szVersion, "COLL", 4);
@@ -89,7 +93,7 @@ namespace
 
         return g_pGame->GetRenderWare()->ReadCOL(strBuffer);
     }
-}            // namespace
+} // namespace
 
 CClientGlassPanel::CClientGlassPanel(CClientManager* pManager, ElementID ID) : ClassInit(this), CClientEntity(ID)
 {
@@ -163,8 +167,8 @@ void CClientGlassPanel::DoPulse()
         matrix.vPos + vecRight - vecUp,
     };
 
-    // Each point of accumulated damage whitens and thickens the panel a bit, standing in for a
-    // frosted crack pattern without needing a separate crack texture or geometry.
+    // Each point of accumulated damage blends the panel a bit further toward white, standing in
+    // for a frosted crack pattern without needing a separate crack texture or geometry.
     const float    fDamageRatio = m_ucMaxDamage > 0 ? static_cast<float>(m_ucDamage) / static_cast<float>(m_ucMaxDamage) : 0.0f;
     const auto     LerpToWhite = [fDamageRatio](unsigned char ucChannel) { return static_cast<unsigned char>(ucChannel + (255 - ucChannel) * fDamageRatio); };
     const D3DCOLOR color = D3DCOLOR_ARGB(LerpToWhite(m_Color.A), LerpToWhite(m_Color.R), LerpToWhite(m_Color.G), LerpToWhite(m_Color.B));
