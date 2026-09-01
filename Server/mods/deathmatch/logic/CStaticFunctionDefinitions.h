@@ -350,6 +350,7 @@ public:
     static bool SetVehicleTurretPosition(CVehicle* pVehicle, float fHorizontal, float fVertical);
     static bool SetVehicleDoorOpenRatio(CElement* pElement, unsigned char ucDoor, float fRatio, unsigned long ulTime = 0);
     static bool SetVehiclePlateText(CElement* pElement, const SString& strPlateText);
+    static bool SetVehicleAlarmState(CElement* pElement, bool bActive);
 
     // static bool SetVehicleHandling(CVehicle* pVehicle, bool bValue);
     static bool ResetVehicleHandling(CVehicle* pVehicle, bool bUseOriginal);

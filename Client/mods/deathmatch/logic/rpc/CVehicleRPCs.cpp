@@ -47,6 +47,7 @@ void CVehicleRPCs::LoadFunctions()
     AddHandler(SET_VEHICLE_HEADLIGHT_COLOR, SetVehicleHeadLightColor, "SetVehicleHeadLightColor");
     AddHandler(SET_VEHICLE_TURRET_POSITION, SetVehicleTurretPosition, "SetVehicleTurretPosition");
     AddHandler(SET_VEHICLE_DOOR_OPEN_RATIO, SetVehicleDoorOpenRatio, "SetVehicleDoorOpenRatio");
+    AddHandler(SET_VEHICLE_ALARM, SetVehicleAlarm, "SetVehicleAlarm");
     AddHandler(SET_VEHICLE_VARIANT, SetVehicleVariant, "SetVehicleVariant");
     AddHandler(GIVE_VEHICLE_SIRENS, GiveVehicleSirens, "giveVehicleSirens");
     AddHandler(REMOVE_VEHICLE_SIRENS, RemoveVehicleSirens, "removeVehicleSirens");
@@ -588,6 +589,19 @@ void CVehicleRPCs::SetVehicleDoorOpenRatio(CClientEntity* pSource, NetBitStreamI
         if (pVehicle)
         {
             pVehicle->SetDoorOpenRatio(ucDoor, angle.data.fRatio, uiTime, true);
+        }
+    }
+}
+
+void CVehicleRPCs::SetVehicleAlarm(CClientEntity* pSource, NetBitStreamInterface& bitStream)
+{
+    bool bActive;
+    if (bitStream.ReadBit(bActive))
+    {
+        CClientVehicle* pVehicle = m_pVehicleManager->Get(pSource->GetID());
+        if (pVehicle)
+        {
+            pVehicle->SetAlarmActive(bActive);
         }
     }
 }

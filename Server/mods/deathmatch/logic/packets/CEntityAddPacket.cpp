@@ -499,6 +499,8 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     damage.data.ucLightStates = pVehicle->m_ucLightStates;
                     BitStream.Write(&damage);
 
+                    BitStream.WriteBit(pVehicle->IsAlarmActive());
+
                     unsigned char ucVariant = pVehicle->GetVariant();
                     BitStream.Write(ucVariant);
 

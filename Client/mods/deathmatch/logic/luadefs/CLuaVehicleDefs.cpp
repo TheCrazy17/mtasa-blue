@@ -84,6 +84,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleNitroLevel", GetVehicleNitroLevel},
         {"getHeliBladeCollisionsEnabled", GetHeliBladeCollisionsEnabled},
         {"isVehicleWindowOpen", IsVehicleWindowOpen},
+        {"getVehicleAlarmState", ArgumentParser<GetVehicleAlarmState>},
         {"getVehicleComponentPosition", GetVehicleComponentPosition},
         {"getVehicleComponentRotation", GetVehicleComponentRotation},
         {"getVehicleComponentScale", GetVehicleComponentScale},
@@ -158,6 +159,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"setVehiclePlateText", SetVehiclePlateText},
         {"setHeliBladeCollisionsEnabled", SetHeliBladeCollisionsEnabled},
         {"setVehicleWindowOpen", SetVehicleWindowOpen},
+        {"setVehicleAlarmState", ArgumentParser<SetVehicleAlarmState>},
         {"setVehicleModelExhaustFumesPosition", SetVehicleModelExhaustFumesPosition},
         {"setVehicleModelDummyPosition", SetVehicleModelDummyPosition},
         {"resetVehicleDummyPositions", ArgumentParser<ResetVehicleDummyPositions>},
@@ -4001,6 +4003,16 @@ int CLuaVehicleDefs::IsVehicleWindowOpen(lua_State* luaVM)
 
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+bool CLuaVehicleDefs::GetVehicleAlarmState(CClientVehicle* pVehicle)
+{
+    return pVehicle->IsAlarmActive();
+}
+
+bool CLuaVehicleDefs::SetVehicleAlarmState(CClientVehicle* pVehicle, bool bActive)
+{
+    return CStaticFunctionDefinitions::SetVehicleAlarmState(*pVehicle, bActive);
 }
 
 int CLuaVehicleDefs::SetVehicleModelDummyPosition(lua_State* luaVM)

@@ -711,6 +711,8 @@ public:
     std::map<SString, SVehicleFrame>& GetComponentMap() { return m_ExtraFrames; }
     bool                              SetPlateText(const SString& strText);
     bool                              SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
+    unsigned short                    GetAlarmState() override { return GetVehicleInterface()->CarAlarmState; }
+    void                              SetAlarmState(unsigned short usMilliseconds) override { GetVehicleInterface()->CarAlarmState = usMilliseconds; }
     float                             GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
     void                              SetWheelScale(float fWheelScale) override { GetVehicleInterface()->m_fWheelScale = fWheelScale; }
     void                              ReinitAudio();

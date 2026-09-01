@@ -265,6 +265,9 @@ public:
     bool IsSirenOrAlarmActive();
     void SetSirenOrAlarmActive(bool bActive);
 
+    bool IsAlarmActive() const { return m_bAlarmActive; };
+    void SetAlarmActive(bool bActive);
+
     bool  HasLandingGear() { return m_bHasLandingGear; };
     float GetLandingGearPosition();
     void  SetLandingGearPosition(float fPosition);
@@ -609,6 +612,7 @@ protected:
     bool                         m_bLandingGearDown;
     bool                         m_bHasAdjustableProperty;
     unsigned short               m_usAdjustablePropertyValue;
+    bool                         m_bAlarmActive;
     std::map<eDoors, CTickCount> m_AutoReallowDoorRatioMap;
     SFixedArray<bool, 6>         m_bAllowDoorRatioSetting;
     SFixedArray<float, 6>        m_fDoorOpenRatio;

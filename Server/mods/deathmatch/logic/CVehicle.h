@@ -397,6 +397,9 @@ public:
     void             SetBlowState(VehicleBlowState state);
     VehicleBlowState GetBlowState() const noexcept { return m_blowState; }
 
+    bool IsAlarmActive() const noexcept { return m_bAlarmActive; }
+    void SetAlarmActive(bool bActive) noexcept { m_bAlarmActive = bActive; }
+
     bool IsOnFire() const noexcept override { return m_onFire; }
     void SetOnFire(bool onFire) noexcept override { m_onFire = onFire; }
 
@@ -430,6 +433,7 @@ private:
     CTickCount     m_llIdleTime;
 
     VehicleBlowState m_blowState = VehicleBlowState::INTACT;
+    bool             m_bAlarmActive = false;
 
     unsigned char m_ucMaxPassengersOverride;
 

@@ -3795,6 +3795,12 @@ bool CStaticFunctionDefinitions::IsVehicleWindowOpen(CClientVehicle& Vehicle, uc
     return Vehicle.IsWindowOpen(ucWindow);
 }
 
+bool CStaticFunctionDefinitions::SetVehicleAlarmState(CClientVehicle& Vehicle, bool bActive)
+{
+    Vehicle.SetAlarmActive(bActive);
+    return true;
+}
+
 bool CStaticFunctionDefinitions::SetVehicleModelDummyPosition(unsigned short usModel, VehicleDummies eDummies, CVector& vecPosition)
 {
     if (CClientVehicleManager::IsValidModel(usModel))

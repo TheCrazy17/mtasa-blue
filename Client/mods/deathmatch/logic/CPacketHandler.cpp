@@ -3386,6 +3386,10 @@ retry:
                         pVehicle->SetLightStatus(i, damage.data.ucLightStates[i]);
                     pVehicle->ResetDamageModelSync();
 
+                    bool bAlarmActive;
+                    bitStream.ReadBit(bAlarmActive);
+                    pVehicle->SetAlarmActive(bAlarmActive);
+
                     // If the vehicle has a turret, read out its position
                     if (CClientVehicleManager::HasTurret(usModel))
                     {

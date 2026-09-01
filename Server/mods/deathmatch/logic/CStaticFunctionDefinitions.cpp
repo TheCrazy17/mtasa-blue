@@ -7926,6 +7926,25 @@ bool CStaticFunctionDefinitions::SetVehicleDoorOpenRatio(CElement* pElement, uns
     return false;
 }
 
+bool CStaticFunctionDefinitions::SetVehicleAlarmState(CElement* pElement, bool bActive)
+{
+    RUN_CHILDREN(SetVehicleAlarmState(*iter, bActive))
+
+    if (IS_VEHICLE(pElement))
+    {
+        CVehicle& Vehicle = static_cast<CVehicle&>(*pElement);
+        Vehicle.SetAlarmActive(bActive);
+
+        CBitStream BitStream;
+        BitStream.pBitStream->WriteBit(bActive);
+        m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(&Vehicle, SET_VEHICLE_ALARM, *BitStream.pBitStream));
+
+        return true;
+    }
+
+    return false;
+}
+
 CMarker* CStaticFunctionDefinitions::CreateMarker(CResource* pResource, const CVector& vecPosition, const char* szType, float fSize, const SColor color,
                                                   CElement* pVisibleTo, bool ignoreAlphaLimits)
 {

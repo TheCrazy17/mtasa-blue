@@ -70,6 +70,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"isVehicleBlown", ArgumentParserWarn<false, IsVehicleBlown>},
         {"getVehicleHeadLightColor", GetVehicleHeadLightColor},
         {"getVehicleDoorOpenRatio", GetVehicleDoorOpenRatio},
+        {"getVehicleAlarmState", ArgumentParser<GetVehicleAlarmState>},
 
         // Vehicle set funcs
         {"fixVehicle", FixVehicle},
@@ -128,6 +129,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleSirenParams", GetVehicleSirenParams},
         {"setVehiclePlateText", SetVehiclePlateText},
         {"setVehicleNitroActivated", ArgumentParser<SetVehicleNitroActivated>},
+        {"setVehicleAlarmState", ArgumentParser<SetVehicleAlarmState>},
     };
 
     // Add functions
@@ -1776,6 +1778,11 @@ bool CLuaVehicleDefs::IsVehicleBlown(CVehicle* vehicle)
     return vehicle->IsBlown();
 }
 
+bool CLuaVehicleDefs::GetVehicleAlarmState(CVehicle* vehicle)
+{
+    return vehicle->IsAlarmActive();
+}
+
 int CLuaVehicleDefs::GetVehicleHeadLightColor(lua_State* luaVM)
 {
     CVehicle* pVehicle;
@@ -3060,4 +3067,9 @@ bool CLuaVehicleDefs::SetVehicleNitroActivated(CVehicle* vehicle, bool state) no
 
     m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(vehicle, SET_VEHICLE_NITRO_ACTIVATED, *BitStream.pBitStream));
     return true;
+}
+
+bool CLuaVehicleDefs::SetVehicleAlarmState(CVehicle* vehicle, bool bActive)
+{
+    return CStaticFunctionDefinitions::SetVehicleAlarmState(vehicle, bActive);
 }

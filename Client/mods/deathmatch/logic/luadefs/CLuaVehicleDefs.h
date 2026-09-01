@@ -85,6 +85,8 @@ public:
     LUA_DECLARE(GetHeliBladeCollisionsEnabled);
     LUA_DECLARE(IsVehicleWindowOpen);
 
+    static bool GetVehicleAlarmState(CClientVehicle* pVehicle);
+
     LUA_DECLARE(FixVehicle);
     static bool BlowVehicle(CClientEntity* entity, std::optional<bool> withExplosion);
     LUA_DECLARE(SetVehicleRotation);
@@ -143,6 +145,8 @@ public:
     LUA_DECLARE(SetVehiclePlateText);
     LUA_DECLARE(SetHeliBladeCollisionsEnabled);
     LUA_DECLARE(SetVehicleWindowOpen);
+
+    static bool SetVehicleAlarmState(CClientVehicle* pVehicle, bool bActive);
 
     LUA_DECLARE(SetVehicleModelDummyPosition);
     LUA_DECLARE_OOP(GetVehicleModelDummyPosition)

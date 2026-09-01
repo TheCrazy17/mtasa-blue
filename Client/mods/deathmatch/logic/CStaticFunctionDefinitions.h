@@ -275,6 +275,7 @@ public:
     static bool SetVehiclePlateText(CClientEntity& Entity, const SString& strText);
     static bool SetHeliBladeCollisionsEnabled(CClientVehicle& Vehicle, bool bEnabled);
     static bool SetVehicleWindowOpen(CClientVehicle& Vehicle, uchar ucWindow, bool bOpen);
+    static bool SetVehicleAlarmState(CClientVehicle& Vehicle, bool bActive);
 
     // Object get funcs
     static CClientObject* CreateObject(CResource& Resource, unsigned short usModelID, const CVector& vecPosition, const CVector& vecRotation, bool bLowLod);

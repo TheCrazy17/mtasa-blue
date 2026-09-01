@@ -151,6 +151,7 @@ CClientVehicle::CClientVehicle(CClientManager* pManager, ElementID ID, unsigned 
     m_bSireneOrAlarmActive = false;
     m_bLandingGearDown = true;
     m_usAdjustablePropertyValue = 0;
+    m_bAlarmActive = false;
     for (unsigned int i = 0; i < 6; ++i)
     {
         m_bAllowDoorRatioSetting[i] = true;
@@ -1430,6 +1431,13 @@ void CClientVehicle::_SetAdjustablePropertyValue(unsigned short usValue)
     m_usAdjustablePropertyValue = usValue;
 }
 
+void CClientVehicle::SetAlarmActive(bool bActive)
+{
+    m_bAlarmActive = bActive;
+    if (m_pVehicle)
+        m_pVehicle->SetAlarmState(bActive ? 5000 : 0);
+}
+
 bool CClientVehicle::HasMovingCollision()
 {
     auto model = GetVehicleTypeForModel(m_usModel);
@@ -2299,6 +2307,10 @@ void CClientVehicle::StreamedInPulse()
             }
         }
 
+        // The native alarm counts down on its own and falls silent at 0, so keep topping it up while our flag is active
+        if (m_bAlarmActive && m_pVehicle->GetAlarmState() < 2000)
+            m_pVehicle->SetAlarmState(5000);
+
         // Are we an unmanned, invisible, blown-up plane?
         if (!GetOccupant() && m_eVehicleType == CLIENTVEHICLE_PLANE && IsBlown() && !m_pVehicle->IsVisible())
         {
@@ -2652,6 +2664,7 @@ void CClientVehicle::Create()
         m_pVehicle->SetSirenOrAlarmActive(m_bSireneOrAlarmActive);
         SetLandingGearDown(m_bLandingGearDown);
         _SetAdjustablePropertyValue(m_usAdjustablePropertyValue);
+        SetAlarmActive(m_bAlarmActive);
         m_pVehicle->SetSwingingDoorsAllowed(m_bSwingingDoorsAllowed);
         m_pVehicle->LockDoors(m_bDoorsLocked);
         m_pVehicle->SetDoorsUndamageable(m_bDoorsUndamageable);
