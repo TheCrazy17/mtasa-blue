@@ -286,6 +286,8 @@ public:
     static bool                SetGlassPanelBreakable(CClientGlassPanel& Panel, bool bBreakable);
     static bool                SetGlassPanelCollisionEnabled(CClientGlassPanel& Panel, bool bEnabled);
     static bool                BreakGlassPanel(CClientGlassPanel& Panel, const CVector& vecForce, unsigned char ucGranularity);
+    static bool                SetGlassPanelMaxDamage(CClientGlassPanel& Panel, unsigned char ucMaxDamage);
+    static bool                DamageGlassPanel(CClientGlassPanel& Panel, unsigned char ucAmount, const CVector& vecForce, unsigned char ucGranularity);
     static bool           GetObjectScale(CClientObject& Object, CVector& vecScale);
     static bool           IsObjectBreakable(CClientObject& Object, bool& bBreakable);
     static bool           IsObjectMoving(CClientEntity& Entity);

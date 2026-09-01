@@ -25,6 +25,10 @@ void CLuaGlassPanelDefs::LoadFunctions()
         {"isGlassPanelBreakable", ArgumentParser<IsGlassPanelBreakable>},
         {"isGlassPanelBroken", ArgumentParser<IsGlassPanelBroken>},
         {"breakGlassPanel", ArgumentParser<BreakGlassPanel>},
+        {"setGlassPanelMaxDamage", ArgumentParser<SetGlassPanelMaxDamage>},
+        {"getGlassPanelMaxDamage", ArgumentParser<GetGlassPanelMaxDamage>},
+        {"getGlassPanelDamage", ArgumentParser<GetGlassPanelDamage>},
+        {"damageGlassPanel", ArgumentParser<DamageGlassPanel>},
         {"setGlassPanelCollisionEnabled", ArgumentParser<SetGlassPanelCollisionEnabled>},
         {"isGlassPanelCollisionEnabled", ArgumentParser<IsGlassPanelCollisionEnabled>},
     };
@@ -45,17 +49,23 @@ void CLuaGlassPanelDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setBreakable", "setGlassPanelBreakable");
     lua_classfunction(luaVM, "setCollisionEnabled", "setGlassPanelCollisionEnabled");
     lua_classfunction(luaVM, "break", "breakGlassPanel");
+    lua_classfunction(luaVM, "setMaxDamage", "setGlassPanelMaxDamage");
+    lua_classfunction(luaVM, "damage", "damageGlassPanel");
 
     lua_classfunction(luaVM, "getSize", "getGlassPanelSize");
     lua_classfunction(luaVM, "getThickness", "getGlassPanelThickness");
     lua_classfunction(luaVM, "getColor", "getGlassColor");
     lua_classfunction(luaVM, "isBreakable", "isGlassPanelBreakable");
     lua_classfunction(luaVM, "isBroken", "isGlassPanelBroken");
+    lua_classfunction(luaVM, "getMaxDamage", "getGlassPanelMaxDamage");
+    lua_classfunction(luaVM, "getDamage", "getGlassPanelDamage");
     lua_classfunction(luaVM, "isCollisionEnabled", "isGlassPanelCollisionEnabled");
 
     lua_classvariable(luaVM, "thickness", "setGlassPanelThickness", "getGlassPanelThickness");
     lua_classvariable(luaVM, "breakable", "setGlassPanelBreakable", "isGlassPanelBreakable");
     lua_classvariable(luaVM, "broken", nullptr, "isGlassPanelBroken");
+    lua_classvariable(luaVM, "maxDamage", "setGlassPanelMaxDamage", "getGlassPanelMaxDamage");
+    lua_classvariable(luaVM, "damage", nullptr, "getGlassPanelDamage");
     lua_classvariable(luaVM, "collisionEnabled", "setGlassPanelCollisionEnabled", "isGlassPanelCollisionEnabled");
 
     lua_registerclass(luaVM, "GlassPanel", "Element");
@@ -125,6 +135,27 @@ bool CLuaGlassPanelDefs::IsGlassPanelBroken(CClientGlassPanel* pPanel)
 bool CLuaGlassPanelDefs::BreakGlassPanel(CClientGlassPanel* pPanel, std::optional<CVector> vecForce, std::optional<uchar> ucGranularity)
 {
     return CStaticFunctionDefinitions::BreakGlassPanel(*pPanel, vecForce.value_or(CVector()), ucGranularity.value_or(2));
+}
+
+bool CLuaGlassPanelDefs::SetGlassPanelMaxDamage(CClientGlassPanel* pPanel, uchar ucMaxDamage)
+{
+    return CStaticFunctionDefinitions::SetGlassPanelMaxDamage(*pPanel, ucMaxDamage);
+}
+
+uchar CLuaGlassPanelDefs::GetGlassPanelMaxDamage(CClientGlassPanel* pPanel)
+{
+    return pPanel->GetMaxDamage();
+}
+
+uchar CLuaGlassPanelDefs::GetGlassPanelDamage(CClientGlassPanel* pPanel)
+{
+    return pPanel->GetDamage();
+}
+
+bool CLuaGlassPanelDefs::DamageGlassPanel(CClientGlassPanel* pPanel, std::optional<uchar> ucAmount, std::optional<CVector> vecForce,
+                                          std::optional<uchar> ucGranularity)
+{
+    return CStaticFunctionDefinitions::DamageGlassPanel(*pPanel, ucAmount.value_or(1), vecForce.value_or(CVector()), ucGranularity.value_or(2));
 }
 
 bool CLuaGlassPanelDefs::SetGlassPanelCollisionEnabled(CClientGlassPanel* pPanel, bool bEnabled)

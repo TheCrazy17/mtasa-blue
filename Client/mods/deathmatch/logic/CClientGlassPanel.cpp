@@ -103,6 +103,8 @@ CClientGlassPanel::CClientGlassPanel(CClientManager* pManager, ElementID ID) : C
     m_Color = SColor(0x60FFFFFF);
     m_bBreakable = false;
     m_bBroken = false;
+    m_ucDamage = 0;
+    m_ucMaxDamage = 0;
     m_bCollisionEnabled = false;
     m_pCollisionObject = nullptr;
 
@@ -161,7 +163,11 @@ void CClientGlassPanel::DoPulse()
         matrix.vPos + vecRight - vecUp,
     };
 
-    const D3DCOLOR color = D3DCOLOR_ARGB(m_Color.A, m_Color.R, m_Color.G, m_Color.B);
+    // Each point of accumulated damage whitens and thickens the panel a bit, standing in for a
+    // frosted crack pattern without needing a separate crack texture or geometry.
+    const float    fDamageRatio = m_ucMaxDamage > 0 ? static_cast<float>(m_ucDamage) / static_cast<float>(m_ucMaxDamage) : 0.0f;
+    const auto     LerpToWhite = [fDamageRatio](unsigned char ucChannel) { return static_cast<unsigned char>(ucChannel + (255 - ucChannel) * fDamageRatio); };
+    const D3DCOLOR color = D3DCOLOR_ARGB(LerpToWhite(m_Color.A), LerpToWhite(m_Color.R), LerpToWhite(m_Color.G), LerpToWhite(m_Color.B));
 
     // Queued draws take ownership of a heap allocation and consume it later in the frame, so this
     // cannot be a stack-local vector.
@@ -218,6 +224,19 @@ bool CClientGlassPanel::Break(const CVector& vecForce, unsigned char ucGranulari
     const CVector vecCorner = matrix.vPos - vecRight * 0.5f - vecUp * 0.5f;
 
     g_pMultiplayer->ShatterGlassPanel(vecCorner, vecUp, vecRight, vecForce, matrix.vPos, ucGranularity);
+    return true;
+}
+
+bool CClientGlassPanel::Damage(unsigned char ucAmount, const CVector& vecForce, unsigned char ucGranularity)
+{
+    if (m_bBroken || !m_bBreakable || m_ucMaxDamage == 0)
+        return false;
+
+    m_ucDamage = static_cast<unsigned char>(std::min<int>(m_ucDamage + ucAmount, m_ucMaxDamage));
+
+    if (m_ucDamage >= m_ucMaxDamage)
+        Break(vecForce, ucGranularity);
+
     return true;
 }
 

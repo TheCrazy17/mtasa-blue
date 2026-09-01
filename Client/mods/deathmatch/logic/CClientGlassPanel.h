@@ -56,6 +56,14 @@ public:
     bool IsBroken() const { return m_bBroken; };
     bool Break(const CVector& vecForce, unsigned char ucGranularity);
 
+    // A lighter hit response than breaking outright: each hit whitens the panel a bit further
+    // (frosted-glass look, no separate crack texture involved) until it reaches max damage, at
+    // which point it breaks on its own the same way an explicit Break() call would.
+    unsigned char GetDamage() const { return m_ucDamage; };
+    unsigned char GetMaxDamage() const { return m_ucMaxDamage; };
+    void          SetMaxDamage(unsigned char ucMaxDamage) { m_ucMaxDamage = ucMaxDamage; };
+    bool          Damage(unsigned char ucAmount, const CVector& vecForce, unsigned char ucGranularity);
+
     bool IsCollisionEnabled() const { return m_bCollisionEnabled; };
     bool SetCollisionEnabled(bool bEnabled);
 
@@ -76,6 +84,9 @@ private:
     SColor  m_Color;
     bool    m_bBreakable;
     bool    m_bBroken;
+
+    unsigned char m_ucDamage;
+    unsigned char m_ucMaxDamage;
 
     bool           m_bCollisionEnabled;
     CClientObject* m_pCollisionObject;

@@ -36,6 +36,12 @@ public:
     static bool IsGlassPanelBroken(CClientGlassPanel* pPanel);
     static bool BreakGlassPanel(CClientGlassPanel* pPanel, std::optional<CVector> vecForce, std::optional<uchar> ucGranularity);
 
+    static bool  SetGlassPanelMaxDamage(CClientGlassPanel* pPanel, uchar ucMaxDamage);
+    static uchar GetGlassPanelMaxDamage(CClientGlassPanel* pPanel);
+    static uchar GetGlassPanelDamage(CClientGlassPanel* pPanel);
+    static bool  DamageGlassPanel(CClientGlassPanel* pPanel, std::optional<uchar> ucAmount, std::optional<CVector> vecForce,
+                                  std::optional<uchar> ucGranularity);
+
     static bool SetGlassPanelCollisionEnabled(CClientGlassPanel* pPanel, bool bEnabled);
     static bool IsGlassPanelCollisionEnabled(CClientGlassPanel* pPanel);
 };

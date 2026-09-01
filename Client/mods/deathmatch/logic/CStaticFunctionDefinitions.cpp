@@ -4171,6 +4171,17 @@ bool CStaticFunctionDefinitions::BreakGlassPanel(CClientGlassPanel& Panel, const
     return Panel.Break(vecForce, ucGranularity);
 }
 
+bool CStaticFunctionDefinitions::SetGlassPanelMaxDamage(CClientGlassPanel& Panel, unsigned char ucMaxDamage)
+{
+    Panel.SetMaxDamage(ucMaxDamage);
+    return true;
+}
+
+bool CStaticFunctionDefinitions::DamageGlassPanel(CClientGlassPanel& Panel, unsigned char ucAmount, const CVector& vecForce, unsigned char ucGranularity)
+{
+    return Panel.Damage(ucAmount, vecForce, ucGranularity);
+}
+
 bool CStaticFunctionDefinitions::GetObjectScale(CClientObject& Object, CVector& vecScale)
 {
     Object.GetScale(vecScale);
