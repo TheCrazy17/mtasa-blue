@@ -45,6 +45,12 @@ public:
     void DoPulse();
     bool ProcessPacket(unsigned char bytePacketID, NetBitStreamInterface& bitStream);
 
+    // Raises the disconnect timeout the same way an in-progress download already does, for
+    // something else that can block the main thread for a while (compiling and starting a
+    // resource's scripts); call this right before the blocking work starts, since DoPulse's own
+    // per-frame check can't run again until that work returns
+    void ExtendTimeoutTime();
+
     void ResetReturnPosition();
 
     void AddInterpolation(const CVector& vecPosition);

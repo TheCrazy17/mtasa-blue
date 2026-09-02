@@ -122,6 +122,10 @@ void CResourceManager::OnDownloadGroupFinished()
             if (pResource->IsWaitingForInitialDownloads())
                 break;
 
+            // Loading a resource compiles and runs its scripts synchronously on this same thread,
+            // which can take a while for a heavy gamemode; make sure the server doesn't get timed
+            // out for going quiet while that runs
+            g_pClientGame->GetNetAPI()->ExtendTimeoutTime();
             pResource->Load();
         }
     }

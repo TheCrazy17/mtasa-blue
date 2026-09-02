@@ -276,6 +276,13 @@ bool CNetAPI::IsDriveByWeapon(unsigned char ucID)
     return ((ucID >= 22 && ucID <= 33) || ucID == 38);
 }
 
+void CNetAPI::ExtendTimeoutTime()
+{
+    m_bIncreaseTimeoutTime = true;
+    m_IncreaseTimeoutTimeTimer.Reset();
+    g_pNet->SetTimeoutTime(30000);
+}
+
 void CNetAPI::DoPulse()
 {
     m_bIsNetworkTrouble = false;

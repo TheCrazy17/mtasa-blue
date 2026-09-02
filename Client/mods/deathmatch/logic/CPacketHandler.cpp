@@ -5342,6 +5342,10 @@ void CPacketHandler::Packet_ResourceStart(NetBitStreamInterface& bitStream)
                 // Load the resource now
                 if (pResource->CanBeLoaded())
                 {
+                    // Loading compiles and runs the resource's scripts synchronously on this same
+                    // thread, which can take a while for a heavy gamemode; make sure the server
+                    // doesn't get timed out for going quiet while that runs
+                    g_pClientGame->GetNetAPI()->ExtendTimeoutTime();
                     pResource->Load();
                 }
             }
