@@ -104,12 +104,12 @@ CClientGlassPanel::CClientGlassPanel(CClientManager* pManager, ElementID ID) : C
     m_fWidth = 1.0f;
     m_fHeight = 1.0f;
     m_fThickness = 0.02f;
-    m_Color = SColor(0x60FFFFFF);
-    m_bBreakable = false;
+    m_Color = SColorRGBA(100, 100, 100, 70);
+    m_bBreakable = true;
     m_bBroken = false;
     m_ucDamage = 0;
     m_ucMaxDamage = 0;
-    m_bCollisionEnabled = false;
+    m_bCollisionEnabled = true;
     m_pCollisionObject = nullptr;
 
     SetTypeName("glass-panel");
