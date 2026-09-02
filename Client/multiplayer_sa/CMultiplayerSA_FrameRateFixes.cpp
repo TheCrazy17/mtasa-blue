@@ -772,6 +772,47 @@ static void __declspec(naked) HOOK_CTaskSimpleSwim__ProcessSwimmingResistance()
     // clang-format on
 }
 
+// Fixes diving underwater sinking far too fast/deep on high FPS.
+// GitHub Issue #3344
+#define HOOKPOS_CTaskSimpleSwim__DiveDepthFix  0x68A42B
+#define HOOKSIZE_CTaskSimpleSwim__DiveDepthFix 6
+static const unsigned int     RETURN_CTaskSimpleSwim__DiveDepthFix = 0x68A431;
+static void __declspec(naked) HOOK_CTaskSimpleSwim__DiveDepthFix()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        fmul    ds:[0x858EF4]           // Original constant used in code (-0.1f)
+        fmul    ds:[0xB7CB5C]           // Multiply by current timestep
+        fdiv    kOriginalTimeStep       // Divide by desired 30 FPS timestep
+        jmp     RETURN_CTaskSimpleSwim__DiveDepthFix
+    }
+    // clang-format on
+}
+
+// Fixes the same dive's upward float-back-to-surface bias on high FPS, so it stays in step with
+// the depth fix above instead of fighting it.
+// GitHub Issue #3344
+#define HOOKPOS_CTaskSimpleSwim__DiveSurfaceBiasFix  0x68A4CA
+#define HOOKSIZE_CTaskSimpleSwim__DiveSurfaceBiasFix 6
+static const unsigned int     RETURN_CTaskSimpleSwim__DiveSurfaceBiasFix = 0x68A4D0;
+static void __declspec(naked) HOOK_CTaskSimpleSwim__DiveSurfaceBiasFix()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        fadd    ds:[0x8708CC]           // Original constant used in code (0.01f)
+        fmul    kOriginalTimeStep       // Together with the fdiv below, multiply by 1 / timestep ratio
+        fdiv    ds:[0xB7CB5C]
+        jmp     RETURN_CTaskSimpleSwim__DiveSurfaceBiasFix
+    }
+    // clang-format on
+}
+
 // Fixes invisible weapon particles (extinguisher, spraycan, flamethrower) at high FPS
 #define HOOKPOS_CWeapon_Update  0x73DC3D
 #define HOOKSIZE_CWeapon_Update 5
@@ -947,6 +988,8 @@ void CMultiplayerSA::InitHooks_FrameRateFixes()
     EZHookInstall(CTaskSimpleSwim__ProcessEffects);
     EZHookInstall(CTaskSimpleSwim__ProcessEffectsBubbleFix);
     EZHookInstall(CTaskSimpleSwim__ProcessSwimmingResistance);
+    EZHookInstall(CTaskSimpleSwim__DiveDepthFix);
+    EZHookInstall(CTaskSimpleSwim__DiveSurfaceBiasFix);
 
     EZHookInstall(CWeapon_Update);
 }
