@@ -920,7 +920,12 @@ void CMultiplayerSA::InitHooks_FrameRateFixes()
     // GitHub Issue #602
     MemPut(0x6811E9, &kOriginalTimeStep);
     MemPut(0x68128A, &kOriginalTimeStep);
-    MemPut(0x68131B, &kOriginalTimeStep);
+
+    // The address above this comment used to also patch 0x68131B, but that one feeds
+    // CTaskSimpleClimb's real-time grab timeout counter rather than a division denominator, so
+    // hardcoding it to a 30 FPS timestep made the counter run at whatever multiple of 30 FPS the
+    // game is actually rendering at, timing out and dropping the ped off the ledge almost
+    // instantly on high FPS instead of letting them hang. GitHub Issue #4577
 
     // CTimer::m_FrameCounter fixes
     EZHookInstall(CTimer__Update);
