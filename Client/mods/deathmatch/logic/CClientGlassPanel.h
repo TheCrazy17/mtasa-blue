@@ -67,6 +67,10 @@ public:
     bool IsCollisionEnabled() const { return m_bCollisionEnabled; };
     bool SetCollisionEnabled(bool bEnabled);
 
+    // The invisible object standing in for this panel's collision, so a bullet-impact handler can
+    // trace a hit back to the panel that owns it; null while collision is disabled
+    CClientObject* GetCollisionObject() const { return m_pCollisionObject; };
+
 protected:
     void DoPulse();
 

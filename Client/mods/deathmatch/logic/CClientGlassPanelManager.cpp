@@ -48,6 +48,19 @@ CClientGlassPanel* CClientGlassPanelManager::Get(ElementID ID)
     return nullptr;
 }
 
+CClientGlassPanel* CClientGlassPanelManager::GetByCollisionObject(CClientEntity* pCollisionObject) const
+{
+    if (!pCollisionObject)
+        return nullptr;
+
+    for (CClientGlassPanel* pPanel : m_List)
+    {
+        if (pPanel->GetCollisionObject() == pCollisionObject)
+            return pPanel;
+    }
+    return nullptr;
+}
+
 void CClientGlassPanelManager::DoPulse()
 {
     for (CClientGlassPanel* pPanel : m_List)

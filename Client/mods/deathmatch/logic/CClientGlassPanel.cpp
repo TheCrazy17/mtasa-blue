@@ -93,7 +93,7 @@ namespace
 
         return g_pGame->GetRenderWare()->ReadCOL(strBuffer);
     }
-} // namespace
+}  // namespace
 
 CClientGlassPanel::CClientGlassPanel(CClientManager* pManager, ElementID ID) : ClassInit(this), CClientEntity(ID)
 {
@@ -108,7 +108,7 @@ CClientGlassPanel::CClientGlassPanel(CClientManager* pManager, ElementID ID) : C
     m_bBreakable = true;
     m_bBroken = false;
     m_ucDamage = 0;
-    m_ucMaxDamage = 0;
+    m_ucMaxDamage = 4;
     m_bCollisionEnabled = true;
     m_pCollisionObject = nullptr;
 

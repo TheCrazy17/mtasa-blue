@@ -18,6 +18,7 @@
 #include <game/CAnimManager.h>
 #include <game/CColPoint.h>
 #include <game/CEventDamage.h>
+#include <game/CFx.h>
 #include <game/CExplosionManager.h>
 #include <game/CFire.h>
 #include <game/CGarage.h>
@@ -5337,6 +5338,17 @@ void CClientGame::BulletImpact(CPed* pInitiator, CEntity* pVictim, const CVector
             if (pVictim)
             {
                 pClientVictim = pPools->GetClientEntity((DWORD*)pVictim->GetInterface());
+            }
+
+            // A glass panel has no native health of its own; the shot actually landed on its
+            // invisible collision object, so trace it back and damage the panel the same way a
+            // vehicle window chips and eventually shatters under gunfire
+            if (CClientGlassPanel* pGlassPanel = g_pClientGame->m_pManager->GetGlassPanelManager()->GetByCollisionObject(pClientVictim))
+            {
+                CVector vecDirection = *pEndPosition - *pStartPosition;
+                vecDirection.Normalize();
+                g_pGame->GetFx()->AddBulletImpact(vecCollision, vecDirection, 1, 3, 1.0f);
+                pGlassPanel->Damage(1, vecDirection, 2);
             }
 
             // Store the data in the bullet fire initiator.

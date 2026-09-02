@@ -27,6 +27,10 @@ public:
     void               DeleteAll();
     CClientGlassPanel* Get(ElementID ID);
 
+    // Traces a hit back to the panel it belongs to, for a bullet-impact handler that only ever
+    // sees the invisible collision object a shot actually landed on
+    CClientGlassPanel* GetByCollisionObject(CClientEntity* pCollisionObject) const;
+
     void DoPulse();
 
     unsigned int Count() { return static_cast<unsigned int>(m_List.size()); };
