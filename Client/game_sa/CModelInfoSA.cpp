@@ -1961,6 +1961,14 @@ void CModelInfoSA::DeallocateModel(void)
     ms_ModelDefaultDummiesPosition.erase(m_dwModelID);
     ms_VehicleModelDefaultWheelSizes.erase(m_dwModelID);
 
+    // Same reasoning for our own custom-collision tracking: a script that never called
+    // engineRestoreCOL before this model was freed would otherwise leave this pointing at the
+    // collision it had, and a model that reuses this ID later would inherit it as its own
+    // "original" collision to restore to - a dangling pointer once the old one is freed too.
+    m_pCustomColModel = nullptr;
+    m_pOriginalColModelInterface = nullptr;
+    m_originalFlags = 0;
+
     switch (GetModelType())
     {
         case eModelInfoType::VEHICLE:
