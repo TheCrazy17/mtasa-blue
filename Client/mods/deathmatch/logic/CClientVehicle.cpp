@@ -1041,6 +1041,23 @@ void CClientVehicle::SetModelBlocking(unsigned short usModel, unsigned char ucVa
     // Different vehicle ID than we have now?
     if (m_usModel != usModel)
     {
+        // Warp out any passenger whose seat won't exist on the new model before we touch anything
+        // else, the same way the server already does for its own setElementModel; otherwise
+        // Destroy/Create below rewarps them into a seat number the new vehicle doesn't have, which
+        // never succeeds and never gets cleaned up either, leaving a permanent ghost occupant
+        unsigned char ucNewMaxPassengers = CClientVehicleManager::GetMaxPassengerCount(usModel);
+        for (int i = 0; i < NUMELMS(m_pPassengers); i++)
+        {
+            if (!m_pPassengers[i])
+                continue;
+
+            // m_pPassengers[i] is seat i+1; the driver (seat 0) is m_pDriver and never needs this,
+            // since a passenger count can't drop below the seat it's already in. 255 means the new
+            // model's passenger count isn't known, which only leaves the driver's seat valid.
+            if (ucNewMaxPassengers == 255 || (i + 1) > ucNewMaxPassengers)
+                CStaticFunctionDefinitions::RemovePedFromVehicle(m_pPassengers[i]);
+        }
+
         // Destroy the old vehicle if we have one
         if (m_pVehicle)
             Destroy();
