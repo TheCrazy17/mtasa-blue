@@ -302,8 +302,10 @@ private:
     void      ApplyControllerSelection(bool bReleaseCurrent);
     void      RefreshDirectInputDeviceList();
     int       FindFirstXInputIndex() const;
+    void      ApplyDefaultBindsOnFirstConnect();
 
     bool                                 m_bDoneInit;
+    bool                                 m_bWasJoypadConnected;
     int                                  m_SettingsRevision;
     int                                  m_iDeviceListRevision;
     bool                                 m_bPendingDeviceListRefresh;
@@ -806,8 +808,15 @@ void CJoystickManager::DoPulse()
     // Stop if no joystick
     if (!IsJoypadConnected())
     {
+        m_bWasJoypadConnected = false;
         ApplyVibration();
         return;
+    }
+
+    if (!m_bWasJoypadConnected)
+    {
+        m_bWasJoypadConnected = true;
+        ApplyDefaultBindsOnFirstConnect();
     }
 
     //
@@ -2038,6 +2047,52 @@ void CJoystickManager::ApplyVibration()
         XInputSetState(m_iXInputUserIndex, &vibration);
 
     m_bVibrationWasActive = bShouldRumble;
+}
+
+// A pad's face/shoulder/stick-click buttons come with no bind at all until a script or the user
+// sets one by hand; GTA's own default control association, which we mirror everywhere else, is
+// itself blank for joypad on the PC version. This gives a first-time pad something to work with,
+// loosely modelled on GTA V's Xbox layout adapted to the actions SA actually has. Foot and vehicle
+// entries on the same button never conflict, since only one context is ever active at a time.
+struct SDefaultJoystickBind
+{
+    const char* szKey;
+    const char* szControl;
+};
+
+static const SDefaultJoystickBind g_DefaultJoystickBinds[] = {
+    {"joy1", "jump"},
+    {"joy2", "crouch"},
+    {"joy3", "action"},
+    {"joy3", "horn"},
+    {"joy4", "enter_exit"},
+    {"joy5", "previous_weapon"},
+    {"joy5", "radio_previous"},
+    {"joy6", "next_weapon"},
+    {"joy6", "handbrake"},
+    {"joy7", "change_camera"},
+    {"joy9", "sprint"},
+    {"joy10", "look_behind"},
+    {"joy10", "vehicle_look_behind"},
+    {"pov_right", "radio_next"},
+};
+
+void CJoystickManager::ApplyDefaultBindsOnFirstConnect()
+{
+    CKeyBindsInterface* pKeyBinds = g_pCore->GetKeyBinds();
+    if (!pKeyBinds)
+        return;
+
+    // Leave it alone if any of these keys are already bound to anything, so this never overwrites
+    // a layout the user picked or restores one they deliberately cleared
+    for (const auto& bind : g_DefaultJoystickBinds)
+    {
+        if (pKeyBinds->HasAnyBindingForKey(bind.szKey))
+            return;
+    }
+
+    for (const auto& bind : g_DefaultJoystickBinds)
+        pKeyBinds->AddGTAControl(bind.szKey, bind.szControl);
 }
 
 void CJoystickManager::ReleaseDirectInputDevice()
