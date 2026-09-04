@@ -20,6 +20,8 @@ class CSettings;
 #define SKINS_PATH        "skins/*"
 #define CHAT_PRESETS_PATH "mta/config/chatboxpresets.xml"
 #define CHAT_PRESETS_ROOT "chatboxpresets"
+#define BIND_LAYOUTS_PATH "mta/config/keybindlayouts.xml"
+#define BIND_LAYOUTS_ROOT "keybindlayouts"
 
 // #define SHOWALLSETTINGS
 
@@ -121,6 +123,7 @@ public:
 
     void SetSelectedIndex(unsigned int uiIndex);
     void ShowRichPresenceShareDataQuestionBox() const;
+    void OnBindLayoutNameEntered(unsigned int uiButton, const std::string& strName);
 
 protected:
     const static int SecKeyNum = 3;  // Number of secondary keys
@@ -282,6 +285,10 @@ protected:
 
     CGUIGridList* m_pBindsList;
     CGUIButton*   m_pBindsDefButton;
+    CGUIComboBox* m_pBindLayouts;
+    CGUIButton*   m_pBindLayoutSaveButton;
+    CGUIButton*   m_pBindLayoutLoadButton;
+    CXMLFile*     m_pBindLayoutsFile;
     CGUIHandle    m_hBind, m_hPriKey, m_hSecKeys[SecKeyNum];
 
     CGUIComboBox*            m_pJoypadDeviceCombo;
@@ -384,6 +391,8 @@ protected:
     bool OnAudioDefaultClick(CGUIElement* pElement);
     bool OnControlsDefaultClick(CGUIElement* pElement);
     bool OnBindsDefaultClick(CGUIElement* pElement);
+    bool OnBindLayoutSaveClick(CGUIElement* pElement);
+    bool OnBindLayoutLoadClick(CGUIElement* pElement);
     bool OnVideoDefaultClick(CGUIElement* pElement);
     bool OnBindsListClick(CGUIElement* pElement);
     bool OnOKButtonClick(CGUIElement* pElement);
@@ -470,6 +479,7 @@ private:
     void LoadSkins();
 
     void   LoadChatPresets();
+    void   LoadBindLayouts();
     void   CreateChatColorTab(eChatColorType eType, const char* szName, CGUITabPanel* pParent);
     void   LoadChatColorFromCVar(eChatColorType eType, const char* szCVar);
     void   LoadChatColorFromString(eChatColorType eType, const std::string& strColor);

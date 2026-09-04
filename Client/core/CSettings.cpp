@@ -342,6 +342,10 @@ void CSettings::ResetGuiPointers()
 
     m_pBindsList = NULL;
     m_pBindsDefButton = NULL;
+    m_pBindLayouts = NULL;
+    m_pBindLayoutSaveButton = NULL;
+    m_pBindLayoutLoadButton = NULL;
+    m_pBindLayoutsFile = NULL;
 
     m_pJoypadDeviceCombo = NULL;
     m_pEditDeadzone = NULL;
@@ -625,6 +629,25 @@ void CSettings::CreateGUI()
     const float availableBindsHeight = bindsButtonPos.fY - bindsListTop - 10.0f;
     const float bindsListHeight = std::clamp(availableBindsHeight, minBindsListHeight, maxBindsListHeight);
     m_pBindsList->SetSize(CVector2D(std::max(0.0f, tabPanelSize.fX - tabHorizontalPadding), bindsListHeight));
+
+    // Named layouts, so a joystick and a keyboard set of binds can be saved and swapped back in
+    // without redoing every key by hand
+    m_pBindLayouts = reinterpret_cast<CGUIComboBox*>(pManager->CreateComboBox(pTabBinds));
+    m_pBindLayouts->SetPosition(CVector2D(bindsListX, bindsButtonPos.fY - 1.0f));
+    m_pBindLayouts->SetSize(CVector2D(160.0f, 200.0f));
+    m_pBindLayouts->SetReadOnly(true);
+
+    m_pBindLayoutSaveButton = reinterpret_cast<CGUIButton*>(pManager->CreateButton(pTabBinds, _("Save")));
+    m_pBindLayoutSaveButton->SetClickHandler(GUI_CALLBACK(&CSettings::OnBindLayoutSaveClick, this));
+    m_pBindLayoutSaveButton->SetPosition(CVector2D(bindsListX + 170.0f, bindsButtonPos.fY));
+    m_pBindLayoutSaveButton->SetSize(CVector2D(70.0f, 24.0f));
+    m_pBindLayoutSaveButton->SetZOrderingEnabled(false);
+
+    m_pBindLayoutLoadButton = reinterpret_cast<CGUIButton*>(pManager->CreateButton(pTabBinds, _("Load")));
+    m_pBindLayoutLoadButton->SetClickHandler(GUI_CALLBACK(&CSettings::OnBindLayoutLoadClick, this));
+    m_pBindLayoutLoadButton->SetPosition(CVector2D(bindsListX + 246.0f, bindsButtonPos.fY));
+    m_pBindLayoutLoadButton->SetSize(CVector2D(70.0f, 24.0f));
+    m_pBindLayoutLoadButton->SetZOrderingEnabled(false);
 
     /**
      *  Controls tab
@@ -2088,6 +2111,9 @@ void CSettings::CreateGUI()
     // Load Chat presets
     LoadChatPresets();
 
+    // Load saved bind layouts
+    LoadBindLayouts();
+
     // Load the load of skins
     LoadSkins();
 }
@@ -2943,6 +2969,94 @@ bool CSettings::OnBindsDefaultClick(CGUIElement* pElement)
 
     // Re-initialize the binds list
     Initialize();
+
+    return true;
+}
+
+bool CSettings::OnBindLayoutLoadClick(CGUIElement* pElement)
+{
+    CGUIListItem* pItem = m_pBindLayouts->GetSelectedItem();
+    if (!pItem)
+        return true;
+
+    CXMLNode* pLayoutNode = reinterpret_cast<CXMLNode*>(pItem->GetData());
+    if (!pLayoutNode)
+        return true;
+
+    CKeyBinds* pKeyBinds = reinterpret_cast<CKeyBinds*>(CCore::GetSingleton().GetKeyBinds());
+    pKeyBinds->ClearCommandsAndControls();
+    pKeyBinds->LoadFromXML(pLayoutNode);
+
+    m_pBindsList->Clear();
+    Initialize();
+
+    return true;
+}
+
+void CSettings::OnBindLayoutNameEntered(unsigned int uiButton, const std::string& strName)
+{
+    CCore::GetSingleton().GetLocalGUI()->GetMainMenu()->GetQuestionWindow()->Reset();
+
+    if (uiButton != 1 || strName.empty() || !m_pBindLayoutsFile)
+        return;
+
+    CXMLNode* pLayoutsRoot = m_pBindLayoutsFile->GetRootNode();
+    if (!pLayoutsRoot)
+        pLayoutsRoot = m_pBindLayoutsFile->CreateRootNode(BIND_LAYOUTS_ROOT);
+
+    // Overwrite a layout already saved under this name instead of stacking a duplicate
+    CXMLNode*                       pLayoutNode = nullptr;
+    list<CXMLNode*>::const_iterator iter = pLayoutsRoot->ChildrenBegin();
+    for (; iter != pLayoutsRoot->ChildrenEnd(); iter++)
+    {
+        CXMLNode*      pNode = reinterpret_cast<CXMLNode*>(*iter);
+        CXMLAttribute* pName = pNode->GetAttributes().Find("name");
+        if (pNode->GetTagName().compare("layout") == 0 && pName && pName->GetValue() == strName)
+        {
+            pLayoutNode = pNode;
+            break;
+        }
+    }
+
+    bool bIsNew = (pLayoutNode == nullptr);
+    if (!pLayoutNode)
+        pLayoutNode = pLayoutsRoot->CreateSubNode("layout");
+    else
+        pLayoutNode->DeleteAllSubNodes();
+
+    pLayoutNode->GetAttributes().Create("name")->SetValue(strName.c_str());
+
+    CKeyBinds* pKeyBinds = reinterpret_cast<CKeyBinds*>(CCore::GetSingleton().GetKeyBinds());
+    pKeyBinds->SaveToXML(pLayoutNode);
+    m_pBindLayoutsFile->Write();
+
+    if (bIsNew)
+    {
+        CGUIListItem* pItem = m_pBindLayouts->AddItem(strName.c_str());
+        pItem->SetData(pLayoutNode);
+        m_pBindLayouts->SetSelectedItemByIndex(m_pBindLayouts->GetItemIndex(pItem));
+    }
+}
+
+void OnBindLayoutNameEnteredCallback(void* ptr, unsigned int uiButton, std::string strName)
+{
+    reinterpret_cast<CSettings*>(ptr)->OnBindLayoutNameEntered(uiButton, strName);
+}
+
+bool CSettings::OnBindLayoutSaveClick(CGUIElement* pElement)
+{
+    CGUIListItem* pSelected = m_pBindLayouts->GetSelectedItem();
+    SString       strCurrentName = pSelected ? pSelected->GetText() : "";
+
+    CQuestionBox* pQuestionBox = CCore::GetSingleton().GetLocalGUI()->GetMainMenu()->GetQuestionWindow();
+    pQuestionBox->Reset();
+    pQuestionBox->SetTitle(_("Please enter a layout name"));
+    pQuestionBox->SetMessage(_("Save the current binds under this name.  \nSaving over an existing name replaces it."));
+    pQuestionBox->SetButton(0, _("Cancel"));
+    pQuestionBox->SetButton(1, _("OK"));
+    pQuestionBox->SetEditbox(0, strCurrentName)->SetMaxLength(32);
+    pQuestionBox->SetCallbackEdit(OnBindLayoutNameEnteredCallback, this);
+    pQuestionBox->Show();
 
     return true;
 }
@@ -5053,6 +5167,32 @@ void CSettings::LoadChatPresets()
                     CGUIListItem* pItem = m_pChatPresets->AddItem(pName->GetValue().c_str());
                     pItem->SetData(pNode);
                 }
+            }
+        }
+    }
+}
+
+void CSettings::LoadBindLayouts()
+{
+    m_pBindLayoutsFile = CCore::GetSingleton().GetXML()->CreateXML(CalcMTASAPath(BIND_LAYOUTS_PATH));
+    if (!m_pBindLayoutsFile || !m_pBindLayoutsFile->Parse())
+        return;
+
+    CXMLNode* pLayoutsRoot = m_pBindLayoutsFile->GetRootNode();
+    if (!pLayoutsRoot)
+        pLayoutsRoot = m_pBindLayoutsFile->CreateRootNode(BIND_LAYOUTS_ROOT);
+
+    list<CXMLNode*>::const_iterator iter = pLayoutsRoot->ChildrenBegin();
+    for (; iter != pLayoutsRoot->ChildrenEnd(); iter++)
+    {
+        CXMLNode* pNode = reinterpret_cast<CXMLNode*>(*iter);
+        if (pNode->GetTagName().compare("layout") == 0)
+        {
+            CXMLAttribute* pName = pNode->GetAttributes().Find("name");
+            if (pName && !pName->GetValue().empty())
+            {
+                CGUIListItem* pItem = m_pBindLayouts->AddItem(pName->GetValue().c_str());
+                pItem->SetData(pNode);
             }
         }
     }
