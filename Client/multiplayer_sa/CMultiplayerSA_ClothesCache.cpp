@@ -299,6 +299,11 @@ public:
 
 CClumpStore ms_clumpStore;
 
+// Defined in CMultiplayerSA_ClothesTextureCache.cpp. Needs to be cleared on the same trigger
+// as the clump cache below, since both are keyed off values that go stale when custom clothes
+// textures change.
+void ClearClothesTextureCache();
+
 ////////////////////////////////////////////////
 //
 // CMultiplayerSA::FlushClothesCache
@@ -309,6 +314,7 @@ CClumpStore ms_clumpStore;
 void CMultiplayerSA::FlushClothesCache()
 {
     ms_clumpStore.m_iCacheRevision++;
+    ClearClothesTextureCache();
 }
 
 ////////////////////////////////////////////////

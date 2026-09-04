@@ -64,6 +64,7 @@ public:
     void                CleanupHooks_HookDestructors();
     void                InitHooks_RwResources();
     void                InitHooks_ClothesCache();
+    void                InitHooks_ClothesTextureCache();
     void                InitHooks_Files();
     void                InitHooks_Weapons();
     void                InitHooks_Peds();

@@ -107,6 +107,7 @@ void CMultiplayerSA::InitHooks_13()
     InitHooks_HookDestructors();
     InitHooks_RwResources();
     InitHooks_ClothesCache();
+    InitHooks_ClothesTextureCache();
     InitHooks_Files();
     InitHooks_Weapons();
     InitHooks_Peds();
