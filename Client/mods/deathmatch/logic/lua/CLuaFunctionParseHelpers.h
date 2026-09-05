@@ -18,6 +18,7 @@
 
 #include "enums/WeaponProperty.h"
 #include "enums/FxParticleSystems.h"
+#include "enums/VehicleExtraType.h"
 #include "enums/WorldProperty.h"
 #include "enums/ObjectProperty.h"
 #include "enums/VehicleAudioSettingProperty.h"
@@ -70,6 +71,7 @@ DECLARE_ENUM(eCursorType)
 DECLARE_ENUM(eWheelPosition)
 DECLARE_ENUM(D3DPRIMITIVETYPE);
 DECLARE_ENUM(VehicleDummies::Enum);
+DECLARE_ENUM(VehicleExtraType::Enum);
 DECLARE_ENUM_CLASS(eGrainMultiplierType);
 DECLARE_ENUM(ResizableVehicleWheelGroup::Enum);
 DECLARE_ENUM(eSurfaceProperties);

@@ -14,6 +14,7 @@
 #include <lua/CLuaMultiReturn.h>
 
 #include "enums/VehicleAudioSettingProperty.h"
+#include "enums/VehicleExtraType.h"
 
 class CLuaVehicleDefs : public CLuaDefs
 {
@@ -203,4 +204,11 @@ public:
 
     static bool SetSmokeTrailEnabled(CClientVehicle* vehicle, bool state);
     static bool IsSmokeTrailEnabled(CClientVehicle* vehicle) noexcept;
+
+    // Vehicle extras (model-driven cosmetic add-ons, e.g. a hanging chain)
+    static bool                 SetVehicleExtraEnabled(CClientVehicle* vehicle, VehicleExtraType::Enum extraType, bool enabled);
+    static bool                 IsVehicleExtraEnabled(CClientVehicle* vehicle, VehicleExtraType::Enum extraType);
+    static bool                 SetVehicleExtraSpeed(CClientVehicle* vehicle, VehicleExtraType::Enum extraType, float speedMultiplier);
+    static float                GetVehicleExtraSpeed(CClientVehicle* vehicle, VehicleExtraType::Enum extraType);
+    static std::vector<SString> GetVehicleExtras(CClientVehicle* vehicle);
 };

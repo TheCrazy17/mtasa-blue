@@ -593,6 +593,10 @@ ADD_ENUM(VehicleDummies::WING_AIRTRAIL, "wing_airtrail")
 ADD_ENUM(VehicleDummies::VEH_GUN, "veh_gun")
 IMPLEMENT_ENUM_END("vehicle-dummy")
 
+IMPLEMENT_ENUM_BEGIN(VehicleExtraType::Enum)
+ADD_ENUM(VehicleExtraType::CHAIN, "chain")
+IMPLEMENT_ENUM_END("vehicle-extra-type")
+
 IMPLEMENT_ENUM_CLASS_BEGIN(eGrainMultiplierType)
 ADD_ENUM(eGrainMultiplierType::MASTER, "master")
 ADD_ENUM(eGrainMultiplierType::INFRARED, "infrared")

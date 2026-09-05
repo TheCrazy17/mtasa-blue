@@ -15,6 +15,7 @@
 #include <game/CVehicleAudioSettingsManager.h>
 #include "lua/CLuaFunctionParser.h"
 #include <CClientVehicleManager.h>
+#include "CVehicleExtras.h"
 
 #include "enums/HandlingProperty.h"
 
@@ -84,6 +85,9 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleNitroLevel", GetVehicleNitroLevel},
         {"getHeliBladeCollisionsEnabled", GetHeliBladeCollisionsEnabled},
         {"isVehicleWindowOpen", IsVehicleWindowOpen},
+        {"isVehicleExtraEnabled", ArgumentParser<IsVehicleExtraEnabled>},
+        {"getVehicleExtraSpeed", ArgumentParser<GetVehicleExtraSpeed>},
+        {"getVehicleExtras", ArgumentParser<GetVehicleExtras>},
         {"getVehicleComponentPosition", GetVehicleComponentPosition},
         {"getVehicleComponentRotation", GetVehicleComponentRotation},
         {"getVehicleComponentScale", GetVehicleComponentScale},
@@ -158,6 +162,8 @@ void CLuaVehicleDefs::LoadFunctions()
         {"setVehiclePlateText", SetVehiclePlateText},
         {"setHeliBladeCollisionsEnabled", SetHeliBladeCollisionsEnabled},
         {"setVehicleWindowOpen", SetVehicleWindowOpen},
+        {"setVehicleExtraEnabled", ArgumentParser<SetVehicleExtraEnabled>},
+        {"setVehicleExtraSpeed", ArgumentParser<SetVehicleExtraSpeed>},
         {"setVehicleModelExhaustFumesPosition", SetVehicleModelExhaustFumesPosition},
         {"setVehicleModelDummyPosition", SetVehicleModelDummyPosition},
         {"resetVehicleDummyPositions", ArgumentParser<ResetVehicleDummyPositions>},
@@ -270,6 +276,9 @@ void CLuaVehicleDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getEntryPoints", ArgumentParser<OOP_GetVehicleEntryPoints>);
     lua_classfunction(luaVM, "isSmokeTrailEnabled", "isVehicleSmokeTrailEnabled");
     lua_classfunction(luaVM, "getRotorState", "getVehicleRotorState");
+    lua_classfunction(luaVM, "isExtraEnabled", "isVehicleExtraEnabled");
+    lua_classfunction(luaVM, "getExtraSpeed", "getVehicleExtraSpeed");
+    lua_classfunction(luaVM, "getExtras", "getVehicleExtras");
 
     lua_classfunction(luaVM, "setComponentVisible", "setVehicleComponentVisible");
     lua_classfunction(luaVM, "setSirensOn", "setVehicleSirensOn");
@@ -323,6 +332,8 @@ void CLuaVehicleDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setRotorState", "setVehicleRotorState");
     lua_classfunction(luaVM, "resetAudioSettings", "resetVehicleAudioSettings");
     lua_classfunction(luaVM, "setAudioSetting", "setVehicleAudioSetting");
+    lua_classfunction(luaVM, "setExtraEnabled", "setVehicleExtraEnabled");
+    lua_classfunction(luaVM, "setExtraSpeed", "setVehicleExtraSpeed");
 
     lua_classfunction(luaVM, "resetComponentPosition", "resetVehicleComponentPosition");
     lua_classfunction(luaVM, "resetComponentRotation", "resetVehicleComponentRotation");
@@ -4455,6 +4466,31 @@ bool CLuaVehicleDefs::SetVehicleRotorState(CClientVehicle* vehicle, bool state, 
 bool CLuaVehicleDefs::GetVehicleRotorState(CClientVehicle* vehicle) noexcept
 {
     return vehicle->GetVehicleRotorState();
+}
+
+bool CLuaVehicleDefs::SetVehicleExtraEnabled(CClientVehicle* vehicle, VehicleExtraType::Enum extraType, bool enabled)
+{
+    return CVehicleExtras::SetEnabled(vehicle, extraType, enabled);
+}
+
+bool CLuaVehicleDefs::IsVehicleExtraEnabled(CClientVehicle* vehicle, VehicleExtraType::Enum extraType)
+{
+    return CVehicleExtras::IsEnabled(vehicle, extraType);
+}
+
+bool CLuaVehicleDefs::SetVehicleExtraSpeed(CClientVehicle* vehicle, VehicleExtraType::Enum extraType, float speedMultiplier)
+{
+    return CVehicleExtras::SetSpeedMultiplier(vehicle, extraType, speedMultiplier);
+}
+
+float CLuaVehicleDefs::GetVehicleExtraSpeed(CClientVehicle* vehicle, VehicleExtraType::Enum extraType)
+{
+    return CVehicleExtras::GetSpeedMultiplier(vehicle, extraType);
+}
+
+std::vector<SString> CLuaVehicleDefs::GetVehicleExtras(CClientVehicle* vehicle)
+{
+    return CVehicleExtras::GetAvailableExtras(vehicle);
 }
 
 bool CLuaVehicleDefs::SetVehicleModelAudioSetting(const uint32_t uiModel, const VehicleAudioSettingProperty::Enum eProperty, float varValue)

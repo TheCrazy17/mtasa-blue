@@ -23,6 +23,7 @@
 #include <enums/VehicleType.h>
 #include <game_sa/CVehicleSA.h>
 #include <game_sa/CVehicleAudioSettingsEntrySA.h>
+#include "CVehicleExtras.h"
 
 using std::list;
 
@@ -261,6 +262,8 @@ CClientVehicle::~CClientVehicle()
 {
     // Unreference us
     m_pManager->UnreferenceEntity(this);
+
+    CVehicleExtras::OnVehicleDestroy(this);
 
     // Unlink any towing attachments
     SetTowedVehicle(NULL);
@@ -2298,6 +2301,8 @@ void CClientVehicle::StreamedInPulse()
                     ++iter;
             }
         }
+
+        CVehicleExtras::Pulse(this);
 
         // Are we an unmanned, invisible, blown-up plane?
         if (!GetOccupant() && m_eVehicleType == CLIENTVEHICLE_PLANE && IsBlown() && !m_pVehicle->IsVisible())
