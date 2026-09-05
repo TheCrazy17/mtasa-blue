@@ -10,6 +10,8 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <algorithm>
+#include <cmath>
 #include <core/CCoreInterface.h>
 #include <game/CAESoundManager.h>
 #include <multiplayer/CMultiplayer.h>
@@ -2611,6 +2613,16 @@ std::size_t CVehicleSA::GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraT
             if (!pRootFrame)
                 pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "fc_chain");
             break;
+        case VehicleExtraType::GEAR_INDICATOR:
+            pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "x_gearmeter");
+            if (!pRootFrame)
+                pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "fc_gm");
+            break;
+        case VehicleExtraType::ODOMETER:
+            pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "x_odometer");
+            if (!pRootFrame)
+                pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "fc_om");
+            break;
         default:
             break;
     }
@@ -2829,6 +2841,285 @@ bool CVehicleSA::SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDe
     // rotation - it already goes through the same "recompute right/up/at from scratch" CMatrix path,
     // just with GTA's native axis layout instead of RW's. Reusing it here avoids duplicating that math.
     pGame->GetRenderWareSA()->RwMatrixSetRotation(spoiler.pFrame->modelling, CVector(SharedUtil::DegreesToRadians(fAngleDegrees), 0.0f, 0.0f));
+    return true;
+}
+
+// "Realistic" (~km/h) speed reading for gauge needles, ported from ModelExtras' own
+// CarUtil::GetVehicleSpeedRealistic. Automobiles/monster trucks/quads read actual wheel speed; every
+// other vehicle type (bikes included, since their wheel angular velocity isn't mapped in this codebase
+// yet) falls back to the same move-speed-based formula ModelExtras itself uses for its own non-car/bike
+// vehicle types.
+bool CVehicleSA::GetVehicleSpeedRealistic(float& fSpeedOut)
+{
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo)
+        return false;
+
+    if (pModelInfo->IsCar() || pModelInfo->IsMonsterTruck() || pModelInfo->IsQuadBike())
+    {
+        auto* pAutomobile = reinterpret_cast<CAutomobileSAInterface*>(GetInterface());
+
+        float fWheelSizeFront = pModelInfo->GetVehicleWheelSize(ResizableVehicleWheelGroup::FRONT_AXLE);
+        float fWheelSizeRear = pModelInfo->GetVehicleWheelSize(ResizableVehicleWheelGroup::REAR_AXLE);
+
+        // Matches ModelExtras' own formula exactly, including its asymmetric wheel-size scaling
+        // (only wheel indices 1 and 3 are multiplied by size, 0 and 2 aren't)
+        float fWheelSpeed = ((pAutomobile->m_wheelSpeed[0] + pAutomobile->m_wheelSpeed[1] * fWheelSizeFront) +
+                             (pAutomobile->m_wheelSpeed[2] + pAutomobile->m_wheelSpeed[3] * fWheelSizeRear)) /
+                            4.0f;
+        fWheelSpeed /= 2.45f;
+        fWheelSpeed *= -186.0f;
+        fSpeedOut = fWheelSpeed;
+        return true;
+    }
+
+    CVector vecMoveSpeed;
+    GetMoveSpeed(&vecMoveSpeed);
+    fSpeedOut = std::sqrt(vecMoveSpeed.fX * vecMoveSpeed.fX + vecMoveSpeed.fY * vecMoveSpeed.fY) * 50.0f * 3.6f;
+    return true;
+}
+
+// Dummy names for the three needle gauge types; each is tried in turn since ModelExtras itself supports
+// more than one naming convention per gauge (different reference DFFs across the mod's history).
+static const char* const g_SpeedGaugeDummyNames[] = {"x_sm", "fc_sm", "speedook"};
+static const char* const g_RpmGaugeDummyNames[] = {"x_rpm", "fc_rpm", "tahook"};
+static const char* const g_TurboGaugeDummyNames[] = {"x_tm"};
+
+std::size_t CVehicleSA::GetVehicleGaugeCount(VehicleExtraType::Enum eExtraType)
+{
+    SVehicleGaugeFrameList& gauge = m_GaugeFrameLists[eExtraType];
+    if (gauge.bResolved)
+        return gauge.frameList.size();
+
+    gauge.bResolved = true;
+
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo || !pModelInfo->IsVehicleExtraSupported(eExtraType))
+        return 0;
+
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    std::vector<RwFrame*> dummies;
+    switch (eExtraType)
+    {
+        case VehicleExtraType::SPEED_GAUGE:
+            for (const char* szName : g_SpeedGaugeDummyNames)
+                RwFrameFindAllFramesStartingWith(pClumpFrame, szName, dummies);
+            break;
+        case VehicleExtraType::RPM_GAUGE:
+            for (const char* szName : g_RpmGaugeDummyNames)
+                RwFrameFindAllFramesStartingWith(pClumpFrame, szName, dummies);
+            break;
+        case VehicleExtraType::TURBO_GAUGE:
+            for (const char* szName : g_TurboGaugeDummyNames)
+                RwFrameFindAllFramesStartingWith(pClumpFrame, szName, dummies);
+            break;
+        case VehicleExtraType::FIXED_GAUGE:
+            RwFrameFindAllFramesStartingWith(pClumpFrame, "x_gauge_fixed", dummies);
+            if (RwFrame* pExact = RwFrameFindFrame(pClumpFrame, "x_gasmeter"))
+                dummies.push_back(pExact);
+            if (RwFrame* pExact = RwFrameFindFrame(pClumpFrame, "x_gm"))
+                dummies.push_back(pExact);
+            if (RwFrame* pExact = RwFrameFindFrame(pClumpFrame, "petrolok"))
+                dummies.push_back(pExact);
+            break;
+        default:
+            break;
+    }
+
+    for (RwFrame* pFrame : dummies)
+        gauge.frameList.push_back({pFrame, 0.0f, 0.0f});
+
+    // FixedGauge never gets a live pulse update; ModelExtras itself just randomises its resting angle
+    // once, here at resolve time, so different instances of the same model don't all show an identical
+    // needle - it's cosmetic variety, not a real fuel-level reading (GTA:SA has no fuel system)
+    if (eExtraType == VehicleExtraType::FIXED_GAUGE)
+    {
+        for (SVehicleGaugeFrame& gaugeFrame : gauge.frameList)
+        {
+            float fRandomAngle = SharedUtil::GetRandomNumberInRange(20.0f, 70.0f);
+            gaugeFrame.fCurrentRotation = fRandomAngle;
+            pGame->GetRenderWareSA()->RwMatrixSetRotation(gaugeFrame.pFrame->modelling, CVector(0.0f, SharedUtil::DegreesToRadians(fRandomAngle), 0.0f));
+        }
+    }
+
+    return gauge.frameList.size();
+}
+
+float CVehicleSA::GetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex)
+{
+    SVehicleGaugeFrameList& gauge = m_GaugeFrameLists[eExtraType];
+    if (gaugeIndex >= gauge.frameList.size())
+        return 0.0f;
+
+    return gauge.frameList[gaugeIndex].fCurrentRotation;
+}
+
+bool CVehicleSA::SetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float fAngleDegrees)
+{
+    SVehicleGaugeFrameList& gauge = m_GaugeFrameLists[eExtraType];
+    if (gaugeIndex >= gauge.frameList.size())
+        return false;
+
+    SVehicleGaugeFrame& gaugeFrame = gauge.frameList[gaugeIndex];
+    gaugeFrame.fCurrentRotation = fAngleDegrees;
+
+    // Same reasoning as spoiler's own SetVehicleSpoilerAngle: an absolute RwMatrixSetRotation call is
+    // algebraically equivalent to ModelExtras' reset-then-rotate approach for a unit-scale frame, just
+    // on the Y axis instead of X since these are dashboard needles, not hinges
+    pGame->GetRenderWareSA()->RwMatrixSetRotation(gaugeFrame.pFrame->modelling, CVector(0.0f, SharedUtil::DegreesToRadians(fAngleDegrees), 0.0f));
+    return true;
+}
+
+bool CVehicleSA::GetVehicleGaugeTargetAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float& fTargetAngleOut)
+{
+    SVehicleGaugeFrameList& gauge = m_GaugeFrameLists[eExtraType];
+    if (gaugeIndex >= gauge.frameList.size())
+        return false;
+
+    float fSpeed;
+    if (!GetVehicleSpeedRealistic(fSpeed))
+        return false;
+
+    unsigned char ucCurrentGear = GetCurrentGear();
+
+    switch (eExtraType)
+    {
+        case VehicleExtraType::RPM_GAUGE:
+        {
+            // ModelExtras' own default tuning (used whenever no per-model override exists); this port
+            // doesn't have an equivalent per-model config layer, so these are the only values used
+            constexpr float kMaxRPM = 5000.0f;
+            constexpr float kMaxRotation = 260.0f;
+
+            float fRPM = 0.0f;
+            if (ucCurrentGear != 0)
+            {
+                float            fMaxGearVelocity = 0.0f;
+                tHandlingDataSA* pHandling = GetVehicleInterface()->pHandlingData;
+                if (pHandling)
+                {
+                    // Reinterprets the same native transmission memory CTransmissionSAInterface only
+                    // partially maps (its fUnknown[18] is exactly this codebase's own CTransmission's
+                    // gears[6] - already RE-verified elsewhere in this codebase, see the max-gear hook
+                    // in CMultiplayerSA.cpp which reads a live CTransmission* off the same native call)
+                    auto* pTransmission = reinterpret_cast<CTransmission*>(&pHandling->Transmission);
+                    if (ucCurrentGear <= pTransmission->numOfGears && ucCurrentGear < 6)
+                        fMaxGearVelocity = pTransmission->gears[ucCurrentGear].maxGearVelocity;
+                }
+
+                if (fMaxGearVelocity > 0.0f)
+                    fRPM = std::clamp(fSpeed / (fMaxGearVelocity * 160.9f), 0.1f, 1.0f) * kMaxRPM;
+                else
+                    fRPM = (fSpeed / std::fabs(static_cast<float>(ucCurrentGear))) * 100.0f;
+            }
+
+            if (IsEngineOn())
+                fRPM = std::max(fRPM, 0.1f * kMaxRPM);
+
+            fTargetAngleOut = std::clamp((fRPM / kMaxRPM) * kMaxRotation, -kMaxRotation, kMaxRotation);
+            return true;
+        }
+        case VehicleExtraType::SPEED_GAUGE:
+        {
+            constexpr float kMaxSpeed = 100.0f;
+            constexpr float kMaxRotation = 100.0f;
+
+            float fTargetRotation = (fSpeed / kMaxSpeed) * kMaxRotation;
+            if (ucCurrentGear == 0)
+                fTargetRotation = -fTargetRotation;  // reverse gear; needle swings the other way
+
+            fTargetAngleOut = std::clamp(fTargetRotation, -kMaxRotation, kMaxRotation);
+            return true;
+        }
+        case VehicleExtraType::TURBO_GAUGE:
+        {
+            constexpr float kMaxTurbo = 220.0f;
+            constexpr float kMaxRotation = 220.0f;
+
+            SVehicleGaugeFrame& gaugeFrame = gauge.frameList[gaugeIndex];
+            float               fTimeStep = pGame->GetTimeStep();
+
+            // Turbo boost isn't a real GTA:SA vehicle stat; ModelExtras approximates it from the
+            // frame-to-frame speed delta instead, which is what this ports faithfully
+            float fTurbo = fSpeed - gaugeFrame.fPrevSpeed;
+            if (ucCurrentGear != 0)
+                fTurbo += (fTurbo >= 0.0f) ? 10.0f : -10.0f;
+
+            float fTargetRotation = (kMaxRotation / kMaxTurbo) * fTurbo * fTimeStep;
+            if (ucCurrentGear == 0)
+                fTargetRotation = -fTargetRotation;
+
+            gaugeFrame.fPrevSpeed = fSpeed;
+
+            fTargetAngleOut = std::clamp(fTargetRotation, -kMaxRotation, kMaxRotation);
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
+// Odometer distance is integrated from wheel rotation delta, the same source ModelExtras' own
+// MileageIndicator uses (CAutomobile::m_fWheelRotation[3] for cars, CBike::m_aWheelPitchAngles[1] for
+// bikes); this codebase maps both under different field names (see CAutomobileSA.h/CBikeSA.h).
+bool CVehicleSA::UpdateVehicleOdometer(float fSpeedMultiplier)
+{
+    // ModelExtras itself requires a full 6-digit hierarchy before it animates anything
+    std::size_t frameCount = GetVehicleExtraFrameCount(VehicleExtraType::ODOMETER);
+    if (frameCount < 6)
+        return false;
+
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo)
+        return false;
+
+    float fWheelRotation;
+    if (pModelInfo->IsCar() || pModelInfo->IsMonsterTruck() || pModelInfo->IsQuadBike())
+        fWheelRotation = reinterpret_cast<CAutomobileSAInterface*>(GetInterface())->m_wheelRotation[3];
+    else if (pModelInfo->IsBike())
+        fWheelRotation = reinterpret_cast<CBikeSAInterface*>(GetInterface())->m_afWheelRotationX[1];
+    else
+        return false;
+
+    if (!m_OdometerState.bHasLastWheelRotation)
+    {
+        m_OdometerState.fLastWheelRotation = fWheelRotation;
+        m_OdometerState.bHasLastWheelRotation = true;
+        return true;
+    }
+
+    float fDelta = fWheelRotation - m_OdometerState.fLastWheelRotation;
+    if (std::fabs(fDelta) > 5.0f)
+        fDelta = 0.0f;  // wrapped around a full turn; ModelExtras itself just drops these frames rather than unwrapping
+    m_OdometerState.fLastWheelRotation = fWheelRotation;
+
+    // ModelExtras' own empirical tuning constants (8.17f/2.86f) - not independently derived, ported as-is
+    float fWheelSizeRear = pModelInfo->GetVehicleWheelSize(ResizableVehicleWheelGroup::REAR_AXLE);
+    float fWheelRadius = (fWheelSizeRear > 0.0f) ? fWheelSizeRear : 0.35f;
+    float fWheelDivisor = fWheelRadius * 8.17f;
+    if (fWheelDivisor <= 0.0f)
+        fWheelDivisor = 2.86f;
+
+    m_OdometerState.dAccumulatedDistance += (std::fabs(fDelta) * fSpeedMultiplier) / fWheelDivisor;
+
+    int iDisplayValue = static_cast<int>(m_OdometerState.dAccumulatedDistance) % 1000000;
+
+    int                     iDivisor = 100000;
+    SVehicleExtraFrameList& digits = m_ExtraFrameLists[VehicleExtraType::ODOMETER];
+    for (std::size_t i = 0; i < 6; i++)
+    {
+        int iCurrentDigit = (iDisplayValue / iDivisor) % 10;
+        iDivisor /= 10;
+
+        if (m_OdometerState.lastDigit[i] != iCurrentDigit)
+        {
+            pGame->GetRenderWareSA()->RwMatrixSetRotation(digits.frameList[i]->modelling,
+                                                          CVector(SharedUtil::DegreesToRadians(iCurrentDigit * 36.0f), 0.0f, 0.0f));
+            m_OdometerState.lastDigit[i] = iCurrentDigit;
+        }
+    }
+
     return true;
 }
 

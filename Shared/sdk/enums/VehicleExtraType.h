@@ -18,6 +18,12 @@ namespace VehicleExtraType
         CHAIN,
         WHEEL_HUB,
         SPOILER,
+        GEAR_INDICATOR,
+        SPEED_GAUGE,
+        RPM_GAUGE,
+        TURBO_GAUGE,
+        ODOMETER,
+        FIXED_GAUGE,
         VEHICLE_EXTRA_TYPE_COUNT,
     };
 };

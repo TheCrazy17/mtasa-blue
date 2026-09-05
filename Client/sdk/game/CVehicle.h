@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 #include <map>
 #include <CVector.h>
@@ -348,6 +349,21 @@ public:
     virtual float GetVehicleSpoilerAngle(std::size_t spoilerIndex) = 0;
     // Sets the spoiler's absolute local X-axis rotation (degrees) and applies it to its dummy frame.
     virtual bool SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDegrees) = 0;
+
+    // Resolves (and caches) this instance's needle dummies for one gauge type (speed/RPM/turbo/fixed).
+    // A vehicle can have more than one of the same gauge type.
+    virtual std::size_t GetVehicleGaugeCount(VehicleExtraType::Enum eExtraType) = 0;
+    virtual float       GetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex) = 0;
+    // Sets the needle's absolute local Y-axis rotation (degrees) and applies it to its dummy frame.
+    virtual bool SetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float fAngleDegrees) = 0;
+    // Reads live vehicle/handling data (wheel speed, current gear, handling transmission data) to work
+    // out where this needle should be heading right now; the caller (CVehicleExtras) still owns the
+    // smoothing that eases GetVehicleGaugeAngle's current value toward this target every pulse.
+    virtual bool GetVehicleGaugeTargetAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float& fTargetAngleOut) = 0;
+
+    // Integrates the odometer's pseudo-distance from wheel rotation and rotates any digit drum whose
+    // displayed digit changed. A no-op if the model has no odometer dummy.
+    virtual bool UpdateVehicleOdometer(float fSpeedMultiplier) = 0;
 
     virtual void                   UpdateLandingGearPosition() = 0;
     virtual bool                   SetPlateText(const SString& strText) = 0;

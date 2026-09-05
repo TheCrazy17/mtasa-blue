@@ -30,6 +30,15 @@ namespace
     // it has for chain: a bigger multiplier means the extra physically moves faster.
     constexpr float kSpoilerExtendRate = 10.0f;
     constexpr float kSpoilerRetractRate = 15.0f;
+
+    // Gauge needles ease toward their target angle the same way spoiler does. ModelExtras itself applies
+    // its coefficient as a direct per-frame increment (current += (target-current)*coefficient*delta)
+    // rather than an exponential blend; the two are equivalent in the small-delta limit, and the blend
+    // form is what this framework's own spoiler animation already established, so the same coefficients
+    // are reused here as blend rates instead of duplicating a second smoothing style.
+    constexpr float kRpmGaugeSmoothingRate = 0.25f;
+    constexpr float kSpeedGaugeSmoothingRate = 0.5f;
+    constexpr float kTurboGaugeSmoothingRate = 0.25f;
 }  // namespace
 
 std::unordered_map<CClientVehicle*, CVehicleExtras::VehicleExtraStates> CVehicleExtras::ms_VehicleStates;
@@ -127,6 +136,47 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
         SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::SPOILER);
         if (state.bEnabled)
             PulseSpoiler(pVehicle, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::GEAR_INDICATOR))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::GEAR_INDICATOR);
+        if (state.bEnabled)
+            PulseGearIndicator(pVehicle, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::SPEED_GAUGE))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::SPEED_GAUGE);
+        if (state.bEnabled)
+            PulseGauge(pVehicle, VehicleExtraType::SPEED_GAUGE, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::RPM_GAUGE))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::RPM_GAUGE);
+        if (state.bEnabled)
+            PulseGauge(pVehicle, VehicleExtraType::RPM_GAUGE, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::TURBO_GAUGE))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::TURBO_GAUGE);
+        if (state.bEnabled)
+            PulseGauge(pVehicle, VehicleExtraType::TURBO_GAUGE, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::FIXED_GAUGE))
+    {
+        if (GetState(pVehicle, VehicleExtraType::FIXED_GAUGE).bEnabled)
+            PulseFixedGauge(pVehicle);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::ODOMETER))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::ODOMETER);
+        if (state.bEnabled)
+            PulseOdometer(pVehicle, state);
     }
 }
 
@@ -231,4 +281,72 @@ void CVehicleExtras::PulseSpoiler(CClientVehicle* pVehicle, SVehicleExtraState& 
 
         pGameVehicle->SetVehicleSpoilerAngle(i, fCurrentAngle);
     }
+}
+
+void CVehicleExtras::PulseGearIndicator(CClientVehicle* pVehicle, SVehicleExtraState& state)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    std::size_t frameCount = pGameVehicle->GetVehicleExtraFrameCount(VehicleExtraType::GEAR_INDICATOR);
+    if (frameCount == 0)
+        return;
+
+    auto sCurrentGear = static_cast<std::int16_t>(pGameVehicle->GetCurrentGear());
+    if (sCurrentGear == state.sCurrentFrame || static_cast<std::size_t>(sCurrentGear) >= frameCount)
+        return;
+
+    pGameVehicle->SetVehicleExtraFrame(VehicleExtraType::GEAR_INDICATOR, static_cast<std::size_t>(sCurrentGear));
+    state.sCurrentFrame = sCurrentGear;
+}
+
+void CVehicleExtras::PulseGauge(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, SVehicleExtraState& state)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    std::size_t gaugeCount = pGameVehicle->GetVehicleGaugeCount(eExtraType);
+    if (gaugeCount == 0)
+        return;
+
+    float fSmoothingRate = kRpmGaugeSmoothingRate;
+    if (eExtraType == VehicleExtraType::SPEED_GAUGE)
+        fSmoothingRate = kSpeedGaugeSmoothingRate;
+    else if (eExtraType == VehicleExtraType::TURBO_GAUGE)
+        fSmoothingRate = kTurboGaugeSmoothingRate;
+
+    float fTimeStep = g_pGame->GetTimeStep();
+
+    for (std::size_t i = 0; i < gaugeCount; i++)
+    {
+        float fTargetAngle;
+        if (!pGameVehicle->GetVehicleGaugeTargetAngle(eExtraType, i, fTargetAngle))
+            continue;
+
+        // speedMultiplier scales how fast the needle physically moves, same meaning it has for chain/spoiler
+        float fBlend = std::clamp(fSmoothingRate * fTimeStep * state.fSpeedMultiplier, 0.0f, 1.0f);
+
+        float fCurrentAngle = pGameVehicle->GetVehicleGaugeAngle(eExtraType, i);
+        fCurrentAngle = fCurrentAngle * (1.0f - fBlend) + fTargetAngle * fBlend;
+
+        pGameVehicle->SetVehicleGaugeAngle(eExtraType, i, fCurrentAngle);
+    }
+}
+
+void CVehicleExtras::PulseFixedGauge(CClientVehicle* pVehicle)
+{
+    // FixedGauge's whole behaviour (a one-time randomised resting angle) happens inside
+    // CVehicleSA::GetVehicleGaugeCount's own lazy-resolve step; this just needs to trigger that once
+    pVehicle->GetGameVehicle()->GetVehicleGaugeCount(VehicleExtraType::FIXED_GAUGE);
+}
+
+void CVehicleExtras::PulseOdometer(CClientVehicle* pVehicle, SVehicleExtraState& state)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleOdometer(state.fSpeedMultiplier);
 }

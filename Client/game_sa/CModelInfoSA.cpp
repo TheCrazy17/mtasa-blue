@@ -2207,6 +2207,32 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
     bool bHasSpoiler = RwFrameFindFrameStartingWith(pFrame, "movspoiler") != NULL;
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::SPOILER] = bHasSpoiler;
 
+    // Gear indicator mods use either prefix depending on which reference DFF they were authored from
+    bool bHasGearIndicator = RwFrameFindFrameStartingWith(pFrame, "x_gearmeter") != NULL || RwFrameFindFrameStartingWith(pFrame, "fc_gm") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::GEAR_INDICATOR] = bHasGearIndicator;
+
+    // Speedometer needle dummies use one of three historical naming conventions
+    bool bHasSpeedGauge = RwFrameFindFrameStartingWith(pFrame, "x_sm") != NULL || RwFrameFindFrameStartingWith(pFrame, "fc_sm") != NULL ||
+                          RwFrameFindFrameStartingWith(pFrame, "speedook") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::SPEED_GAUGE] = bHasSpeedGauge;
+
+    // Tachometer needle dummies, likewise
+    bool bHasRpmGauge = RwFrameFindFrameStartingWith(pFrame, "x_rpm") != NULL || RwFrameFindFrameStartingWith(pFrame, "fc_rpm") != NULL ||
+                        RwFrameFindFrameStartingWith(pFrame, "tahook") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::RPM_GAUGE] = bHasRpmGauge;
+
+    bool bHasTurboGauge = RwFrameFindFrameStartingWith(pFrame, "x_tm") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::TURBO_GAUGE] = bHasTurboGauge;
+
+    // Odometer digit drums mods use either prefix depending on which reference DFF they were authored from
+    bool bHasOdometer = RwFrameFindFrameStartingWith(pFrame, "x_odometer") != NULL || RwFrameFindFrameStartingWith(pFrame, "fc_om") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::ODOMETER] = bHasOdometer;
+
+    // Fixed gauges (fuel etc.) use a prefix plus a handful of exact historical dummy names
+    bool bHasFixedGauge = RwFrameFindFrameStartingWith(pFrame, "x_gauge_fixed") != NULL || RwFrameFindFrame(pFrame, "x_gasmeter") != NULL ||
+                          RwFrameFindFrame(pFrame, "x_gm") != NULL || RwFrameFindFrame(pFrame, "petrolok") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::FIXED_GAUGE] = bHasFixedGauge;
+
     m_ModelSupportedExtras.m_bInitialised = true;
 }
 

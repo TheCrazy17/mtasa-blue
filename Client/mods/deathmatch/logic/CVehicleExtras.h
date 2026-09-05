@@ -55,6 +55,10 @@ private:
     static void PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& state);
     static void PulseWheelHub(CClientVehicle* pVehicle);
     static void PulseSpoiler(CClientVehicle* pVehicle, SVehicleExtraState& state);
+    static void PulseGearIndicator(CClientVehicle* pVehicle, SVehicleExtraState& state);
+    static void PulseGauge(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, SVehicleExtraState& state);
+    static void PulseFixedGauge(CClientVehicle* pVehicle);
+    static void PulseOdometer(CClientVehicle* pVehicle, SVehicleExtraState& state);
 
     static std::unordered_map<CClientVehicle*, VehicleExtraStates> ms_VehicleStates;
 };

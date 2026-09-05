@@ -446,6 +446,39 @@ struct SVehicleSpoilerFrame
     float    fCurrentAngle = 0.0f;
 };
 
+// One resolved needle dummy shared by SpeedGauge/RPMGauge/TurboGauge/FixedGauge. fCurrentRotation is the
+// live, absolute Y-axis rotation angle (degrees) CVehicleExtras::Pulse*Gauge updates every pulse, or sets
+// once for FixedGauge. fPrevSpeed is TurboGauge-only: its target angle comes from the frame-to-frame
+// speed delta, ModelExtras' own crude accelerometer substitute (see CVehicleExtras::PulseTurboGauge).
+struct SVehicleGaugeFrame
+{
+    RwFrame* pFrame = nullptr;
+    float    fCurrentRotation = 0.0f;
+    float    fPrevSpeed = 0.0f;
+};
+
+// Resolved needle dummies for one gauge type on one vehicle instance's own clump. Kept as its own array
+// slot per VehicleExtraType, same shape as SVehicleExtraFrameList, since a vehicle can have more than
+// one needle of the same gauge type (e.g. driver and passenger dash).
+struct SVehicleGaugeFrameList
+{
+    std::vector<SVehicleGaugeFrame> frameList;
+    bool                            bResolved{false};
+};
+
+// Per-instance odometer integration state. The digit drum frames themselves are resolved and cached via
+// the same m_ExtraFrameLists[ODOMETER] mechanism CHAIN uses (root dummy + ordered children); this struct
+// only holds the extra state that mechanism doesn't: dAccumulatedDistance is a pseudo-distance driven by
+// wheel rotation delta, and lastDigit lets Pulse only rotate a drum when its displayed digit changes,
+// matching ModelExtras' own MileageIndicator behaviour.
+struct SVehicleOdometerState
+{
+    double             dAccumulatedDistance{0.0};
+    float              fLastWheelRotation{0.0f};
+    bool               bHasLastWheelRotation{false};
+    std::array<int, 6> lastDigit{-1, -1, -1, -1, -1, -1};
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -471,6 +504,8 @@ private:
     bool                                                                           m_bWheelHubPairsResolved{false};
     std::vector<SVehicleSpoilerFrame>                                              m_SpoilerFrames;
     bool                                                                           m_bSpoilerFramesResolved{false};
+    std::array<SVehicleGaugeFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_GaugeFrameLists;
+    SVehicleOdometerState                                                          m_OdometerState;
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -748,14 +783,19 @@ public:
     bool                              SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) override;
     void                              UpdateVehicleExtraWheelHubs() override;
     std::size_t                       GetVehicleSpoilerCount() override;
-    bool  GetVehicleSpoilerConfig(std::size_t spoilerIndex, float& fRotationDegrees, float& fTransitionTime, float& fTriggerSpeed) override;
-    float GetVehicleSpoilerAngle(std::size_t spoilerIndex) override;
-    bool  SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDegrees) override;
-    bool  SetPlateText(const SString& strText);
-    bool  SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
-    float GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
-    void  SetWheelScale(float fWheelScale) override { GetVehicleInterface()->m_fWheelScale = fWheelScale; }
-    void  ReinitAudio();
+    bool        GetVehicleSpoilerConfig(std::size_t spoilerIndex, float& fRotationDegrees, float& fTransitionTime, float& fTriggerSpeed) override;
+    float       GetVehicleSpoilerAngle(std::size_t spoilerIndex) override;
+    bool        SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDegrees) override;
+    std::size_t GetVehicleGaugeCount(VehicleExtraType::Enum eExtraType) override;
+    float       GetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex) override;
+    bool        SetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float fAngleDegrees) override;
+    bool        GetVehicleGaugeTargetAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float& fTargetAngleOut) override;
+    bool        UpdateVehicleOdometer(float fSpeedMultiplier) override;
+    bool        SetPlateText(const SString& strText);
+    bool        SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
+    float       GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
+    void        SetWheelScale(float fWheelScale) override { GetVehicleInterface()->m_fWheelScale = fWheelScale; }
+    void        ReinitAudio();
 
     void UpdateLandingGearPosition();
 
@@ -787,4 +827,5 @@ private:
 
     void                 ResolveWheelHubPairs();
     SVehicleSpoilerFrame ParseSpoilerDummy(RwFrame* pFrame);
+    bool                 GetVehicleSpeedRealistic(float& fSpeedOut);
 };
