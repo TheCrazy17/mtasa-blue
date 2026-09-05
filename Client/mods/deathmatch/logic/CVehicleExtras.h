@@ -59,6 +59,7 @@ private:
     static void PulseGauge(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, SVehicleExtraState& state);
     static void PulseFixedGauge(CClientVehicle* pVehicle);
     static void PulseOdometer(CClientVehicle* pVehicle, SVehicleExtraState& state);
+    static void PulseClock(CClientVehicle* pVehicle);
 
     static std::unordered_map<CClientVehicle*, VehicleExtraStates> ms_VehicleStates;
 };

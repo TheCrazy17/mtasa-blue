@@ -3123,6 +3123,108 @@ bool CVehicleSA::UpdateVehicleOdometer(float fSpeedMultiplier)
     return true;
 }
 
+// Resolves this instance's digital clock. Unlike every other extra in this framework, this needs a
+// one-time setup step beyond finding a dummy: the "digits" child is a template holding up to 10 digit
+// face meshes, which get cloned onto each of the four digit position frames (matching ModelExtras' own
+// DigitalClockFeature) so each position ends up with its own independent set of 10 faces to show/hide.
+bool CVehicleSA::ResolveClockDigits()
+{
+    if (m_ClockState.bResolved)
+        return m_ClockState.bSupported;
+
+    m_ClockState.bResolved = true;
+
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo || !pModelInfo->IsVehicleExtraSupported(VehicleExtraType::CLOCK))
+        return false;
+
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+    RwFrame* pClockRoot = RwFrameFindFrameStartingWith(pClumpFrame, "x_dclock");
+    if (!pClockRoot)
+        return false;
+
+    static const char* const g_ClockDigitPositionNames[4] = {"digit1", "digit2", "digit3", "digit4"};
+
+    RwFrame* pDigitsTemplate = nullptr;
+    RwFrame* digitPosFrames[4] = {nullptr, nullptr, nullptr, nullptr};
+
+    for (RwFrame* pChild = pClockRoot->child; pChild != NULL; pChild = pChild->next)
+    {
+        if (!pDigitsTemplate && strncmp(pChild->szName, "digits", 16) == 0)
+            pDigitsTemplate = pChild;
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (!digitPosFrames[i] && strncmp(pChild->szName, g_ClockDigitPositionNames[i], 16) == 0)
+                digitPosFrames[i] = pChild;
+        }
+    }
+
+    if (!pDigitsTemplate || !digitPosFrames[0] || !digitPosFrames[1] || !digitPosFrames[2] || !digitPosFrames[3])
+        return false;
+
+    std::vector<RwFrame*> templateFaces;
+    for (RwFrame* pFace = pDigitsTemplate->child; pFace != NULL && templateFaces.size() < 10; pFace = pFace->next)
+        templateFaces.push_back(pFace);
+
+    if (templateFaces.empty())
+        return false;
+
+    RpClump* pClump = reinterpret_cast<RpClump*>(GetInterface()->m_pRwObject);
+
+    for (RwFrame* pFaceFrame : templateFaces)
+    {
+        std::vector<RwObject*> faceAtomics;
+        GetAllAtomicObjects(pFaceFrame, faceAtomics);
+        if (faceAtomics.empty())
+            continue;
+
+        RpAtomic* pTemplateAtomic = reinterpret_cast<RpAtomic*>(faceAtomics[0]);
+
+        for (std::size_t posIndex = 0; posIndex < 4; posIndex++)
+        {
+            RpAtomic* pClone = RpAtomicClone(pTemplateAtomic);
+            if (!pClone)
+                continue;
+
+            RpAtomicSetFrame(pClone, digitPosFrames[posIndex]);
+            RpClumpAddAtomic(pClump, pClone);
+
+            RwObject* pCloneObject = reinterpret_cast<RwObject*>(pClone);
+            pCloneObject->flags &= ~0x05;  // start hidden; SetClockDigits shows exactly one per position
+            m_ClockState.digitPositions[posIndex].faceAtomics.push_back(pCloneObject);
+        }
+
+        // Hide the original template face now it's been cloned onto all 4 positions, so it doesn't also
+        // render at its own (organisational, off-model) location
+        for (RwObject* pOriginal : faceAtomics)
+            pOriginal->flags &= ~0x05;
+    }
+
+    m_ClockState.bSupported = true;
+    return true;
+}
+
+bool CVehicleSA::SetClockDigits(std::uint8_t digit1, std::uint8_t digit2, std::uint8_t digit3, std::uint8_t digit4)
+{
+    if (!ResolveClockDigits())
+        return false;
+
+    const std::uint8_t digits[4] = {digit1, digit2, digit3, digit4};
+    for (std::size_t posIndex = 0; posIndex < 4; posIndex++)
+    {
+        SVehicleClockDigitPosition& position = m_ClockState.digitPositions[posIndex];
+        for (std::size_t face = 0; face < position.faceAtomics.size(); face++)
+        {
+            if (face == digits[posIndex])
+                position.faceAtomics[face]->flags |= 0x04;
+            else
+                position.faceAtomics[face]->flags &= ~0x05;
+        }
+    }
+    return true;
+}
+
 void CVehicleSA::SetNitroLevel(float fLevel)
 {
     DWORD dwThis = (DWORD)GetInterface();

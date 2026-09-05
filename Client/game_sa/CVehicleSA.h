@@ -479,6 +479,21 @@ struct SVehicleOdometerState
     std::array<int, 6> lastDigit{-1, -1, -1, -1, -1, -1};
 };
 
+// One digit position (digit1..digit4) on a digital clock dummy: up to 10 cloned face atomics, one per
+// digit 0-9, all attached to this position's own frame (see CVehicleSA::ResolveClockDigits). Pulse shows
+// exactly one face per position based on the live in-game clock.
+struct SVehicleClockDigitPosition
+{
+    std::vector<RwObject*> faceAtomics;
+};
+
+struct SVehicleClockState
+{
+    std::array<SVehicleClockDigitPosition, 4> digitPositions;
+    bool                                      bResolved{false};
+    bool                                      bSupported{false};
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -506,6 +521,7 @@ private:
     bool                                                                           m_bSpoilerFramesResolved{false};
     std::array<SVehicleGaugeFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_GaugeFrameLists;
     SVehicleOdometerState                                                          m_OdometerState;
+    SVehicleClockState                                                             m_ClockState;
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -791,6 +807,7 @@ public:
     bool        SetVehicleGaugeAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float fAngleDegrees) override;
     bool        GetVehicleGaugeTargetAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float& fTargetAngleOut) override;
     bool        UpdateVehicleOdometer(float fSpeedMultiplier) override;
+    bool        SetClockDigits(std::uint8_t digit1, std::uint8_t digit2, std::uint8_t digit3, std::uint8_t digit4) override;
     bool        SetPlateText(const SString& strText);
     bool        SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float       GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
@@ -828,4 +845,5 @@ private:
     void                 ResolveWheelHubPairs();
     SVehicleSpoilerFrame ParseSpoilerDummy(RwFrame* pFrame);
     bool                 GetVehicleSpeedRealistic(float& fSpeedOut);
+    bool                 ResolveClockDigits();
 };

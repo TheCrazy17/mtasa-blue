@@ -11,6 +11,7 @@
 #include <StdInc.h>
 #include <algorithm>
 #include <cmath>
+#include <game/CClock.h>
 #include "CVehicleExtras.h"
 #include "CClientVehicle.h"
 #include "lua/CLuaFunctionParseHelpers.h"
@@ -177,6 +178,12 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
         SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::ODOMETER);
         if (state.bEnabled)
             PulseOdometer(pVehicle, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::CLOCK))
+    {
+        if (GetState(pVehicle, VehicleExtraType::CLOCK).bEnabled)
+            PulseClock(pVehicle);
     }
 }
 
@@ -349,4 +356,24 @@ void CVehicleExtras::PulseOdometer(CClientVehicle* pVehicle, SVehicleExtraState&
         return;
 
     pGameVehicle->UpdateVehicleOdometer(state.fSpeedMultiplier);
+}
+
+void CVehicleExtras::PulseClock(CClientVehicle* pVehicle)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    unsigned char ucHour = 0;
+    unsigned char ucMinute = 0;
+    g_pGame->GetClock()->Get(&ucHour, &ucMinute);
+
+    // ModelExtras supports a per-dummy 12-hour toggle via its own external per-model JSON config; this
+    // framework has no equivalent config layer, so the clock always shows 24-hour time
+    ucHour %= 24;
+    ucMinute %= 60;
+
+    pGameVehicle->SetClockDigits(static_cast<std::uint8_t>(ucHour / 10), static_cast<std::uint8_t>(ucHour % 10), static_cast<std::uint8_t>(ucMinute / 10),
+                                 static_cast<std::uint8_t>(ucMinute % 10));
 }

@@ -24,6 +24,7 @@ namespace VehicleExtraType
         TURBO_GAUGE,
         ODOMETER,
         FIXED_GAUGE,
+        CLOCK,
         VEHICLE_EXTRA_TYPE_COUNT,
     };
 };

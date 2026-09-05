@@ -603,6 +603,7 @@ ADD_ENUM(VehicleExtraType::RPM_GAUGE, "rpmGauge")
 ADD_ENUM(VehicleExtraType::TURBO_GAUGE, "turboGauge")
 ADD_ENUM(VehicleExtraType::ODOMETER, "odometer")
 ADD_ENUM(VehicleExtraType::FIXED_GAUGE, "fixedGauge")
+ADD_ENUM(VehicleExtraType::CLOCK, "clock")
 IMPLEMENT_ENUM_END("vehicle-extra-type")
 
 IMPLEMENT_ENUM_CLASS_BEGIN(eGrainMultiplierType)

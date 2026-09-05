@@ -365,6 +365,10 @@ public:
     // displayed digit changed. A no-op if the model has no odometer dummy.
     virtual bool UpdateVehicleOdometer(float fSpeedMultiplier) = 0;
 
+    // Resolves (and clones) this instance's digital clock digit-face atomics on first call. Shows the
+    // one face per digit position matching the four digits passed in, hides the rest.
+    virtual bool SetClockDigits(std::uint8_t digit1, std::uint8_t digit2, std::uint8_t digit3, std::uint8_t digit4) = 0;
+
     virtual void                   UpdateLandingGearPosition() = 0;
     virtual bool                   SetPlateText(const SString& strText) = 0;
     virtual bool                   SetWindowOpenFlagState(unsigned char ucWindow, bool bState) = 0;

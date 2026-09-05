@@ -2233,6 +2233,30 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
                           RwFrameFindFrame(pFrame, "x_gm") != NULL || RwFrameFindFrame(pFrame, "petrolok") != NULL;
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::FIXED_GAUGE] = bHasFixedGauge;
 
+    // The clock dummy only counts as supported once its digit position children are present too;
+    // just checking for "x_dclock" would flag models whose digit hierarchy is incomplete/malformed
+    bool     bHasClock = false;
+    RwFrame* pClockRoot = RwFrameFindFrameStartingWith(pFrame, "x_dclock");
+    if (pClockRoot)
+    {
+        bool bHasDigitsTemplate = false;
+        bool bHasDigitPos[4] = {false, false, false, false};
+        for (RwFrame* pChild = pClockRoot->child; pChild != NULL; pChild = pChild->next)
+        {
+            if (strncmp(pChild->szName, "digits", 16) == 0)
+                bHasDigitsTemplate = true;
+            for (int i = 0; i < 4; i++)
+            {
+                char szDigitPosName[8] = "digit1";
+                szDigitPosName[5] = static_cast<char>('1' + i);
+                if (strncmp(pChild->szName, szDigitPosName, 16) == 0)
+                    bHasDigitPos[i] = true;
+            }
+        }
+        bHasClock = bHasDigitsTemplate && bHasDigitPos[0] && bHasDigitPos[1] && bHasDigitPos[2] && bHasDigitPos[3];
+    }
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::CLOCK] = bHasClock;
+
     m_ModelSupportedExtras.m_bInitialised = true;
 }
 
