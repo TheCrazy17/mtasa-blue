@@ -2202,6 +2202,11 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
     }
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::WHEEL_HUB] = bHasWheelHubPair;
 
+    // Spoiler dummy names encode their own tuning (see CVehicleSA's spoiler dummy parsing), so
+    // presence of any one of them is all that's needed here
+    bool bHasSpoiler = RwFrameFindFrameStartingWith(pFrame, "movspoiler") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::SPOILER] = bHasSpoiler;
+
     m_ModelSupportedExtras.m_bInitialised = true;
 }
 

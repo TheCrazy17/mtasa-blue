@@ -24,6 +24,12 @@ namespace
     constexpr float kChainMaxSpeed = 10.0f;
     constexpr float kChainMaxIntervalMs = 200.0f;
     constexpr float kChainMinIntervalMs = 20.0f;
+
+    // A spoiler eases toward its target angle rather than snapping to it; it extends slower than it
+    // retracts, matching ModelExtras' own tuning. speedMultiplier scales both rates, same meaning as
+    // it has for chain: a bigger multiplier means the extra physically moves faster.
+    constexpr float kSpoilerExtendRate = 10.0f;
+    constexpr float kSpoilerRetractRate = 15.0f;
 }  // namespace
 
 std::unordered_map<CClientVehicle*, CVehicleExtras::VehicleExtraStates> CVehicleExtras::ms_VehicleStates;
@@ -115,6 +121,13 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
         if (GetState(pVehicle, VehicleExtraType::WHEEL_HUB).bEnabled)
             PulseWheelHub(pVehicle);
     }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::SPOILER))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::SPOILER);
+        if (state.bEnabled)
+            PulseSpoiler(pVehicle, state);
+    }
 }
 
 void CVehicleExtras::PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& state)
@@ -176,4 +189,46 @@ void CVehicleExtras::PulseWheelHub(CClientVehicle* pVehicle)
         return;
 
     pGameVehicle->UpdateVehicleExtraWheelHubs();
+}
+
+void CVehicleExtras::PulseSpoiler(CClientVehicle* pVehicle, SVehicleExtraState& state)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    std::size_t spoilerCount = pGameVehicle->GetVehicleSpoilerCount();
+    if (spoilerCount == 0)
+        return;
+
+    CVector vecMoveSpeed;
+    pVehicle->GetMoveSpeed(vecMoveSpeed);
+
+    // ModelExtras compares against CarUtil::GetVehicleSpeed, the 2D move-speed magnitude scaled by
+    // 50; match that scale so a dummy-name-encoded trigger speed keeps its original real-world meaning
+    float speed = std::sqrt(vecMoveSpeed.fX * vecMoveSpeed.fX + vecMoveSpeed.fY * vecMoveSpeed.fY) * 50.0f;
+    float timeStep = g_pGame->GetTimeStep();
+
+    for (std::size_t i = 0; i < spoilerCount; i++)
+    {
+        float fRotationDegrees, fTransitionTime, fTriggerSpeed;
+        if (!pGameVehicle->GetVehicleSpoilerConfig(i, fRotationDegrees, fTransitionTime, fTriggerSpeed))
+            continue;
+
+        bool  bIsTriggered = speed > fTriggerSpeed;
+        float fTargetAngle = bIsTriggered ? -fRotationDegrees : 0.0f;
+        float fTotalTime = std::max(1.0f, fTransitionTime);
+
+        // speedMultiplier scales how fast the spoiler physically moves, same meaning it has for chain
+        float fTransitionSpeed = (bIsTriggered ? kSpoilerExtendRate : kSpoilerRetractRate) / fTotalTime * state.fSpeedMultiplier;
+
+        // Framerate-independent exponential smoothing toward the target angle
+        float fBlend = 1.0f - std::exp(-fTransitionSpeed * timeStep);
+
+        float fCurrentAngle = pGameVehicle->GetVehicleSpoilerAngle(i);
+        fCurrentAngle = fCurrentAngle * (1.0f - fBlend) + fTargetAngle * fBlend;
+
+        pGameVehicle->SetVehicleSpoilerAngle(i, fCurrentAngle);
+    }
 }

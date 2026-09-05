@@ -434,6 +434,18 @@ struct SVehicleWheelHubPair
     bool     bIsLeftSide = false;
 };
 
+// One resolved spoiler dummy for AnimatedSpoiler. fRotationDegrees/fTransitionTime/fTriggerSpeed are
+// parsed once from the dummy name (see CVehicleSA::ParseSpoilerDummy); fCurrentAngle is the live,
+// exponentially-smoothed animation state CVehicleExtras::PulseSpoiler updates every pulse.
+struct SVehicleSpoilerFrame
+{
+    RwFrame* pFrame = nullptr;
+    float    fRotationDegrees = 30.0f;
+    float    fTransitionTime = 3000.0f;
+    float    fTriggerSpeed = 20.0f;
+    float    fCurrentAngle = 0.0f;
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -457,6 +469,8 @@ private:
     std::array<SVehicleExtraFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_ExtraFrameLists;
     std::vector<SVehicleWheelHubPair>                                              m_WheelHubPairs;
     bool                                                                           m_bWheelHubPairsResolved{false};
+    std::vector<SVehicleSpoilerFrame>                                              m_SpoilerFrames;
+    bool                                                                           m_bSpoilerFramesResolved{false};
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -733,11 +747,15 @@ public:
     std::size_t                       GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType) override;
     bool                              SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) override;
     void                              UpdateVehicleExtraWheelHubs() override;
-    bool                              SetPlateText(const SString& strText);
-    bool                              SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
-    float                             GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
-    void                              SetWheelScale(float fWheelScale) override { GetVehicleInterface()->m_fWheelScale = fWheelScale; }
-    void                              ReinitAudio();
+    std::size_t                       GetVehicleSpoilerCount() override;
+    bool  GetVehicleSpoilerConfig(std::size_t spoilerIndex, float& fRotationDegrees, float& fTransitionTime, float& fTriggerSpeed) override;
+    float GetVehicleSpoilerAngle(std::size_t spoilerIndex) override;
+    bool  SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDegrees) override;
+    bool  SetPlateText(const SString& strText);
+    bool  SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
+    float GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
+    void  SetWheelScale(float fWheelScale) override { GetVehicleInterface()->m_fWheelScale = fWheelScale; }
+    void  ReinitAudio();
 
     void UpdateLandingGearPosition();
 
@@ -767,5 +785,6 @@ private:
     void           FinalizeFramesList();
     void           DumpVehicleFrames();
 
-    void ResolveWheelHubPairs();
+    void                 ResolveWheelHubPairs();
+    SVehicleSpoilerFrame ParseSpoilerDummy(RwFrame* pFrame);
 };

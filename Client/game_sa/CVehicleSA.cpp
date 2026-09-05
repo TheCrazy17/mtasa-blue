@@ -2733,6 +2733,105 @@ void CVehicleSA::UpdateVehicleExtraWheelHubs()
     }
 }
 
+SVehicleSpoilerFrame CVehicleSA::ParseSpoilerDummy(RwFrame* pFrame)
+{
+    SVehicleSpoilerFrame spoiler;
+    spoiler.pFrame = pFrame;
+
+    // Dummy name encodes tuning directly: movspoiler_<rotationDegrees>_<transitionTime>
+    SString strName = pFrame->szName;
+
+    std::size_t firstUnderscore = strName.find('_');
+    std::size_t secondUnderscore = (firstUnderscore != SString::npos) ? strName.find('_', firstUnderscore + 1) : SString::npos;
+    if (firstUnderscore != SString::npos && secondUnderscore != SString::npos && secondUnderscore > firstUnderscore + 1)
+    {
+        try
+        {
+            spoiler.fRotationDegrees =
+                std::stof(strName.SubStr(static_cast<int>(firstUnderscore) + 1, static_cast<int>(secondUnderscore - firstUnderscore - 1)));
+        }
+        catch (const std::exception&)
+        {
+            // ModelExtras itself falls back to 3.0 degrees here, which reads like an authoring typo
+            // for a sane default; use the struct's own default (30 degrees) instead
+        }
+    }
+
+    std::size_t lastUnderscore = strName.rfind('_');
+    if (lastUnderscore != SString::npos && lastUnderscore + 1 < strName.length())
+    {
+        try
+        {
+            spoiler.fTransitionTime = std::stof(strName.SubStr(static_cast<int>(lastUnderscore) + 1));
+        }
+        catch (const std::exception&)
+        {
+            // Keep the struct's own default (3000)
+        }
+    }
+
+    return spoiler;
+}
+
+std::size_t CVehicleSA::GetVehicleSpoilerCount()
+{
+    if (m_bSpoilerFramesResolved)
+        return m_SpoilerFrames.size();
+
+    m_bSpoilerFramesResolved = true;
+
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo || !pModelInfo->IsVehicleExtraSupported(VehicleExtraType::SPOILER))
+        return 0;
+
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    std::vector<RwFrame*> spoilerDummies;
+    RwFrameFindAllFramesStartingWith(pClumpFrame, "movspoiler", spoilerDummies);
+
+    for (RwFrame* pDummy : spoilerDummies)
+        m_SpoilerFrames.push_back(ParseSpoilerDummy(pDummy));
+
+    return m_SpoilerFrames.size();
+}
+
+bool CVehicleSA::GetVehicleSpoilerConfig(std::size_t spoilerIndex, float& fRotationDegrees, float& fTransitionTime, float& fTriggerSpeed)
+{
+    if (spoilerIndex >= m_SpoilerFrames.size())
+        return false;
+
+    const SVehicleSpoilerFrame& spoiler = m_SpoilerFrames[spoilerIndex];
+    fRotationDegrees = spoiler.fRotationDegrees;
+    fTransitionTime = spoiler.fTransitionTime;
+    fTriggerSpeed = spoiler.fTriggerSpeed;
+    return true;
+}
+
+float CVehicleSA::GetVehicleSpoilerAngle(std::size_t spoilerIndex)
+{
+    if (spoilerIndex >= m_SpoilerFrames.size())
+        return 0.0f;
+
+    return m_SpoilerFrames[spoilerIndex].fCurrentAngle;
+}
+
+bool CVehicleSA::SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDegrees)
+{
+    if (spoilerIndex >= m_SpoilerFrames.size())
+        return false;
+
+    SVehicleSpoilerFrame& spoiler = m_SpoilerFrames[spoilerIndex];
+    spoiler.fCurrentAngle = fAngleDegrees;
+
+    // Resetting the frame to an identity basis and then applying an absolute local X-axis rotation
+    // (ModelExtras' MatrixUtil::ResetRotation + SetRotationXAbsolute) is algebraically identical, for
+    // a unit-scale frame, to just calling this codebase's own RwMatrixSetRotation with a pure X
+    // rotation - it already goes through the same "recompute right/up/at from scratch" CMatrix path,
+    // just with GTA's native axis layout instead of RW's. Reusing it here avoids duplicating that math.
+    pGame->GetRenderWareSA()->RwMatrixSetRotation(spoiler.pFrame->modelling, CVector(SharedUtil::DegreesToRadians(fAngleDegrees), 0.0f, 0.0f));
+    return true;
+}
+
 void CVehicleSA::SetNitroLevel(float fLevel)
 {
     DWORD dwThis = (DWORD)GetInterface();

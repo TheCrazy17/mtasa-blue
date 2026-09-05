@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <vector>
 #include <game/RenderWare.h>
 
 struct CColModelSAInterface;
@@ -288,4 +289,18 @@ inline RwFrame* RwFrameFindFrameStartingWith(RwFrame* parent, const char* prefix
         ret = ret->next;
     }
     return NULL;
+}
+
+// Same as RwFrameFindFrameStartingWith, but collects every match instead of stopping at the first.
+// Used by vehicle extras that can have more than one dummy per vehicle (e.g. several spoiler flaps).
+inline void RwFrameFindAllFramesStartingWith(RwFrame* parent, const char* prefix, std::vector<RwFrame*>& outFrames)
+{
+    for (RwFrame* ret = parent->child; ret != NULL; ret = ret->next)
+    {
+        if (ret->child != NULL)
+            RwFrameFindAllFramesStartingWith(ret, prefix, outFrames);
+
+        if (strncmp(&ret->szName[0], prefix, strlen(prefix)) == 0)
+            outFrames.push_back(ret);
+    }
 }

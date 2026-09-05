@@ -341,6 +341,14 @@ public:
     // for every wheel/hub pair this instance's clump has resolved. A no-op if the model has none.
     virtual void UpdateVehicleExtraWheelHubs() = 0;
 
+    // Resolves (and caches) this instance's spoiler dummies. A vehicle can have more than one.
+    virtual std::size_t GetVehicleSpoilerCount() = 0;
+    // Dummy-name-encoded tuning for one resolved spoiler (see CModelInfoSA::InitialiseSupportedExtras).
+    virtual bool  GetVehicleSpoilerConfig(std::size_t spoilerIndex, float& fRotationDegrees, float& fTransitionTime, float& fTriggerSpeed) = 0;
+    virtual float GetVehicleSpoilerAngle(std::size_t spoilerIndex) = 0;
+    // Sets the spoiler's absolute local X-axis rotation (degrees) and applies it to its dummy frame.
+    virtual bool SetVehicleSpoilerAngle(std::size_t spoilerIndex, float fAngleDegrees) = 0;
+
     virtual void                   UpdateLandingGearPosition() = 0;
     virtual bool                   SetPlateText(const SString& strText) = 0;
     virtual bool                   SetWindowOpenFlagState(unsigned char ucWindow, bool bState) = 0;

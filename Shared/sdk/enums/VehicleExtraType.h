@@ -17,6 +17,7 @@ namespace VehicleExtraType
     {
         CHAIN,
         WHEEL_HUB,
+        SPOILER,
         VEHICLE_EXTRA_TYPE_COUNT,
     };
 };
