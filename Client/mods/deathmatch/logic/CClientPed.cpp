@@ -190,6 +190,9 @@ void CClientPed::Init(CClientManager* pManager, unsigned long ulModelID, bool bI
     m_bProcessingWeaponFireEvent = false;
     m_bDeferredGangDrivebyAbort = false;
     m_bSteeringIKActive = false;
+    m_LeftArmIKPose = LeftArmIKPose::NONE;
+    m_iLastSeenGear = 0;
+    m_ulGearStickGrabEndTime = 0;
 
     m_pAnimationBlock = NULL;
     m_bRequestedAnimation = false;
@@ -306,6 +309,8 @@ CClientPed::~CClientPed()
     // native 999999ms auto-expiry
     if (m_bSteeringIKActive && m_pPlayerPed)
         m_pPlayerPed->AbortArmPointing(true);
+    if (m_LeftArmIKPose != LeftArmIKPose::NONE && m_pPlayerPed)
+        m_pPlayerPed->AbortArmPointing(false);
 
     g_pClientGame->RemovePedPointerFromSet(this);
 
@@ -2853,6 +2858,7 @@ void CClientPed::StreamedInPulse(bool bDoStandardPulses)
         }
 
         UpdateSteeringIK(pVehicle);
+        UpdateGearStickAndHandbrakeIK(pVehicle);
 
         // In a vehicle?
         if (pVehicle)
@@ -7399,6 +7405,71 @@ void CClientPed::UpdateSteeringIK(CClientVehicle* pVehicle)
         GetGamePlayer()->AbortArmPointing(true);
         m_bSteeringIKActive = false;
     }
+}
+
+// Gear stick and handbrake are two more vehicle extras built on the same arm-pointing IK as
+// steering, sharing the ped's left arm since steering already claims the right (this branch
+// always uses the right arm for the wheel regardless of a vehicle's real left/right-hand-drive
+// layout, so always using the left for these keeps that same simplification consistent rather
+// than modelling real per-vehicle handedness).
+//
+// Gear stick is event-triggered, not continuous: a real driver's hand rests on the wheel and
+// only visits the stick around a shift. CClientVehicle already exposes the current gear each
+// pulse (there's no separate "gear changed" event to hook), so a change is detected by comparing
+// against the last-seen value and the pose is then held briefly rather than for as long as the
+// extra is enabled.
+//
+// Handbrake wins if both would apply in the same frame: pulling the handbrake is a deliberate,
+// sustained action for as long as it's held on, whereas the gear-stick grab is only ever a brief
+// touch, so a real driver's hand would already have moved on to the handbrake by the time it
+// matters.
+//
+// Unlike steering, neither target needs the dummy's full orientation (no wheel-angle-style math
+// to apply on top of it), so this reuses CClientVehicle's existing generic component-position
+// API directly instead of adding bespoke target-resolution methods that would just be another
+// copy of "find this vehicle's IK dummy and convert it to root space".
+void CClientPed::UpdateGearStickAndHandbrakeIK(CClientVehicle* pVehicle)
+{
+    constexpr float          LEFT_ARM_IK_SPEED = 0.5f;
+    constexpr std::int32_t   LEFT_ARM_IK_BLEND_TIME_MS = 250;
+    constexpr float          LEFT_ARM_IK_CULL_DISTANCE = 40.0f;
+    constexpr unsigned long  GEAR_STICK_GRAB_DURATION_MS = 600;
+
+    const bool          bIsDriving = pVehicle && GetOccupiedVehicleSeat() == 0;
+    const unsigned long ulNow = CClientTime::GetTime();
+
+    // Poll for a gear change regardless of whether the extra is currently enabled, so toggling
+    // it on mid-drive can't be misread as a change that just happened
+    int iCurrentGear = bIsDriving ? pVehicle->GetCurrentGear() : m_iLastSeenGear;
+    if (bIsDriving && iCurrentGear != m_iLastSeenGear)
+        m_ulGearStickGrabEndTime = ulNow + GEAR_STICK_GRAB_DURATION_MS;
+    m_iLastSeenGear = iCurrentGear;
+
+    LeftArmIKPose desiredPose = LeftArmIKPose::NONE;
+    CVector       vecLocalOffset;
+
+    if (bIsDriving && pVehicle->IsExtraEnabled("handbrakeIK") && pVehicle->IsHandbrakeOn() &&
+        pVehicle->GetComponentPosition("ik_hand_brake", vecLocalOffset, EComponentBase::ROOT))
+    {
+        desiredPose = LeftArmIKPose::HANDBRAKE;
+    }
+    else if (bIsDriving && pVehicle->IsExtraEnabled("gearStickIK") && ulNow < m_ulGearStickGrabEndTime &&
+             pVehicle->GetComponentPosition("ik_gear_stick", vecLocalOffset, EComponentBase::ROOT))
+    {
+        desiredPose = LeftArmIKPose::GEAR_STICK;
+    }
+
+    if (desiredPose != LeftArmIKPose::NONE)
+    {
+        GetGamePlayer()->PointArmAtEntity(false, pVehicle->GetGameVehicle(), vecLocalOffset, LEFT_ARM_IK_SPEED, LEFT_ARM_IK_BLEND_TIME_MS,
+                                           LEFT_ARM_IK_CULL_DISTANCE);
+    }
+    else if (m_LeftArmIKPose != LeftArmIKPose::NONE)
+    {
+        GetGamePlayer()->AbortArmPointing(false);
+    }
+
+    m_LeftArmIKPose = desiredPose;
 }
 
 // Called from CPedSync

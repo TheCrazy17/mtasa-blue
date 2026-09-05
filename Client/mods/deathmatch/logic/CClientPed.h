@@ -93,6 +93,16 @@ enum eDeathAnims
     DEATH_ANIM_TORSO = 20,
 };
 
+// Which vehicle-extra pose (if any) currently owns the driving ped's left arm. Steering already
+// claims the right arm (see UpdateSteeringIK), so gear stick and handbrake share the left one and
+// can never both be active at once.
+enum class LeftArmIKPose : unsigned char
+{
+    NONE,
+    GEAR_STICK,
+    HANDBRAKE,
+};
+
 struct SDelayedSyncData
 {
     unsigned long    ulTime;
@@ -617,6 +627,7 @@ public:
     void ResetVehicleInOut();
     void UpdateVehicleInOut();
     void UpdateSteeringIK(CClientVehicle* pVehicle);
+    void UpdateGearStickAndHandbrakeIK(CClientVehicle* pVehicle);
 
     void Respawn(CVector* pvecPosition = NULL, bool bRestoreState = false, bool bCameraCut = false);
 
@@ -735,6 +746,9 @@ public:
     bool                                     m_bProcessingWeaponFireEvent;
     bool                                     m_bDeferredGangDrivebyAbort;
     bool                                     m_bSteeringIKActive;
+    LeftArmIKPose                            m_LeftArmIKPose;
+    int                                      m_iLastSeenGear;
+    unsigned long                            m_ulGearStickGrabEndTime;
     std::unique_ptr<CAnimBlock>              m_pAnimationBlock;
     bool                                     m_bRequestedAnimation;
     SAnimationCache                          m_AnimationCache;

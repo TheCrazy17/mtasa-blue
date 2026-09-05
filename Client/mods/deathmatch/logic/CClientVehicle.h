@@ -246,6 +246,8 @@ public:
     bool IsEngineOn();
     void SetEngineOn(bool bEngineOn);
 
+    bool IsHandbrakeOn();
+
     bool CanBeDamaged();
     void CalcAndUpdateCanBeDamagedFlag();
     void SetScriptCanBeDamaged(bool bCanBeDamaged);
@@ -559,8 +561,9 @@ public:
 
     // "Vehicle extras" are opt-in-via-DFF-authoring features (named after a dummy the model
     // has), auto-enabled when the relevant dummy is present, overridable per-instance from Lua
-    // via setVehicleExtraEnabled. "steeringIK" is the first one; the name deliberately doesn't
-    // have to match its backing dummy name (see GetSteeringWheelIKTarget).
+    // via setVehicleExtraEnabled. "steeringIK", "gearStickIK" and "handbrakeIK" are recognised in
+    // this pass; each Lua-facing name deliberately doesn't have to match its backing dummy name
+    // (see the name table in IsExtraEnabled, and GetSteeringWheelIKTarget for steering's target).
     bool SetExtraEnabled(const SString& strExtraName, bool bEnabled);
     bool IsExtraEnabled(const SString& strExtraName);
 

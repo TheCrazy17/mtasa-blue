@@ -1204,6 +1204,11 @@ bool CClientVehicle::IsEngineOn()
     return m_pVehicle ? m_pVehicle->IsEngineOn() : m_bEngineOn;
 }
 
+bool CClientVehicle::IsHandbrakeOn()
+{
+    return m_pVehicle && m_pVehicle->IsHandbrakeOn();
+}
+
 void CClientVehicle::SetEngineOn(bool bEngineOn)
 {
     if (m_pVehicle)
@@ -5195,10 +5200,19 @@ bool CClientVehicle::IsExtraEnabled(const SString& strExtraName)
         return it->second;
 
     // No script override: auto-detect from the model's dummies, same philosophy as the "vehicle
-    // extras" chain feature. steeringIK is the only recognised extra in this pass; the Lua-facing
-    // name intentionally differs from the DFF dummy name below (see GetSteeringWheelIKTarget).
-    if (strExtraName == "steeringIK")
-        return m_pVehicle && m_pVehicle->IsComponentPresent("ik_steer");
+    // extras" chain feature. Dummy names follow VehIK's own documented convention where one is
+    // known (steer/gear stick/handbrake); Lua-facing names intentionally don't have to match them
+    // (see GetSteeringWheelIKTarget for steering's fuller target, which needs more than a dummy
+    // lookup).
+    static const std::map<SString, SString> extraDummyNames = {
+        {"steeringIK", "ik_steer"},
+        {"gearStickIK", "ik_gear_stick"},
+        {"handbrakeIK", "ik_hand_brake"},
+    };
+
+    auto dummyIt = extraDummyNames.find(strExtraName);
+    if (dummyIt != extraDummyNames.end())
+        return m_pVehicle && m_pVehicle->IsComponentPresent(dummyIt->second);
 
     return false;
 }
