@@ -713,6 +713,7 @@ public:
     bool                              SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float                             GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
     void                              SetWheelScale(float fWheelScale) override { GetVehicleInterface()->m_fWheelScale = fWheelScale; }
+    float                             GetSteerAngle() override { return GetVehicleInterface()->m_fSteerAngle; }
     void                              ReinitAudio();
 
     void UpdateLandingGearPosition();

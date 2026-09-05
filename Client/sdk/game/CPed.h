@@ -197,6 +197,16 @@ public:
 
     virtual class CPedSAInterface* GetPedInterface() noexcept = 0;
 
+    // Points one of the ped's arms at a spot defined as a local-space offset from another
+    // entity's own matrix (e.g. a vehicle's steering wheel dummy); refreshes the same native
+    // IK task on repeat calls rather than stacking a new one, so it's fine to call every frame
+    // to track a moving/rotating offset. Must be paired with AbortArmPointing once the pose is
+    // no longer wanted; the native side does not release it on its own for a long time.
+    virtual void PointArmAtEntity(bool bRightArm, CEntity* pTargetEntity, const CVector& vecLocalOffset, float fSpeed, std::int32_t iBlendTimeMS,
+                                   float fCullDist) = 0;
+    virtual void AbortArmPointing(bool bRightArm, std::int32_t iBlendTimeMS = 250) = 0;
+    virtual bool IsArmPointing(bool bRightArm) = 0;
+
     virtual void SetModelIndex(std::uint32_t modelIndex) = 0;
 
     virtual void DetachPedFromEntity() = 0;

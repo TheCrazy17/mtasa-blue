@@ -365,6 +365,11 @@ public:
     CPedSAInterface* GetPedInterface() noexcept override { return static_cast<CPedSAInterface*>(m_pInterface); }
     CPedSAInterface* GetPedInterface() const noexcept { return static_cast<CPedSAInterface*>(m_pInterface); }
 
+    void PointArmAtEntity(bool bRightArm, CEntity* pTargetEntity, const CVector& vecLocalOffset, float fSpeed, std::int32_t iBlendTimeMS,
+                           float fCullDist) override;
+    void AbortArmPointing(bool bRightArm, std::int32_t iBlendTimeMS = 250) override;
+    bool IsArmPointing(bool bRightArm) override;
+
     void Init();
 
     void SetModelIndex(std::uint32_t modelIndex) override;

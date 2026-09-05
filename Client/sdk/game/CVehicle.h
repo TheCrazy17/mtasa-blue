@@ -154,6 +154,7 @@ public:
 
     virtual unsigned char GetCurrentGear() = 0;
     virtual float         GetGasPedal() = 0;
+    virtual float         GetSteerAngle() = 0;
     virtual bool          GetTowBarPos(CVector* pVector, CVehicle* pTrailer) = 0;
     virtual bool          GetTowHitchPos(CVector* pVector) = 0;
     virtual bool          IsUpsideDown() = 0;

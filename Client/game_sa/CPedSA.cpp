@@ -80,6 +80,60 @@ void CPedSA::Init()
 #endif
 }
 
+// IKChainManager_c (g_ikChainMan) is a native class the base game already uses to point a
+// ped's arm at an entity/position, e.g. for weapon aiming. Addresses and calling conventions
+// below were confirmed against the retail 1.0 US binary with Ghidra, not just taken from
+// gta-reversed's reconstruction:
+//  - PointArm (0x618B60) is __thiscall; every call site in the game's own aiming code loads
+//    the fixed singleton address 0xC15448 into ECX right before calling it, repeatedly, once
+//    per frame, for as long as the aim pose is held. So calling this every frame to refresh a
+//    moving/rotating target (like a turning steering wheel) is how vanilla already drives it,
+//    not a one-shot API being reused against its grain.
+//  - AbortPointArm (0x6182F0) and IsArmPointing (0x6182B0) are static __stdcall functions,
+//    confirmed by their RET 0xC / RET 0x8 stack cleanup in the disassembly.
+//  - The chain's per-frame target resolver only takes the entity-type-agnostic path (transform
+//    the offset by the target's own matrix) when offsetBoneTag is BONE_UNKNOWN (-1); the other
+//    branch reads a bone off the target as if it were a ped skeleton, which would misbehave for
+//    a non-ped target such as a vehicle. Hardcoding BONE_UNKNOWN below keeps this call safe for
+//    any CEntity target.
+namespace
+{
+    constexpr std::uintptr_t IK_CHAIN_MANAGER_ADDRESS = 0xC15448;
+
+    constexpr std::uintptr_t FUNC_IKChainManager_PointArm = 0x618B60;
+    constexpr std::uintptr_t FUNC_IKChainManager_AbortPointArm = 0x6182F0;
+    constexpr std::uintptr_t FUNC_IKChainManager_IsArmPointing = 0x6182B0;
+
+    constexpr std::int32_t IK_ARM_RIGHT = 0;
+    constexpr std::int32_t IK_ARM_LEFT = 1;
+    constexpr std::int32_t IK_BONE_TAG_UNKNOWN = -1;
+}  // namespace
+
+void CPedSA::PointArmAtEntity(bool bRightArm, CEntity* pTargetEntity, const CVector& vecLocalOffset, float fSpeed, std::int32_t iBlendTimeMS,
+                               float fCullDist)
+{
+    using PointArm_t = void(__thiscall*)(void* pThis, const char* szPurpose, std::int32_t iArm, CPedSAInterface* pPed, CEntitySAInterface* pEntity,
+                                          std::int32_t iOffsetBoneTag, const CVector* pOffset, float fSpeed, std::int32_t iBlendTime, float fCullDist);
+
+    CEntitySAInterface* pEntityInterface = pTargetEntity ? pTargetEntity->GetInterface() : nullptr;
+    CVector             vecOffset = vecLocalOffset;
+
+    ((PointArm_t)FUNC_IKChainManager_PointArm)((void*)IK_CHAIN_MANAGER_ADDRESS, "mtasa steeringIK", bRightArm ? IK_ARM_RIGHT : IK_ARM_LEFT, GetPedInterface(),
+                                                pEntityInterface, IK_BONE_TAG_UNKNOWN, &vecOffset, fSpeed, iBlendTimeMS, fCullDist);
+}
+
+void CPedSA::AbortArmPointing(bool bRightArm, std::int32_t iBlendTimeMS)
+{
+    using AbortPointArm_t = void(__stdcall*)(std::int32_t iArm, CPedSAInterface* pPed, std::int32_t iBlendOutTime);
+    ((AbortPointArm_t)FUNC_IKChainManager_AbortPointArm)(bRightArm ? IK_ARM_RIGHT : IK_ARM_LEFT, GetPedInterface(), iBlendTimeMS);
+}
+
+bool CPedSA::IsArmPointing(bool bRightArm)
+{
+    using IsArmPointing_t = bool(__stdcall*)(std::int32_t iArm, CPedSAInterface* pPed);
+    return ((IsArmPointing_t)FUNC_IKChainManager_IsArmPointing)(bRightArm ? IK_ARM_RIGHT : IK_ARM_LEFT, GetPedInterface());
+}
+
 void CPedSA::SetModelIndex(std::uint32_t modelIndex)
 {
     // char __thiscall CPed::SetModelIndex(void *this, int a2)
