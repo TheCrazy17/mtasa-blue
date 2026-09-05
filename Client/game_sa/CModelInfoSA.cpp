@@ -2163,6 +2163,23 @@ void CModelInfoSA::ResetSupportedUpgrades()
     m_ModelSupportedUpgrades.Reset();
 }
 
+void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
+{
+    m_ModelSupportedExtras.Reset();
+
+    RwFrame* pFrame = RpGetFrame(pClump);
+
+    // Chain ornament mods use either prefix depending on which reference DFF they were authored from
+    bool bHasChain = RwFrameFindFrameStartingWith(pFrame, "x_chain") != NULL || RwFrameFindFrameStartingWith(pFrame, "fc_chain") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::CHAIN] = bHasChain;
+    m_ModelSupportedExtras.m_bInitialised = true;
+}
+
+bool CModelInfoSA::IsVehicleExtraSupported(VehicleExtraType::Enum eExtraType)
+{
+    return m_ModelSupportedExtras.m_SupportedFlags[eExtraType];
+}
+
 void CModelInfoSA::SetObjectPropertiesGroup(unsigned short usNewGroup)
 {
     unsigned short usOrgGroup = GetObjectPropertiesGroup();

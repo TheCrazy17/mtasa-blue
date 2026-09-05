@@ -462,6 +462,7 @@ void                       CVehicleModelInterface_SetClump()
         if (pModelInfo && (DWORD)pModelInfo->GetInterface() == (DWORD)pLoadingModelInfo)
         {
             pModelInfo->InitialiseSupportedUpgrades(pLoadingClump);
+            pModelInfo->InitialiseSupportedExtras(pLoadingClump);
             break;
         }
     }

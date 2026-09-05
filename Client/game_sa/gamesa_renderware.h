@@ -266,3 +266,26 @@ inline RwFrame* RwFrameFindFrame(RwFrame* parent, const char* name)
     }
     return NULL;
 }
+
+// Same as RwFrameFindFrame, but matches a name prefix instead of the full name.
+// Custom DFF conventions (e.g. vehicle extra dummies) sometimes vary the suffix.
+inline RwFrame* RwFrameFindFrameStartingWith(RwFrame* parent, const char* prefix)
+{
+    RwFrame *ret = parent->child, *buf;
+    while (ret != NULL)
+    {
+        if (ret->child != NULL)
+        {
+            buf = RwFrameFindFrameStartingWith(ret, prefix);
+            if (buf != NULL)
+                return buf;
+        }
+
+        if (strncmp(&ret->szName[0], prefix, strlen(prefix)) == 0)
+        {
+            return ret;
+        }
+        ret = ret->next;
+    }
+    return NULL;
+}

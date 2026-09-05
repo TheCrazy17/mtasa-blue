@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <vector>
 #include <map>
 #include <CVector.h>
@@ -21,6 +22,7 @@
 
 #include "enums/VehicleDummies.h"
 #include "enums/ResizableVehicleWheelGroup.h"
+#include "enums/VehicleExtraType.h"
 
 class CAEVehicleAudioEntity;
 class CColModel;
@@ -328,12 +330,18 @@ public:
     virtual bool                              SetComponentVisible(const SString& vehicleComponent, bool bVisible) = 0;
     virtual bool                              GetComponentVisible(const SString& vehicleComponent, bool& bVisible) = 0;
     virtual std::map<SString, SVehicleFrame>& GetComponentMap() = 0;
-    virtual void                              UpdateLandingGearPosition() = 0;
-    virtual bool                              SetPlateText(const SString& strText) = 0;
-    virtual bool                              SetWindowOpenFlagState(unsigned char ucWindow, bool bState) = 0;
-    virtual float                             GetWheelScale() = 0;
-    virtual void                              SetWheelScale(float fWheelScale) = 0;
-    virtual CAEVehicleAudioEntity*            GetVehicleAudioEntity() = 0;
+
+    // Resolves (and caches) the swing-position frames for a model-driven vehicle extra on this instance's
+    // own clump. Returns 0 if the model has no such dummy, regardless of eExtraType.
+    virtual std::size_t GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType) = 0;
+    // Hides every resolved swing-position frame except the one at frameIndex, which is shown.
+    virtual bool                   SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) = 0;
+    virtual void                   UpdateLandingGearPosition() = 0;
+    virtual bool                   SetPlateText(const SString& strText) = 0;
+    virtual bool                   SetWindowOpenFlagState(unsigned char ucWindow, bool bState) = 0;
+    virtual float                  GetWheelScale() = 0;
+    virtual void                   SetWheelScale(float fWheelScale) = 0;
+    virtual CAEVehicleAudioEntity* GetVehicleAudioEntity() = 0;
 
     virtual bool GetDummyPosition(VehicleDummies::Enum dummy, CVector& position) const = 0;
     virtual bool SetDummyPosition(VehicleDummies::Enum dummy, const CVector& position) = 0;

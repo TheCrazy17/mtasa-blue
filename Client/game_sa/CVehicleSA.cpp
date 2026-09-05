@@ -2588,6 +2588,64 @@ bool CVehicleSA::GetComponentVisible(const SString& vehicleComponent, bool& bOut
     return false;
 }
 
+std::size_t CVehicleSA::GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType)
+{
+    SVehicleExtraFrameList& extra = m_ExtraFrameLists[eExtraType];
+    if (extra.bResolved)
+        return extra.frameList.size();
+
+    // Only ever walk this instance's own clump once; a missing dummy stays missing for its lifetime
+    extra.bResolved = true;
+
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo || !pModelInfo->IsVehicleExtraSupported(eExtraType))
+        return 0;
+
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+    RwFrame* pRootFrame = NULL;
+
+    switch (eExtraType)
+    {
+        case VehicleExtraType::CHAIN:
+            pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "x_chain");
+            if (!pRootFrame)
+                pRootFrame = RwFrameFindFrameStartingWith(pClumpFrame, "fc_chain");
+            break;
+        default:
+            break;
+    }
+
+    if (pRootFrame)
+    {
+        for (RwFrame* pChild = pRootFrame->child; pChild != NULL; pChild = pChild->next)
+            extra.frameList.push_back(pChild);
+    }
+
+    return extra.frameList.size();
+}
+
+bool CVehicleSA::SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex)
+{
+    SVehicleExtraFrameList& extra = m_ExtraFrameLists[eExtraType];
+    if (frameIndex >= extra.frameList.size())
+        return false;
+
+    for (std::size_t i = 0; i < extra.frameList.size(); i++)
+    {
+        std::vector<RwObject*> atomicList;
+        GetAllAtomicObjects(extra.frameList[i], atomicList);
+
+        for (RwObject* pAtomic : atomicList)
+        {
+            if (i == frameIndex)
+                pAtomic->flags |= 0x04;  // rpATOMICRENDER
+            else
+                pAtomic->flags &= ~0x05;  // mirrors SetComponentVisible's hide idiom
+        }
+    }
+    return true;
+}
+
 void CVehicleSA::SetNitroLevel(float fLevel)
 {
     DWORD dwThis = (DWORD)GetInterface();

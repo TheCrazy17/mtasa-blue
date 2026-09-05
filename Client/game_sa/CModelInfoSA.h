@@ -333,6 +333,18 @@ public:
 };
 static_assert(sizeof(CVehicleModelInfoSAInterface) == 0x308, "Invalid size of CVehicleModelInfoSAInterface class");
 
+// Which model-driven vehicle extras (see VehicleExtraType.h) this model's DFF was found to have dummies for
+struct SVehicleSupportedExtras
+{
+    void Reset()
+    {
+        m_SupportedFlags.fill(false);
+        m_bInitialised = false;
+    }
+    std::array<bool, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_SupportedFlags{};
+    bool                                                         m_bInitialised = false;
+};
+
 class CModelInfoSA : public CModelInfo
 {
 protected:
@@ -355,6 +367,7 @@ protected:
     static std::unordered_map<DWORD, std::pair<float, float>>                         ms_VehicleModelDefaultWheelSizes;
     static std::map<unsigned short, int>                                              ms_DefaultTxdIDMap;
     SVehicleSupportedUpgrades                                                         m_ModelSupportedUpgrades;
+    SVehicleSupportedExtras                                                           m_ModelSupportedExtras;
 
 public:
     CModelInfoSA();
@@ -483,6 +496,9 @@ public:
 
     void InitialiseSupportedUpgrades(RpClump* pClump);
     void ResetSupportedUpgrades();
+
+    void InitialiseSupportedExtras(RpClump* pClump) override;
+    bool IsVehicleExtraSupported(VehicleExtraType::Enum eExtraType) override;
 
     void           SetObjectPropertiesGroup(unsigned short usObjectGroup);
     unsigned short GetObjectPropertiesGroup();

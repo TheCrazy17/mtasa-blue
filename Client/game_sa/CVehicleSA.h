@@ -416,31 +416,41 @@ static_assert(sizeof(CVehicleSAInterface) == 1440, "Invalid size for CVehicleSAI
 
 class CAutomobileSAInterface;
 
+// Frames resolved for one vehicle-extra type on one vehicle instance's own clump.
+// Resolution happens lazily and only once per instance; bResolved guards against re-walking
+// the frame tree every time the extra turns out to be unsupported.
+struct SVehicleExtraFrameList
+{
+    std::vector<RwFrame*> frameList;
+    bool                  bResolved{false};
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
 
 private:
-    CDamageManagerSA*                m_pDamageManager{nullptr};
-    CAEVehicleAudioEntitySA*         m_pVehicleAudioEntity{nullptr};
-    CHandlingEntrySA*                m_pHandlingData{nullptr};
-    CFlyingHandlingEntrySA*          m_pFlyingHandlingData{nullptr};
-    void*                            m_pSuspensionLines{nullptr};
-    bool                             m_bIsDerailable{true};
-    unsigned char                    m_ucAlpha{255};
-    CVector                          m_vecGravity{0.0f, 0.0f, -1.0f};
-    SharedUtil::SColor               m_HeadLightColor{SharedUtil::SColorRGBA{255, 255, 255, 255}};
-    SharedUtil::SColor               m_RGBColors[4];
-    SharedUtil::SColor               m_RGBColorsFixed[4];
-    CDoorSA                          m_doors[6];
-    bool                             m_bSwingingDoorsAllowed{false};
-    SSirenInfo                       m_tSirenInfo;
-    std::map<SString, SVehicleFrame> m_ExtraFrames;
-    unsigned char                    m_ucVariant;
-    unsigned char                    m_ucVariant2;
-    unsigned char                    m_ucVariantCount{0};
-    bool                             m_doorsUndamageable{false};
-    bool                             m_rotorState{true};
+    CDamageManagerSA*                                                              m_pDamageManager{nullptr};
+    CAEVehicleAudioEntitySA*                                                       m_pVehicleAudioEntity{nullptr};
+    CHandlingEntrySA*                                                              m_pHandlingData{nullptr};
+    CFlyingHandlingEntrySA*                                                        m_pFlyingHandlingData{nullptr};
+    void*                                                                          m_pSuspensionLines{nullptr};
+    bool                                                                           m_bIsDerailable{true};
+    unsigned char                                                                  m_ucAlpha{255};
+    CVector                                                                        m_vecGravity{0.0f, 0.0f, -1.0f};
+    SharedUtil::SColor                                                             m_HeadLightColor{SharedUtil::SColorRGBA{255, 255, 255, 255}};
+    SharedUtil::SColor                                                             m_RGBColors[4];
+    SharedUtil::SColor                                                             m_RGBColorsFixed[4];
+    CDoorSA                                                                        m_doors[6];
+    bool                                                                           m_bSwingingDoorsAllowed{false};
+    SSirenInfo                                                                     m_tSirenInfo;
+    std::map<SString, SVehicleFrame>                                               m_ExtraFrames;
+    std::array<SVehicleExtraFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_ExtraFrameLists;
+    unsigned char                                                                  m_ucVariant;
+    unsigned char                                                                  m_ucVariant2;
+    unsigned char                                                                  m_ucVariantCount{0};
+    bool                                                                           m_doorsUndamageable{false};
+    bool                                                                           m_rotorState{true};
 
     std::array<CVector, static_cast<std::size_t>(VehicleDummies::VEHICLE_DUMMY_COUNT)> m_dummyPositions;
 
@@ -709,6 +719,8 @@ public:
     void                              AddComponent(RwFrame* pFrame, bool bReadOnly);
     bool                              GetComponentVisible(const SString& vehicleComponent, bool& bVisible);
     std::map<SString, SVehicleFrame>& GetComponentMap() { return m_ExtraFrames; }
+    std::size_t                       GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType) override;
+    bool                              SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) override;
     bool                              SetPlateText(const SString& strText);
     bool                              SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float                             GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }

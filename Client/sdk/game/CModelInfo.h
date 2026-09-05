@@ -15,6 +15,7 @@
 #include "CAnimBlock.h"
 #include "enums/VehicleDummies.h"
 #include "enums/ResizableVehicleWheelGroup.h"
+#include "enums/VehicleExtraType.h"
 #include "Common.h"
 
 constexpr std::uint16_t MODEL_PROPERTIES_GROUP_STATIC = 0xFFFF;
@@ -214,6 +215,10 @@ public:
 
     // Init the supported upgrades structure
     virtual void InitialiseSupportedUpgrades(RpClump* pClump) = 0;
+
+    // Init the supported vehicle extras structure (model-detected optional dummies, e.g. a hanging chain)
+    virtual void InitialiseSupportedExtras(RpClump* pClump) = 0;
+    virtual bool IsVehicleExtraSupported(VehicleExtraType::Enum eExtraType) = 0;
 
     // ONLY use for peds
     virtual void GetVoice(short* psVoiceType, short* psVoice) = 0;
