@@ -335,7 +335,12 @@ public:
     // own clump. Returns 0 if the model has no such dummy, regardless of eExtraType.
     virtual std::size_t GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType) = 0;
     // Hides every resolved swing-position frame except the one at frameIndex, which is shown.
-    virtual bool                   SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) = 0;
+    virtual bool SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) = 0;
+
+    // Copies each already GTA-animated wheel dummy's rotation onto its matching decorative hub dummy,
+    // for every wheel/hub pair this instance's clump has resolved. A no-op if the model has none.
+    virtual void UpdateVehicleExtraWheelHubs() = 0;
+
     virtual void                   UpdateLandingGearPosition() = 0;
     virtual bool                   SetPlateText(const SString& strText) = 0;
     virtual bool                   SetWindowOpenFlagState(unsigned char ucWindow, bool bState) = 0;

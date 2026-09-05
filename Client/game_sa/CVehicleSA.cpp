@@ -2646,6 +2646,93 @@ bool CVehicleSA::SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::si
     return true;
 }
 
+// Wheel dummy (native, GTA-animated) and its matching decorative hub dummy, per wheel position.
+// Mirrors CModelInfoSA's own copy of this table; kept local to each side rather than shared, the
+// same way chain's "x_chain"/"fc_chain" prefixes are duplicated between detection and resolution.
+struct SWheelHubResolveNames
+{
+    const char* wheelName;
+    const char* wheelNameAlt;
+    const char* hubName;
+    const char* hubNameAlt;
+    bool        bIsLeftSide;
+};
+static const SWheelHubResolveNames g_WheelHubResolveNames[6] = {
+    {"wheel_rf_dummy", nullptr, "hub_rf", nullptr, false},
+    {"wheel_rm_dummy", nullptr, "hub_rm", nullptr, false},
+    {"wheel_rr_dummy", "wheel_rb_dummy", "hub_rr", "hub_rb", false},
+    {"wheel_lf_dummy", nullptr, "hub_lf", nullptr, true},
+    {"wheel_lm_dummy", nullptr, "hub_lm", nullptr, true},
+    {"wheel_lr_dummy", "wheel_lb_dummy", "hub_lr", "hub_lb", true},
+};
+
+void CVehicleSA::ResolveWheelHubPairs()
+{
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    for (const SWheelHubResolveNames& names : g_WheelHubResolveNames)
+    {
+        RwFrame* pWheelFrame = RwFrameFindFrame(pClumpFrame, names.wheelName);
+        if (!pWheelFrame && names.wheelNameAlt)
+            pWheelFrame = RwFrameFindFrame(pClumpFrame, names.wheelNameAlt);
+
+        RwFrame* pHubFrame = RwFrameFindFrame(pClumpFrame, names.hubName);
+        if (!pHubFrame && names.hubNameAlt)
+            pHubFrame = RwFrameFindFrame(pClumpFrame, names.hubNameAlt);
+
+        if (pWheelFrame && pHubFrame)
+            m_WheelHubPairs.push_back({pWheelFrame, pHubFrame, names.bIsLeftSide});
+    }
+}
+
+void CVehicleSA::UpdateVehicleExtraWheelHubs()
+{
+    if (!m_bWheelHubPairsResolved)
+    {
+        m_bWheelHubPairsResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::WHEEL_HUB))
+            ResolveWheelHubPairs();
+    }
+
+    for (const SVehicleWheelHubPair& pair : m_WheelHubPairs)
+    {
+        // GTA already spins the wheel dummy natively as the vehicle drives; just copy its rotation
+        // onto the hub, mirrored on the left side so the hub doesn't end up spinning backwards
+        CVector vecRight = (CVector&)pair.pWheelFrame->modelling.right;
+        if (pair.bIsLeftSide)
+        {
+            vecRight.fX = -vecRight.fX;
+            vecRight.fY = -vecRight.fY;
+            vecRight.fZ = -vecRight.fZ;
+        }
+
+        // Rebuild an orthonormal basis around the copied right vector, using the hub's own previous
+        // "at" as the seed so the basis stays well-defined frame to frame (ModelExtras'
+        // MatrixUtil::ForceRightVector, itself CMatrix::ForceUpVector adjusted for RwMatrix's
+        // right/up/at layout instead of GTA's native CMatrix layout)
+        CVector vecUp = vecRight;
+        vecUp.CrossProduct(&(CVector&)pair.pHubFrame->modelling.at);
+        CVector vecForward = vecUp;
+        vecForward.CrossProduct(&vecRight);
+        vecUp.Normalize();
+        vecForward.Normalize();
+
+        pair.pHubFrame->modelling.right = (RwV3d&)vecRight;
+        pair.pHubFrame->modelling.up = (RwV3d&)vecUp;
+        pair.pHubFrame->modelling.at = (RwV3d&)vecForward;
+
+        // The hub cap mesh is authored upside-down relative to this basis; flip it upright
+        pair.pHubFrame->modelling.up.x = -pair.pHubFrame->modelling.up.x;
+        pair.pHubFrame->modelling.up.y = -pair.pHubFrame->modelling.up.y;
+        pair.pHubFrame->modelling.up.z = -pair.pHubFrame->modelling.up.z;
+
+        // Follow the wheel's height only, keeping the hub's own authored track-width offset
+        pair.pHubFrame->modelling.pos.z = pair.pWheelFrame->modelling.pos.z;
+    }
+}
+
 void CVehicleSA::SetNitroLevel(float fLevel)
 {
     DWORD dwThis = (DWORD)GetInterface();

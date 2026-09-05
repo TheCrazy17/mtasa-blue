@@ -29,8 +29,9 @@ struct SVehicleExtraState
     CTickCount   lastUpdateTime;
 };
 
-// Drives the model-driven vehicle extras framework (chain for now; doors/spoiler/roof can follow
-// the same pattern: detect the dummy in CModelInfoSA, resolve frames in CVehicleSA, add a case here).
+// Drives the model-driven vehicle extras framework (chain, rotating wheel hubs so far; doors/spoiler/
+// roof can follow the same pattern: detect the dummy in CModelInfoSA, resolve frames in CVehicleSA,
+// add a case here).
 class CVehicleExtras
 {
 public:
@@ -52,6 +53,7 @@ private:
     static SVehicleExtraState& GetState(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType);
 
     static void PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& state);
+    static void PulseWheelHub(CClientVehicle* pVehicle);
 
     static std::unordered_map<CClientVehicle*, VehicleExtraStates> ms_VehicleStates;
 };

@@ -103,12 +103,18 @@ std::vector<SString> CVehicleExtras::GetAvailableExtras(CClientVehicle* pVehicle
 
 void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
 {
-    if (!IsExtraSupported(pVehicle, VehicleExtraType::CHAIN))
-        return;
+    if (IsExtraSupported(pVehicle, VehicleExtraType::CHAIN))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::CHAIN);
+        if (state.bEnabled)
+            PulseChain(pVehicle, state);
+    }
 
-    SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::CHAIN);
-    if (state.bEnabled)
-        PulseChain(pVehicle, state);
+    if (IsExtraSupported(pVehicle, VehicleExtraType::WHEEL_HUB))
+    {
+        if (GetState(pVehicle, VehicleExtraType::WHEEL_HUB).bEnabled)
+            PulseWheelHub(pVehicle);
+    }
 }
 
 void CVehicleExtras::PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& state)
@@ -159,4 +165,15 @@ void CVehicleExtras::PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& st
 
     pGameVehicle->SetVehicleExtraFrame(VehicleExtraType::CHAIN, static_cast<std::size_t>(state.sCurrentFrame));
     state.lastUpdateTime = CTickCount::Now();
+}
+
+void CVehicleExtras::PulseWheelHub(CClientVehicle* pVehicle)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    // The rotation copy is pure overhead if nobody can see it
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleExtraWheelHubs();
 }

@@ -16,6 +16,7 @@ namespace VehicleExtraType
     enum Enum
     {
         CHAIN,
+        WHEEL_HUB,
         VEHICLE_EXTRA_TYPE_COUNT,
     };
 };

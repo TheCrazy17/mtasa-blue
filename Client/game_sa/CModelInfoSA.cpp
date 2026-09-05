@@ -2163,6 +2163,20 @@ void CModelInfoSA::ResetSupportedUpgrades()
     m_ModelSupportedUpgrades.Reset();
 }
 
+// Wheel dummy (native, GTA-animated) and its matching decorative hub dummy, per wheel position.
+// Rear/back positions accept either historical spelling used across authored DFFs.
+struct SWheelHubDummyNames
+{
+    const char* wheelName;
+    const char* wheelNameAlt;
+    const char* hubName;
+    const char* hubNameAlt;
+};
+static const SWheelHubDummyNames g_WheelHubDummyNames[6] = {
+    {"wheel_rf_dummy", nullptr, "hub_rf", nullptr}, {"wheel_rm_dummy", nullptr, "hub_rm", nullptr}, {"wheel_rr_dummy", "wheel_rb_dummy", "hub_rr", "hub_rb"},
+    {"wheel_lf_dummy", nullptr, "hub_lf", nullptr}, {"wheel_lm_dummy", nullptr, "hub_lm", nullptr}, {"wheel_lr_dummy", "wheel_lb_dummy", "hub_lr", "hub_lb"},
+};
+
 void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
 {
     m_ModelSupportedExtras.Reset();
@@ -2172,6 +2186,22 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
     // Chain ornament mods use either prefix depending on which reference DFF they were authored from
     bool bHasChain = RwFrameFindFrameStartingWith(pFrame, "x_chain") != NULL || RwFrameFindFrameStartingWith(pFrame, "fc_chain") != NULL;
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::CHAIN] = bHasChain;
+
+    // A hub dummy with no matching wheel dummy has nothing to copy rotation from, so only count it
+    // as supported once at least one position has both halves of the pair.
+    bool bHasWheelHubPair = false;
+    for (const SWheelHubDummyNames& names : g_WheelHubDummyNames)
+    {
+        bool bHasWheel = RwFrameFindFrame(pFrame, names.wheelName) != NULL || (names.wheelNameAlt && RwFrameFindFrame(pFrame, names.wheelNameAlt) != NULL);
+        bool bHasHub = RwFrameFindFrame(pFrame, names.hubName) != NULL || (names.hubNameAlt && RwFrameFindFrame(pFrame, names.hubNameAlt) != NULL);
+        if (bHasWheel && bHasHub)
+        {
+            bHasWheelHubPair = true;
+            break;
+        }
+    }
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::WHEEL_HUB] = bHasWheelHubPair;
+
     m_ModelSupportedExtras.m_bInitialised = true;
 }
 

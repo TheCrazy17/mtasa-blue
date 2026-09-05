@@ -595,6 +595,7 @@ IMPLEMENT_ENUM_END("vehicle-dummy")
 
 IMPLEMENT_ENUM_BEGIN(VehicleExtraType::Enum)
 ADD_ENUM(VehicleExtraType::CHAIN, "chain")
+ADD_ENUM(VehicleExtraType::WHEEL_HUB, "wheelHub")
 IMPLEMENT_ENUM_END("vehicle-extra-type")
 
 IMPLEMENT_ENUM_CLASS_BEGIN(eGrainMultiplierType)

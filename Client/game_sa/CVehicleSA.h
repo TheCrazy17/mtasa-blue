@@ -425,6 +425,15 @@ struct SVehicleExtraFrameList
     bool                  bResolved{false};
 };
 
+// One resolved wheel/hub dummy pair for RotatingWheelHubs. Unlike chain's frame list, each entry
+// needs both a source (wheel, already animated by GTA) and a target (hub, ours to rotate) frame.
+struct SVehicleWheelHubPair
+{
+    RwFrame* pWheelFrame = nullptr;
+    RwFrame* pHubFrame = nullptr;
+    bool     bIsLeftSide = false;
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -446,6 +455,8 @@ private:
     SSirenInfo                                                                     m_tSirenInfo;
     std::map<SString, SVehicleFrame>                                               m_ExtraFrames;
     std::array<SVehicleExtraFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_ExtraFrameLists;
+    std::vector<SVehicleWheelHubPair>                                              m_WheelHubPairs;
+    bool                                                                           m_bWheelHubPairsResolved{false};
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -721,6 +732,7 @@ public:
     std::map<SString, SVehicleFrame>& GetComponentMap() { return m_ExtraFrames; }
     std::size_t                       GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType) override;
     bool                              SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) override;
+    void                              UpdateVehicleExtraWheelHubs() override;
     bool                              SetPlateText(const SString& strText);
     bool                              SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float                             GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
@@ -754,4 +766,6 @@ private:
     SVehicleFrame* GetVehicleComponent(const SString& vehicleComponent);
     void           FinalizeFramesList();
     void           DumpVehicleFrames();
+
+    void ResolveWheelHubPairs();
 };
