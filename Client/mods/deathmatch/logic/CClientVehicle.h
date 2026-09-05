@@ -557,6 +557,18 @@ public:
     bool IsOnFire() override { return m_pVehicle ? m_pVehicle->IsOnFire() : false; }
     bool SetOnFire(bool onFire) override { return m_pVehicle ? m_pVehicle->SetOnFire(onFire) : false; }
 
+    // "Vehicle extras" are opt-in-via-DFF-authoring features (named after a dummy the model
+    // has), auto-enabled when the relevant dummy is present, overridable per-instance from Lua
+    // via setVehicleExtraEnabled. "steeringIK" is the first one; the name deliberately doesn't
+    // have to match its backing dummy name (see GetSteeringWheelIKTarget).
+    bool SetExtraEnabled(const SString& strExtraName, bool bEnabled);
+    bool IsExtraEnabled(const SString& strExtraName);
+
+    // Local-space (vehicle root relative) point a driving ped's hand should aim for this frame,
+    // derived from the model's "ik_steer" dummy plus the live steering angle. False if the
+    // model has no such dummy.
+    bool GetSteeringWheelIKTarget(CVector& vecLocalOffsetOut);
+
 protected:
     void ConvertComponentRotationBase(const SString& vehicleComponent, CVector& vecInOutRotation, EComponentBaseType inputBase, EComponentBaseType outputBase);
     void ConvertComponentPositionBase(const SString& vehicleComponent, CVector& vecInOutPosition, EComponentBaseType inputBase, EComponentBaseType outputBase);
@@ -755,6 +767,9 @@ public:
     std::map<SString, SVehicleComponentData> m_ComponentData;
     // Store visibility state when the component map is regenerated
     std::map<SString, bool> m_ComponentVisibilityBackup;
+    // Per-instance script overrides for named "vehicle extras" (see SetExtraEnabled); absent
+    // entries fall back to auto-detection based on the model's dummies
+    std::map<SString, bool> m_ExtraEnabledOverrides;
     bool                    m_bAsyncLoadingDisabled;
 
     std::array<CVector, static_cast<std::size_t>(VehicleDummies::VEHICLE_DUMMY_COUNT)> m_dummyPositions;

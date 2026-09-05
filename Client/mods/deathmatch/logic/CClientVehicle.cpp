@@ -5174,6 +5174,61 @@ bool CClientVehicle::ResetDummyPositions()
     }
 }
 
+namespace
+{
+    // Distance from the wheel's centre (the dummy's position) to where the hand grips the rim.
+    // No VehIK source is available to confirm a real figure, so this is a plausible constant for
+    // a GTA:SA-scale car steering wheel; a script can't currently override it.
+    constexpr float STEERING_WHEEL_GRIP_RADIUS = 0.18f;
+}  // namespace
+
+bool CClientVehicle::SetExtraEnabled(const SString& strExtraName, bool bEnabled)
+{
+    m_ExtraEnabledOverrides[strExtraName] = bEnabled;
+    return true;
+}
+
+bool CClientVehicle::IsExtraEnabled(const SString& strExtraName)
+{
+    auto it = m_ExtraEnabledOverrides.find(strExtraName);
+    if (it != m_ExtraEnabledOverrides.end())
+        return it->second;
+
+    // No script override: auto-detect from the model's dummies, same philosophy as the "vehicle
+    // extras" chain feature. steeringIK is the only recognised extra in this pass; the Lua-facing
+    // name intentionally differs from the DFF dummy name below (see GetSteeringWheelIKTarget).
+    if (strExtraName == "steeringIK")
+        return m_pVehicle && m_pVehicle->IsComponentPresent("ik_steer");
+
+    return false;
+}
+
+bool CClientVehicle::GetSteeringWheelIKTarget(CVector& vecLocalOffsetOut)
+{
+    if (!m_pVehicle)
+        return false;
+
+    CMatrix matDummy;
+    if (!m_pVehicle->GetComponentMatrix("ik_steer", matDummy))
+        return false;
+
+    // GetComponentMatrix returns the dummy's raw parent-relative transform; convert to vehicle
+    // root space so it lines up with the vehicle's own matrix on the native side (see
+    // CPedSA::PointArmAtEntity, which transforms this offset by the target entity's root matrix)
+    ConvertComponentMatrixBase("ik_steer", matDummy, EComponentBase::PARENT, EComponentBase::ROOT);
+
+    const float fSteerAngle = m_pVehicle->GetSteerAngle();
+    const float fCos = cosf(fSteerAngle);
+    const float fSin = sinf(fSteerAngle);
+
+    // ik_steer authoring convention (our own choice; no VehIK source exists to confirm theirs):
+    // the dummy's position is the wheel's centre, its local front axis is the steering column
+    // (the wheel spins around it), and its local up axis marks 12 o'clock when centred.
+    CVector vecGripDirection = matDummy.vUp * fCos + matDummy.vRight * fSin;
+    vecLocalOffsetOut = matDummy.vPos + vecGripDirection * STEERING_WHEEL_GRIP_RADIUS;
+    return true;
+}
+
 bool CClientVehicle::DoesNeedToWaitForGroundToLoad()
 {
     if (!g_pGame->IsASyncLoadingEnabled())
