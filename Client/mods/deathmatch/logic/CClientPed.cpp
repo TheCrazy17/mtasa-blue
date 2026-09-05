@@ -189,6 +189,7 @@ void CClientPed::Init(CClientManager* pManager, unsigned long ulModelID, bool bI
     m_bDoingGangDriveby = false;
     m_bProcessingWeaponFireEvent = false;
     m_bDeferredGangDrivebyAbort = false;
+    m_bSteeringIKActive = false;
 
     m_pAnimationBlock = NULL;
     m_bRequestedAnimation = false;
@@ -300,6 +301,11 @@ CClientPed::~CClientPed()
     // still be somewhere in use, and a crash can occur by calling its members.
     // So we switch to internal GTA animation to avoid the crash.
     CStaticFunctionDefinitions::SetPedAnimation(*this, "ped", "idle_stance", -1, 250, true, false, false, false);
+
+    // Release a steering hand pose before the game ped goes away, rather than leaving it to the
+    // native 999999ms auto-expiry
+    if (m_bSteeringIKActive && m_pPlayerPed)
+        m_pPlayerPed->AbortArmPointing(true);
 
     g_pClientGame->RemovePedPointerFromSet(this);
 
@@ -2845,6 +2851,8 @@ void CClientPed::StreamedInPulse(bool bDoStandardPulses)
         {
             m_pPlayerPed->SetArmor(m_armor);
         }
+
+        UpdateSteeringIK(pVehicle);
 
         // In a vehicle?
         if (pVehicle)
@@ -7355,6 +7363,41 @@ void CClientPed::UpdateVehicleInOut()
 #ifdef MTA_DEBUG
         g_pCore->GetConsole()->Printf("* Sent_InOut: vehicle_notify_fell_off");
 #endif
+    }
+}
+
+// Makes a driving ped's hand track the vehicle's steering wheel via the native arm-pointing IK
+// the base game already uses for things like weapon aiming (see CPedSA::PointArmAtEntity).
+// Runs every StreamedInPulse for every streamed-in ped, local or remote, so it self-corrects
+// within a frame however driving stops (exit, seat change, extra disabled, vehicle destroyed).
+void CClientPed::UpdateSteeringIK(CClientVehicle* pVehicle)
+{
+    // No VehIK source exists to confirm real tuning values, so these are reasonable starting
+    // points modelled on vanilla PointArm call sites (weapon aiming): a moderate blend speed and
+    // AbortPointArm's own 250ms default blend-out time.
+    constexpr float        STEERING_IK_SPEED = 0.5f;
+    constexpr std::int32_t STEERING_IK_BLEND_TIME_MS = 250;
+    constexpr float        STEERING_IK_CULL_DISTANCE = 40.0f;
+
+    // Only the driver's seat holds the wheel; anything else (no vehicle, wrong seat, extra
+    // disabled, model has no ik_steer dummy) means a pose we previously applied must be released
+    CVector vecLocalOffset;
+    bool    bShouldApply = pVehicle && GetOccupiedVehicleSeat() == 0 && pVehicle->IsExtraEnabled("steeringIK") &&
+                         pVehicle->GetSteeringWheelIKTarget(vecLocalOffset);
+
+    if (bShouldApply)
+    {
+        // The right arm reaches a centred wheel reasonably for both left- and right-hand-drive
+        // layouts; doing both arms isn't meaningfully more work once one is working, but is left
+        // for a follow-up rather than forced into this first pass
+        GetGamePlayer()->PointArmAtEntity(true, pVehicle->GetGameVehicle(), vecLocalOffset, STEERING_IK_SPEED, STEERING_IK_BLEND_TIME_MS,
+                                           STEERING_IK_CULL_DISTANCE);
+        m_bSteeringIKActive = true;
+    }
+    else if (m_bSteeringIKActive)
+    {
+        GetGamePlayer()->AbortArmPointing(true);
+        m_bSteeringIKActive = false;
     }
 }
 

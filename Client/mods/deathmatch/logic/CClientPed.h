@@ -616,6 +616,7 @@ public:
     bool ExitVehicle();
     void ResetVehicleInOut();
     void UpdateVehicleInOut();
+    void UpdateSteeringIK(CClientVehicle* pVehicle);
 
     void Respawn(CVector* pvecPosition = NULL, bool bRestoreState = false, bool bCameraCut = false);
 
@@ -733,6 +734,7 @@ public:
     bool                                     m_bDoingGangDriveby;
     bool                                     m_bProcessingWeaponFireEvent;
     bool                                     m_bDeferredGangDrivebyAbort;
+    bool                                     m_bSteeringIKActive;
     std::unique_ptr<CAnimBlock>              m_pAnimationBlock;
     bool                                     m_bRequestedAnimation;
     SAnimationCache                          m_AnimationCache;
