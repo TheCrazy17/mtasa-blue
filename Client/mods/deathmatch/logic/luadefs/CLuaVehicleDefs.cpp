@@ -101,6 +101,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"getVehicleRotorState", ArgumentParser<GetVehicleRotorState>},
         {"getVehicleModelAudioSettings", ArgumentParser<GetVehicleModelAudioSettings>},
         {"getVehicleAudioSettings", ArgumentParser<GetVehicleAudioSettings>},
+        {"isVehicleExtraEnabled", ArgumentParser<IsVehicleExtraEnabled>},
 
         // Vehicle set funcs
         {"createVehicle", CreateVehicle},
@@ -172,6 +173,7 @@ void CLuaVehicleDefs::LoadFunctions()
         {"resetVehicleModelAudioSettings", ArgumentParser<ResetVehicleModelAudioSettings>},
         {"setVehicleAudioSetting", ArgumentParser<SetVehicleAudioSetting>},
         {"resetVehicleAudioSettings", ArgumentParser<ResetVehicleAudioSettings>},
+        {"setVehicleExtraEnabled", ArgumentParser<SetVehicleExtraEnabled>},
     };
 
     // Add functions
@@ -323,6 +325,8 @@ void CLuaVehicleDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setRotorState", "setVehicleRotorState");
     lua_classfunction(luaVM, "resetAudioSettings", "resetVehicleAudioSettings");
     lua_classfunction(luaVM, "setAudioSetting", "setVehicleAudioSetting");
+    lua_classfunction(luaVM, "setExtraEnabled", "setVehicleExtraEnabled");
+    lua_classfunction(luaVM, "isExtraEnabled", "isVehicleExtraEnabled");
 
     lua_classfunction(luaVM, "resetComponentPosition", "resetVehicleComponentPosition");
     lua_classfunction(luaVM, "resetComponentRotation", "resetVehicleComponentRotation");
@@ -4441,6 +4445,16 @@ bool CLuaVehicleDefs::SetSmokeTrailEnabled(CClientVehicle* vehicle, bool state)
 bool CLuaVehicleDefs::IsSmokeTrailEnabled(CClientVehicle* vehicle) noexcept
 {
     return vehicle->IsSmokeTrailEnabled();
+}
+
+bool CLuaVehicleDefs::SetVehicleExtraEnabled(CClientVehicle* vehicle, std::string name, bool enabled)
+{
+    return vehicle->SetExtraEnabled(name, enabled);
+}
+
+bool CLuaVehicleDefs::IsVehicleExtraEnabled(CClientVehicle* vehicle, std::string name) noexcept
+{
+    return vehicle->IsExtraEnabled(name);
 }
 
 bool CLuaVehicleDefs::SetVehicleRotorState(CClientVehicle* vehicle, bool state, std::optional<bool> stopRotor) noexcept

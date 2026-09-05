@@ -203,4 +203,7 @@ public:
 
     static bool SetSmokeTrailEnabled(CClientVehicle* vehicle, bool state);
     static bool IsSmokeTrailEnabled(CClientVehicle* vehicle) noexcept;
+
+    static bool SetVehicleExtraEnabled(CClientVehicle* vehicle, std::string name, bool enabled);
+    static bool IsVehicleExtraEnabled(CClientVehicle* vehicle, std::string name) noexcept;
 };
