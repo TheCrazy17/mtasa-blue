@@ -2959,7 +2959,10 @@ void CVehicleSA::UpdateVehicleSpotlightAim()
 
     // This codebase's own control-state equivalent of ModelExtras' raw VK_RMB check: vehicle_mouse_look
     // is the native GTA:SA control for holding the camera in free-look while driving, bound to the right
-    // mouse button by default, read the same abstracted way every other bound control is
+    // mouse button by default, read the same abstracted way every other bound control is. Confirmed
+    // against gta-reversed: the game only ever sets this flag while the local player is actually driving
+    // (not riding as a passenger), so unlike ModelExtras' own raw key read, aiming here is driver-only -
+    // a side effect of going through the real control state instead of a raw key hook
     CControllerState controllerState;
     pGame->GetPad()->GetCurrentControllerState(&controllerState);
     if (!controllerState.m_bVehicleMouseLook)
