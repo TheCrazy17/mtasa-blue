@@ -294,6 +294,22 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
             PulseSimpleLight(pVehicle, VehicleExtraType::DRL, pGameVehicle->IsEngineOn());
     }
 
+    // Strobe blinks unconditionally whenever the model has the dummy - ModelExtras' own StrobeLightComponent
+    // has no on/off state or vehicle-state gate at all (unlike every light above), just a per-dummy timer
+    // that flips every 1000ms (strobe.delay's own default; this framework has no equivalent of ModelExtras'
+    // external per-model JSON override for it, same as every other JSON-only tunable already dropped
+    // elsewhere on this branch). Every strobe dummy on a vehicle starts that timer at the same value (0),
+    // so upstream's own dummies already flip in lockstep - the same wall-clock-phase shape indicators
+    // already use here reproduces that synchronised blink without needing per-instance timer state
+    if (IsExtraSupported(pVehicle, VehicleExtraType::STROBE_LIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::STROBE_LIGHT).bEnabled)
+        {
+            bool bStrobePhase = (CTickCount::Now().ToLongLong() / 1000) % 2 == 0;
+            PulseSimpleLight(pVehicle, VehicleExtraType::STROBE_LIGHT, bStrobePhase);
+        }
+    }
+
     if (IsExtraSupported(pVehicle, VehicleExtraType::SPOTLIGHT))
     {
         PulseSimpleLight(pVehicle, VehicleExtraType::SPOTLIGHT, IsEnabled(pVehicle, VehicleExtraType::SPOTLIGHT));
@@ -321,6 +337,46 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     {
         bIndicatorRightOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_RIGHT);
         PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_RIGHT, bIndicatorRightOn && bIndicatorBlinkPhase);
+    }
+
+    // STT (stop/tail/turn, ModelExtras' STTLightComponent) is a combined lamp: lit for brake or tail duty
+    // the same way BRAKE_LIGHT/TAIL_LIGHT above already are, plus - ModelExtras' own IndicatorComponent
+    // additionally renders the very same STTLightLeft/Right material while that side's indicator is
+    // blinking - the indicator's own blink phase on top. Left/right need independent state here (unlike
+    // every combined light above) because both the indicator interaction and the damage gating genuinely
+    // differ per side.
+    bool bBrakeOn = pGameVehicle->GetBrakePedal() > kLightOnThreshold;
+    bool bTailOn = pGameVehicle->GetLightsOn();
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::STT_LIGHT_LEFT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::STT_LIGHT_LEFT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::STT_LIGHT_LEFT, bBrakeOn || bTailOn || (bIndicatorLeftOn && bIndicatorBlinkPhase));
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT, bBrakeOn || bTailOn || (bIndicatorRightOn && bIndicatorBlinkPhase));
+    }
+
+    // NABRAKE (non-actuated brake accent, ModelExtras' NABrakeLightComponent): a brake-only accent lamp
+    // next to a dedicated indicator, so it has to go dark - not blink - for as long as this side's
+    // indicator is switched on, leaving the indicator itself as the only thing lit there; otherwise the
+    // two would show together and muddy the signal. ModelExtras' own gate compares its single combined
+    // indicator-state enum against BothOn/LeftOn/RightOn; with this branch's own independent per-side
+    // indicator switches that reduces to "this side's own indicator switch is off", checked directly
+    // rather than reintroducing a combined state just to compare against.
+    if (IsExtraSupported(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT, bBrakeOn && !bIndicatorLeftOn);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT, bBrakeOn && !bIndicatorRightOn);
     }
 
     // Dashboard LEDs: same shape as the lights above (a dummy mesh shown or hidden as one group), but
