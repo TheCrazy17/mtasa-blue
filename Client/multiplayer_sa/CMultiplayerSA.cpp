@@ -433,6 +433,11 @@ FxSystemDestructionHandler*                m_pFxSystemDestructionHandler = NULL;
 DrivebyAnimationHandler*                   m_pDrivebyAnimationHandler = NULL;
 AudioZoneRadioSwitchHandler*               m_pAudioZoneRadioSwitchHandler = NULL;
 
+// Last radio station id requested by the game's own audio-zone switcher (see
+// CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_ChangeStation below). 0xFFFFFFFF never
+// matches a real station id, so it forces the next zone switch to always fire.
+DWORD dwLastRequestedStation = 0xFFFFFFFF;
+
 CEntitySAInterface* dwSavedPlayerPointer = 0;
 CEntitySAInterface* activeEntityForStreaming = 0;  // the entity that the streaming system considers active
 
@@ -2743,6 +2748,11 @@ void CMultiplayerSA::SetDrivebyAnimationHandler(DrivebyAnimationHandler* pHandle
 
 void CMultiplayerSA::SetAudioZoneRadioSwitchHandler(AudioZoneRadioSwitchHandler* pHandler)
 {
+    // Reset the audio-zone dedup cache (see dwLastRequestedStation) whenever this handler is
+    // (re)installed, i.e. on every connect, so a station id left over from a previous session
+    // can't suppress the next real audio-zone switch after a reconnect.
+    dwLastRequestedStation = 0xFFFFFFFF;
+
     m_pAudioZoneRadioSwitchHandler = pHandler;
 }
 
@@ -8036,8 +8046,7 @@ static void __declspec(naked) HOOK_Idle_CWorld_ProcessPedsAfterPreRender()
     // clang-format on
 }
 
-DWORD dwLastRequestedStation = -1;
-void  CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_ChangeStation(DWORD dwStationID)
+void CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_ChangeStation(DWORD dwStationID)
 {
     if (dwLastRequestedStation != dwStationID)
     {
