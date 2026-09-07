@@ -494,6 +494,89 @@ struct SVehicleClockState
     bool                                      bSupported{false};
 };
 
+// One decorative frame that follows a real GTA door's own open/close ratio (see CVehicleSA::GetDoor) by
+// rotating, e.g. a hood, boot, or swinging side door. Ported from ModelExtras' RotateDoorConfig;
+// fRotationMultiplier/fPopOutDistance are dummy-tuning ModelExtras itself reads from an external
+// per-model JSON config this framework has no equivalent for, so both just keep ModelExtras' own
+// no-JSON-override fallback values (a pure 0..max degree swing, no pop-out translation).
+struct SVehicleRotateDoorFrame
+{
+    RwFrame* pFrame = nullptr;
+    float    fRotationMultiplier = 1.0f;
+    float    fPopOutDistance = 0.0f;
+};
+
+// One decorative frame that follows a real GTA door's own open/close ratio by sliding, e.g. a van or
+// minibus side door. Ported from ModelExtras' SlideDoorConfig; unlike rotate door, ModelExtras' own
+// no-JSON-override fallback for this one does include a small sideways pop-out.
+struct SVehicleSlideDoorFrame
+{
+    RwFrame* pFrame = nullptr;
+    float    fSlideMultiplier = 1.0f;
+    float    fPopOutDistance = 0.15f;
+};
+
+// One rotating panel of a convertible roof (either the roof canopy itself or a boot/tonneau cover panel
+// that has to swing open before the canopy can move, and closed again after). fCurrentAngle is the live
+// animation state CVehicleSA::UpdateRoofPanelRotation eases linearly toward its target every pulse; the
+// same shape is reused for a rollback bed's own bed platform and hydraulics shell, since ModelExtras
+// itself uses an identical rotation formula for all of these. fTargetRotationDegrees/fSpeed are
+// dummy/model tuning ModelExtras itself reads from an external per-model JSON config this framework has
+// no equivalent for (including its own separate per-panel speed knob, dropped entirely rather than kept
+// as an always-1.0 placeholder - the same call already made for the clock's unreachable 12-hour toggle);
+// roof's own struct-literal default (30 degrees) is used here as the fallback target for all of them,
+// since a rollback bed's own JSON-less fallback in ModelExtras is 0 degrees - i.e. invisible - which
+// reads as an authoring gap upstream (see CVehicleSA::UpdateVehicleExtraRollbackBed) rather than a
+// deliberate default.
+struct SVehicleRoofPanelFrame
+{
+    RwFrame* pFrame = nullptr;
+    float    fTargetRotationDegrees = 30.0f;
+    float    fCurrentAngle = 0.0f;
+};
+
+enum class ERoofAnimPhase
+{
+    IDLE,
+    OPENING_BOOTS,
+    MOVING_ROOF,
+    CLOSING_BOOTS,
+};
+
+// Resolved convertible-roof dummies and the sequenced open/close state machine driving them (boot panels
+// open, then the roof itself moves, then boot panels close again). bPrevTargetExpanded is only used to
+// notice when CVehicleExtras' own bTargetOpen state flips, to kick the machine off the IDLE phase.
+struct SVehicleRoofState
+{
+    std::vector<SVehicleRoofPanelFrame> bootFrames;
+    std::vector<SVehicleRoofPanelFrame> roofFrames;
+    ERoofAnimPhase                      ePhase{ERoofAnimPhase::IDLE};
+    bool                                bPrevTargetExpanded{false};
+    bool                                bResolved{false};
+    bool                                bSupported{false};
+};
+
+// One hydraulic piston of a rollback bed, sliding along its own local Z axis. fCurrentMove is the live
+// animation state (distance moved so far); fTargetMove keeps ModelExtras' own hardcoded per-piston
+// default (2 units), unlike the bed/hydraulics-shell rotation targets - see SVehicleRoofPanelFrame.
+struct SVehicleRollbackBedPiston
+{
+    RwFrame* pFrame = nullptr;
+    float    fTargetMove = 2.0f;
+    float    fCurrentMove = 0.0f;
+};
+
+// Resolved rollback-bed dummies. Unlike roof, ModelExtras runs all three parts (bed, hydraulics shell,
+// pistons) simultaneously every pulse with no phase sequencing between them.
+struct SVehicleRollbackBedState
+{
+    SVehicleRoofPanelFrame                 bedFrame;
+    SVehicleRoofPanelFrame                 hydraulicsShellFrame;
+    std::vector<SVehicleRollbackBedPiston> pistons;
+    bool                                   bResolved{false};
+    bool                                   bSupported{false};
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -522,6 +605,12 @@ private:
     std::array<SVehicleGaugeFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_GaugeFrameLists;
     SVehicleOdometerState                                                          m_OdometerState;
     SVehicleClockState                                                             m_ClockState;
+    std::array<std::vector<SVehicleRotateDoorFrame>, 6>                            m_RotateDoorFrames;
+    bool                                                                           m_bRotateDoorFramesResolved{false};
+    std::array<std::vector<SVehicleSlideDoorFrame>, 6>                             m_SlideDoorFrames;
+    bool                                                                           m_bSlideDoorFramesResolved{false};
+    SVehicleRoofState                                                              m_RoofState;
+    SVehicleRollbackBedState                                                       m_RollbackBedState;
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -808,6 +897,10 @@ public:
     bool        GetVehicleGaugeTargetAngle(VehicleExtraType::Enum eExtraType, std::size_t gaugeIndex, float& fTargetAngleOut) override;
     bool        UpdateVehicleOdometer(float fSpeedMultiplier) override;
     bool        SetClockDigits(std::uint8_t digit1, std::uint8_t digit2, std::uint8_t digit3, std::uint8_t digit4) override;
+    void        UpdateVehicleExtraRotateDoors() override;
+    void        UpdateVehicleExtraSlideDoors() override;
+    void        UpdateVehicleExtraConvertibleRoof(bool bTargetExpanded, float fSpeedMultiplier) override;
+    void        UpdateVehicleExtraRollbackBed(bool bTargetExpanded, float fSpeedMultiplier) override;
     bool        SetPlateText(const SString& strText);
     bool        SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float       GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }
@@ -846,4 +939,8 @@ private:
     SVehicleSpoilerFrame ParseSpoilerDummy(RwFrame* pFrame);
     bool                 GetVehicleSpeedRealistic(float& fSpeedOut);
     bool                 ResolveClockDigits();
+    void                 ResolveRotateDoorFrames();
+    void                 ResolveSlideDoorFrames();
+    void                 ResolveRollbackBedFrames();
+    static bool          UpdateRoofPanelRotation(SVehicleRoofPanelFrame& panel, bool bClosed, float fSpeedMultiplier);
 };

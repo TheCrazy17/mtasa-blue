@@ -185,6 +185,32 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
         if (GetState(pVehicle, VehicleExtraType::CLOCK).bEnabled)
             PulseClock(pVehicle);
     }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::ROTATE_DOOR))
+    {
+        if (GetState(pVehicle, VehicleExtraType::ROTATE_DOOR).bEnabled)
+            PulseRotateDoor(pVehicle);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::SLIDE_DOOR))
+    {
+        if (GetState(pVehicle, VehicleExtraType::SLIDE_DOOR).bEnabled)
+            PulseSlideDoor(pVehicle);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::CONVERTIBLE_ROOF))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::CONVERTIBLE_ROOF);
+        if (state.bEnabled)
+            PulseConvertibleRoof(pVehicle, state);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::ROLLBACK_BED))
+    {
+        SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::ROLLBACK_BED);
+        if (state.bEnabled)
+            PulseRollbackBed(pVehicle, state);
+    }
 }
 
 void CVehicleExtras::PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& state)
@@ -376,4 +402,70 @@ void CVehicleExtras::PulseClock(CClientVehicle* pVehicle)
 
     pGameVehicle->SetClockDigits(static_cast<std::uint8_t>(ucHour / 10), static_cast<std::uint8_t>(ucHour % 10), static_cast<std::uint8_t>(ucMinute / 10),
                                  static_cast<std::uint8_t>(ucMinute % 10));
+}
+
+void CVehicleExtras::PulseRotateDoor(CClientVehicle* pVehicle)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleExtraRotateDoors();
+}
+
+void CVehicleExtras::PulseSlideDoor(CClientVehicle* pVehicle)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleExtraSlideDoors();
+}
+
+void CVehicleExtras::PulseConvertibleRoof(CClientVehicle* pVehicle, SVehicleExtraState& state)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleExtraConvertibleRoof(state.bTargetOpen, state.fSpeedMultiplier);
+}
+
+void CVehicleExtras::PulseRollbackBed(CClientVehicle* pVehicle, SVehicleExtraState& state)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleExtraRollbackBed(state.bTargetOpen, state.fSpeedMultiplier);
+}
+
+bool CVehicleExtras::IsOpen(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType)
+{
+    if (!IsExtraSupported(pVehicle, eExtraType))
+        return false;
+
+    return GetState(pVehicle, eExtraType).bTargetOpen;
+}
+
+bool CVehicleExtras::SetOpen(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, bool bOpen)
+{
+    if (!IsExtraSupported(pVehicle, eExtraType))
+        return false;
+
+    // Only these two extras are open/close state machines; every other type has no such concept
+    if (eExtraType != VehicleExtraType::CONVERTIBLE_ROOF && eExtraType != VehicleExtraType::ROLLBACK_BED)
+        return false;
+
+    // A rollback bed's hydraulics need the engine running to move in either direction, matching
+    // ModelExtras' own toggle handler
+    if (eExtraType == VehicleExtraType::ROLLBACK_BED && !pVehicle->IsEngineOn())
+        return false;
+
+    GetState(pVehicle, eExtraType).bTargetOpen = bOpen;
+    return true;
 }

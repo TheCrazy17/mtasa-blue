@@ -27,6 +27,10 @@ struct SVehicleExtraState
     float        fSpeedMultiplier = 1.0f;
     std::int16_t sCurrentFrame = 0;
     CTickCount   lastUpdateTime;
+
+    // Desired state for the two open/close state-machine extras (convertible roof, rollback bed); every
+    // other extra type leaves this unused. Set via CVehicleExtras::SetOpen.
+    bool bTargetOpen = false;
 };
 
 // Drives the model-driven vehicle extras framework (chain, rotating wheel hubs, animated spoiler so
@@ -46,6 +50,12 @@ public:
     static float GetSpeedMultiplier(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType);
     static bool  SetSpeedMultiplier(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, float fMultiplier);
 
+    // Desired open/closed state for the two extras that are state machines rather than a continuous
+    // speed-driven cycle (convertible roof, rollback bed); a no-op for every other extra type. Rollback
+    // bed additionally refuses while the engine is off, matching ModelExtras' own toggle handler.
+    static bool IsOpen(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType);
+    static bool SetOpen(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, bool bOpen);
+
     static std::vector<SString> GetAvailableExtras(CClientVehicle* pVehicle);
 
 private:
@@ -60,6 +70,10 @@ private:
     static void PulseFixedGauge(CClientVehicle* pVehicle);
     static void PulseOdometer(CClientVehicle* pVehicle, SVehicleExtraState& state);
     static void PulseClock(CClientVehicle* pVehicle);
+    static void PulseRotateDoor(CClientVehicle* pVehicle);
+    static void PulseSlideDoor(CClientVehicle* pVehicle);
+    static void PulseConvertibleRoof(CClientVehicle* pVehicle, SVehicleExtraState& state);
+    static void PulseRollbackBed(CClientVehicle* pVehicle, SVehicleExtraState& state);
 
     static std::unordered_map<CClientVehicle*, VehicleExtraStates> ms_VehicleStates;
 };

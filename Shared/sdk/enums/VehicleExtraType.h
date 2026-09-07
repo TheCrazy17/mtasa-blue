@@ -25,6 +25,10 @@ namespace VehicleExtraType
         ODOMETER,
         FIXED_GAUGE,
         CLOCK,
+        ROTATE_DOOR,
+        SLIDE_DOOR,
+        CONVERTIBLE_ROOF,
+        ROLLBACK_BED,
         VEHICLE_EXTRA_TYPE_COUNT,
     };
 };

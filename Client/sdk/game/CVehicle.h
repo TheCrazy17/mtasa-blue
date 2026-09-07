@@ -369,6 +369,22 @@ public:
     // one face per digit position matching the four digits passed in, hides the rest.
     virtual bool SetClockDigits(std::uint8_t digit1, std::uint8_t digit2, std::uint8_t digit3, std::uint8_t digit4) = 0;
 
+    // Resolves (and caches) this instance's rotating door dummies (hood/boot/side swing) on first call,
+    // then applies each one's own real GTA door open ratio (see GetDoor) as a pop + rotation. A no-op if
+    // the model has none.
+    virtual void UpdateVehicleExtraRotateDoors() = 0;
+    // Same as above, for sliding doors (van/minibus side doors); applies a pop + slide instead.
+    virtual void UpdateVehicleExtraSlideDoors() = 0;
+
+    // Resolves (and caches) this instance's convertible roof dummies on first call, then advances its
+    // open/close phase machine (boot panels open, roof moves, boot panels close) one step toward
+    // bTargetExpanded. A no-op if the model has none.
+    virtual void UpdateVehicleExtraConvertibleRoof(bool bTargetExpanded, float fSpeedMultiplier) = 0;
+    // Resolves (and caches) this instance's rollback-bed dummies (bed platform, hydraulics shell,
+    // pistons) on first call, then eases all of them toward bTargetExpanded simultaneously. A no-op if
+    // the model has none.
+    virtual void UpdateVehicleExtraRollbackBed(bool bTargetExpanded, float fSpeedMultiplier) = 0;
+
     virtual void                   UpdateLandingGearPosition() = 0;
     virtual bool                   SetPlateText(const SString& strText) = 0;
     virtual bool                   SetWindowOpenFlagState(unsigned char ucWindow, bool bState) = 0;

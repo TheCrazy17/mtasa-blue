@@ -3225,6 +3225,345 @@ bool CVehicleSA::SetClockDigits(std::uint8_t digit1, std::uint8_t digit2, std::u
     return true;
 }
 
+// Rotating-door dummy prefix to real GTA door index (see CVehicleSA::GetDoor). Boot/bonnet share their
+// group with a pop-and-tilt formula distinct from the four swinging side doors' own pop-and-swing one;
+// UpdateVehicleExtraRotateDoors tells them apart from the door index itself, not a flag in this table.
+struct SRotateDoorGroupName
+{
+    const char* szPrefix;
+    eDoors      eDoor;
+};
+static const SRotateDoorGroupName g_RotateDoorGroupNames[6] = {
+    {"x_rd_lf", FRONT_LEFT_DOOR}, {"x_rd_rf", FRONT_RIGHT_DOOR}, {"x_rd_lr", REAR_LEFT_DOOR},
+    {"x_rd_rr", REAR_RIGHT_DOOR}, {"x_rd_boot", BOOT},           {"x_rd_bonnet", BONNET},
+};
+
+void CVehicleSA::ResolveRotateDoorFrames()
+{
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    for (const SRotateDoorGroupName& group : g_RotateDoorGroupNames)
+    {
+        std::vector<RwFrame*> dummies;
+        RwFrameFindAllFramesStartingWith(pClumpFrame, group.szPrefix, dummies);
+
+        for (RwFrame* pFrame : dummies)
+        {
+            SVehicleRotateDoorFrame frame;
+            frame.pFrame = pFrame;
+            m_RotateDoorFrames[static_cast<std::size_t>(group.eDoor)].push_back(frame);
+        }
+    }
+}
+
+// A rotating door dummy's pose is a direct function of the real door's own open ratio every pulse, not
+// something this framework eases itself - GTA's own door swing (and this codebase's door interpolation
+// on top of it, see CClientVehicle::ProcessDoorInterpolation) is already smooth, so there's nothing left
+// to smooth here. Ported from ModelExtras' RotateDoor::UpdateSingleFrame.
+void CVehicleSA::UpdateVehicleExtraRotateDoors()
+{
+    if (!m_bRotateDoorFramesResolved)
+    {
+        m_bRotateDoorFramesResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::ROTATE_DOOR))
+            ResolveRotateDoorFrames();
+    }
+
+    for (std::size_t doorIndex = 0; doorIndex < m_RotateDoorFrames.size(); doorIndex++)
+    {
+        std::vector<SVehicleRotateDoorFrame>& frames = m_RotateDoorFrames[doorIndex];
+        if (frames.empty())
+            continue;
+
+        float fRatio = GetDoor(static_cast<unsigned char>(doorIndex))->GetAngleOpenRatio();
+        float fPopFactor = std::min(1.0f, fRatio * 5.0f);
+        bool  bIsBootBonnet = doorIndex == static_cast<std::size_t>(BONNET) || doorIndex == static_cast<std::size_t>(BOOT);
+        bool  bIsLeftSide = doorIndex == static_cast<std::size_t>(FRONT_LEFT_DOOR) || doorIndex == static_cast<std::size_t>(REAR_LEFT_DOOR);
+
+        for (SVehicleRotateDoorFrame& frame : frames)
+        {
+            if (bIsBootBonnet)
+            {
+                // Pops upward and tilts open around the hinge's lateral (X) axis
+                frame.pFrame->modelling.pos.z = fPopFactor * frame.fPopOutDistance;
+                float fRotationDegrees = fRatio * frame.fRotationMultiplier * 45.0f;
+                pGame->GetRenderWareSA()->RwMatrixSetRotation(frame.pFrame->modelling, CVector(SharedUtil::DegreesToRadians(fRotationDegrees), 0.0f, 0.0f));
+            }
+            else
+            {
+                // Pops outward sideways and swings open around the hinge's vertical (Z) axis, mirrored
+                // so left and right doors both swing outward rather than the same direction
+                float fSideMultiplier = bIsLeftSide ? 1.0f : -1.0f;
+                frame.pFrame->modelling.pos.x = fPopFactor * frame.fPopOutDistance * fSideMultiplier;
+                float fRotationDegrees = fRatio * frame.fRotationMultiplier * 90.0f * fSideMultiplier;
+                pGame->GetRenderWareSA()->RwMatrixSetRotation(frame.pFrame->modelling, CVector(0.0f, 0.0f, SharedUtil::DegreesToRadians(fRotationDegrees)));
+            }
+        }
+    }
+}
+
+// Sliding-door dummy prefix to real GTA door index. Left/right front each accept three historical
+// spellings: ModelExtras' own x_sd_ prefix, plus the vanilla dummy names some stock GTA:SA van/bus DFFs
+// already carry for their own side doors (so this can drive those without any custom DFF at all).
+struct SSlideDoorPrefix
+{
+    const char* szPrefix;
+    eDoors      eDoor;
+};
+static const SSlideDoorPrefix g_SlideDoorPrefixes[8] = {
+    {"dvan_l", FRONT_LEFT_DOOR}, {"dmbus_l", FRONT_LEFT_DOOR}, {"x_sd_lf", FRONT_LEFT_DOOR}, {"dvan_r", FRONT_RIGHT_DOOR},
+    {"dmbus_r", FRONT_RIGHT_DOOR}, {"x_sd_rf", FRONT_RIGHT_DOOR}, {"x_sd_lr", REAR_LEFT_DOOR}, {"x_sd_rr", REAR_RIGHT_DOOR},
+};
+
+void CVehicleSA::ResolveSlideDoorFrames()
+{
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    for (const SSlideDoorPrefix& entry : g_SlideDoorPrefixes)
+    {
+        std::vector<RwFrame*> dummies;
+        RwFrameFindAllFramesStartingWith(pClumpFrame, entry.szPrefix, dummies);
+
+        for (RwFrame* pFrame : dummies)
+        {
+            SVehicleSlideDoorFrame frame;
+            frame.pFrame = pFrame;
+            m_SlideDoorFrames[static_cast<std::size_t>(entry.eDoor)].push_back(frame);
+        }
+    }
+}
+
+// Same direct-function-of-the-real-door-ratio approach as rotate door, but sliding instead of swinging:
+// pure translation, no rotation at all. Ported from ModelExtras' SlideDoor::UpdateDoorGroup.
+void CVehicleSA::UpdateVehicleExtraSlideDoors()
+{
+    if (!m_bSlideDoorFramesResolved)
+    {
+        m_bSlideDoorFramesResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::SLIDE_DOOR))
+            ResolveSlideDoorFrames();
+    }
+
+    for (std::size_t doorIndex = 0; doorIndex < m_SlideDoorFrames.size(); doorIndex++)
+    {
+        std::vector<SVehicleSlideDoorFrame>& frames = m_SlideDoorFrames[doorIndex];
+        if (frames.empty())
+            continue;
+
+        float fRatio = GetDoor(static_cast<unsigned char>(doorIndex))->GetAngleOpenRatio();
+        float fPopFactor = std::min(1.0f, fRatio * 5.0f);
+
+        // ModelExtras' own sign convention here is the mirror image of rotate door's: left pops toward
+        // -X, right toward +X
+        bool  bIsLeftSide = doorIndex == static_cast<std::size_t>(FRONT_LEFT_DOOR) || doorIndex == static_cast<std::size_t>(REAR_LEFT_DOOR);
+        float fSideMultiplier = bIsLeftSide ? -1.0f : 1.0f;
+
+        for (SVehicleSlideDoorFrame& frame : frames)
+        {
+            frame.pFrame->modelling.pos.y = frame.fSlideMultiplier * fRatio * -1.0f;
+            frame.pFrame->modelling.pos.x = fPopFactor * frame.fPopOutDistance * fSideMultiplier;
+        }
+    }
+}
+
+// Eases one rotating panel's current angle linearly toward its own configured angle (or back to 0 if
+// bClosed) at a constant angular speed - unlike spoiler/gauge's framerate-independent exponential
+// smoothing, ModelExtras' own roof/rollback-bed animation is a fixed-rate ramp that snaps exactly onto
+// the target once within one pulse's step of it. fSpeedMultiplier is CVehicleExtras' own generic
+// per-vehicle speed multiplier, applied the same way it already scales spoiler/gauge/odometer's rate.
+// Returns true once the target angle has been reached (a missing frame counts as already there).
+bool CVehicleSA::UpdateRoofPanelRotation(SVehicleRoofPanelFrame& panel, bool bClosed, float fSpeedMultiplier)
+{
+    if (!panel.pFrame)
+        return true;
+
+    float fTarget = bClosed ? 0.0f : panel.fTargetRotationDegrees;
+    float fDelta = fTarget - panel.fCurrentAngle;
+    float fStep = pGame->GetTimeStep() * std::fabs(panel.fTargetRotationDegrees) / 360.0f * fSpeedMultiplier;
+
+    if (std::fabs(fDelta) > fStep)
+        panel.fCurrentAngle += (fDelta > 0.0f ? fStep : -fStep);
+    else
+        panel.fCurrentAngle = fTarget;
+
+    pGame->GetRenderWareSA()->RwMatrixSetRotation(panel.pFrame->modelling, CVector(SharedUtil::DegreesToRadians(panel.fCurrentAngle), 0.0f, 0.0f));
+    return panel.fCurrentAngle == fTarget;
+}
+
+// Resolves (and caches) a convertible roof's boot/tonneau cover panels and roof canopy dummies, then
+// advances its sequenced open/close phase machine one step: boot panels open, then the canopy itself
+// moves, then boot panels close again - in that order every time, regardless of which direction the
+// canopy is headed (see CVehicleSA::UpdateRoofPanelRotation's bClosed parameter). Ported from
+// ModelExtras' ConvertibleRoof::Init render callback and its AnimPhase state machine.
+void CVehicleSA::UpdateVehicleExtraConvertibleRoof(bool bTargetExpanded, float fSpeedMultiplier)
+{
+    if (!m_RoofState.bResolved)
+    {
+        m_RoofState.bResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::CONVERTIBLE_ROOF))
+        {
+            RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+            std::vector<RwFrame*> bootDummies;
+            RwFrameFindAllFramesStartingWith(pClumpFrame, "x_convertible_boot", bootDummies);
+            for (RwFrame* pFrame : bootDummies)
+            {
+                SVehicleRoofPanelFrame panel;
+                panel.pFrame = pFrame;
+                m_RoofState.bootFrames.push_back(panel);
+            }
+
+            std::vector<RwFrame*> roofDummies;
+            RwFrameFindAllFramesStartingWith(pClumpFrame, "x_convertible_roof", roofDummies);
+            for (RwFrame* pFrame : roofDummies)
+            {
+                SVehicleRoofPanelFrame panel;
+                panel.pFrame = pFrame;
+                m_RoofState.roofFrames.push_back(panel);
+            }
+
+            m_RoofState.bSupported = !m_RoofState.roofFrames.empty();
+
+            // Roof canopies start life rotated up to their own closed/covering pose to match a normally
+            // closed convertible top; ModelExtras itself skips this specific instance's own equivalent
+            // step when it happens to spawn already raining, auto-folding instead - that weather tie-in
+            // isn't replicated here, see this feature's own report for why
+            for (SVehicleRoofPanelFrame& panel : m_RoofState.roofFrames)
+            {
+                panel.fCurrentAngle = panel.fTargetRotationDegrees;
+                pGame->GetRenderWareSA()->RwMatrixSetRotation(panel.pFrame->modelling, CVector(SharedUtil::DegreesToRadians(panel.fCurrentAngle), 0.0f, 0.0f));
+            }
+        }
+    }
+
+    if (!m_RoofState.bSupported)
+        return;
+
+    // A target flip while idle kicks the sequence off; anything already mid-sequence keeps running
+    // uninterrupted regardless of further flips, matching ModelExtras' own phase machine
+    if (bTargetExpanded != m_RoofState.bPrevTargetExpanded && m_RoofState.ePhase == ERoofAnimPhase::IDLE)
+        m_RoofState.ePhase = ERoofAnimPhase::OPENING_BOOTS;
+
+    switch (m_RoofState.ePhase)
+    {
+        case ERoofAnimPhase::OPENING_BOOTS:
+        {
+            bool bAllOpened = true;
+            for (SVehicleRoofPanelFrame& panel : m_RoofState.bootFrames)
+            {
+                if (!UpdateRoofPanelRotation(panel, false, fSpeedMultiplier))
+                    bAllOpened = false;
+            }
+            if (bAllOpened)
+                m_RoofState.ePhase = ERoofAnimPhase::MOVING_ROOF;
+            break;
+        }
+        case ERoofAnimPhase::MOVING_ROOF:
+        {
+            bool bAllMoved = true;
+            for (SVehicleRoofPanelFrame& panel : m_RoofState.roofFrames)
+            {
+                if (!UpdateRoofPanelRotation(panel, bTargetExpanded, fSpeedMultiplier))
+                    bAllMoved = false;
+            }
+            if (bAllMoved)
+                m_RoofState.ePhase = ERoofAnimPhase::CLOSING_BOOTS;
+            break;
+        }
+        case ERoofAnimPhase::CLOSING_BOOTS:
+        {
+            bool bAllClosed = true;
+            for (SVehicleRoofPanelFrame& panel : m_RoofState.bootFrames)
+            {
+                if (!UpdateRoofPanelRotation(panel, true, fSpeedMultiplier))
+                    bAllClosed = false;
+            }
+            if (bAllClosed)
+            {
+                m_RoofState.ePhase = ERoofAnimPhase::IDLE;
+                m_RoofState.bPrevTargetExpanded = bTargetExpanded;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+void CVehicleSA::ResolveRollbackBedFrames()
+{
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    m_RollbackBedState.bedFrame.pFrame = RwFrameFindFrame(pClumpFrame, "x_rb_bed");
+    m_RollbackBedState.hydraulicsShellFrame.pFrame = RwFrameFindFrame(pClumpFrame, "x_rb_hydraulics");
+
+    std::vector<RwFrame*> pistonDummies;
+    RwFrameFindAllFramesStartingWith(pClumpFrame, "x_rb_hydraulic_", pistonDummies);
+    for (RwFrame* pFrame : pistonDummies)
+    {
+        SVehicleRollbackBedPiston piston;
+        piston.pFrame = pFrame;
+        m_RollbackBedState.pistons.push_back(piston);
+    }
+}
+
+// Resolves (and caches) a rollback bed's platform, hydraulics shell, and piston dummies, then eases all
+// of them simultaneously toward bTargetExpanded every pulse - unlike convertible roof, ModelExtras runs
+// this one with no phase sequencing between its parts. Ported from ModelExtras' RollbackBed::Init render
+// callback; the platform/shell rotation call itself is commented out with a "TODO FIX" marker in
+// ModelExtras' own current source (its replacement, MatrixUtil::SetRotationX, doesn't even exist there),
+// so this reimplements the clearly-intended-but-never-finished rotation using this codebase's own
+// absolute-rotation mechanism instead, same as every other rotating extra in this framework.
+void CVehicleSA::UpdateVehicleExtraRollbackBed(bool bTargetExpanded, float fSpeedMultiplier)
+{
+    if (!m_RollbackBedState.bResolved)
+    {
+        m_RollbackBedState.bResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::ROLLBACK_BED))
+        {
+            ResolveRollbackBedFrames();
+            m_RollbackBedState.bSupported = m_RollbackBedState.bedFrame.pFrame != nullptr ||
+                                            m_RollbackBedState.hydraulicsShellFrame.pFrame != nullptr || !m_RollbackBedState.pistons.empty();
+        }
+    }
+
+    if (!m_RollbackBedState.bSupported)
+        return;
+
+    bool bClosed = !bTargetExpanded;
+    UpdateRoofPanelRotation(m_RollbackBedState.bedFrame, bClosed, fSpeedMultiplier);
+    UpdateRoofPanelRotation(m_RollbackBedState.hydraulicsShellFrame, bClosed, fSpeedMultiplier);
+
+    for (SVehicleRollbackBedPiston& piston : m_RollbackBedState.pistons)
+    {
+        if (!piston.pFrame)
+            continue;
+
+        float fTarget = bTargetExpanded ? piston.fTargetMove : 0.0f;
+        float fDelta = fTarget - piston.fCurrentMove;
+
+        // ModelExtras' own constant-velocity piston formula: divides by 100 as a base scaling factor so
+        // a speed multiplier of 1.0 isn't instant, distinct from the rotating parts' angle-proportional step
+        float fStep = pGame->GetTimeStep() * (fSpeedMultiplier / 100.0f);
+
+        float fPreviousMove = piston.fCurrentMove;
+        if (std::fabs(fDelta) > fStep)
+            piston.fCurrentMove += (fDelta > 0.0f ? fStep : -fStep);
+        else
+            piston.fCurrentMove = fTarget;
+
+        piston.pFrame->modelling.pos.z += (piston.fCurrentMove - fPreviousMove);
+    }
+}
+
 void CVehicleSA::SetNitroLevel(float fLevel)
 {
     DWORD dwThis = (DWORD)GetInterface();

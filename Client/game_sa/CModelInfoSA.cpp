@@ -2257,6 +2257,31 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
     }
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::CLOCK] = bHasClock;
 
+    // Rotating doors (hood/boot swing up, side doors swing out): one shared dummy family, differentiated
+    // by suffix at resolve time (see CVehicleSA::ResolveRotateDoorFrames), so presence of any one of them
+    // is enough to count the model as supported
+    bool bHasRotateDoor = RwFrameFindFrameStartingWith(pFrame, "x_rd_") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::ROTATE_DOOR] = bHasRotateDoor;
+
+    // Sliding doors (van/minibus side doors). ModelExtras itself also recognises the vanilla GTA:SA
+    // dummy names some stock van/bus DFFs already carry for their own side doors, alongside its own
+    // custom x_sd_ prefix, so both are checked here too
+    bool bHasSlideDoor = RwFrameFindFrameStartingWith(pFrame, "dvan_l") != NULL || RwFrameFindFrameStartingWith(pFrame, "dvan_r") != NULL ||
+                        RwFrameFindFrameStartingWith(pFrame, "dmbus_l") != NULL || RwFrameFindFrameStartingWith(pFrame, "dmbus_r") != NULL ||
+                        RwFrameFindFrameStartingWith(pFrame, "x_sd_") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::SLIDE_DOOR] = bHasSlideDoor;
+
+    // Convertible roof. Its own boot/tonneau cover panels are optional (some DFFs have none), so only
+    // the roof canopy dummy itself is required
+    bool bHasConvertibleRoof = RwFrameFindFrameStartingWith(pFrame, "x_convertible_roof") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::CONVERTIBLE_ROOF] = bHasConvertibleRoof;
+
+    // Tow truck rollback bed: bed platform, hydraulics shell, and pistons each degrade gracefully if
+    // missing (see CVehicleSA::UpdateVehicleExtraRollbackBed), so any one dummy is enough to support it
+    bool bHasRollbackBed = RwFrameFindFrame(pFrame, "x_rb_bed") != NULL || RwFrameFindFrame(pFrame, "x_rb_hydraulics") != NULL ||
+                           RwFrameFindFrameStartingWith(pFrame, "x_rb_hydraulic_") != NULL;
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::ROLLBACK_BED] = bHasRollbackBed;
+
     m_ModelSupportedExtras.m_bInitialised = true;
 }
 
