@@ -75,8 +75,7 @@ namespace
             return true;
 
         CDamageManager* pDamage = pGameVehicle->GetDamageManager();
-        return !pDamage->GetLightStatus(bLeft ? LEFT_HEADLIGHT : RIGHT_HEADLIGHT) &&
-               !pDamage->GetPanelStatus(bLeft ? FRONT_LEFT_PANEL : FRONT_RIGHT_PANEL);
+        return !pDamage->GetLightStatus(bLeft ? LEFT_HEADLIGHT : RIGHT_HEADLIGHT) && !pDamage->GetPanelStatus(bLeft ? FRONT_LEFT_PANEL : FRONT_RIGHT_PANEL);
     }
 
     bool IsTaillightOk(CClientVehicle* pVehicle, CVehicle* pGameVehicle, bool bLeft)
@@ -85,8 +84,7 @@ namespace
             return true;
 
         CDamageManager* pDamage = pGameVehicle->GetDamageManager();
-        return !pDamage->GetLightStatus(bLeft ? LEFT_TAIL_LIGHT : RIGHT_TAIL_LIGHT) &&
-               !pDamage->GetPanelStatus(bLeft ? REAR_LEFT_PANEL : REAR_RIGHT_PANEL);
+        return !pDamage->GetLightStatus(bLeft ? LEFT_TAIL_LIGHT : RIGHT_TAIL_LIGHT) && !pDamage->GetPanelStatus(bLeft ? REAR_LEFT_PANEL : REAR_RIGHT_PANEL);
     }
 
     // SIDE_LIGHT keys off the front wing panel only (matching ModelExtras' own isMiddleLeftOk/
@@ -404,14 +402,14 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     {
         bIndicatorLeftOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_LEFT);
         PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_LEFT,
-                          bIndicatorLeftOn && bIndicatorBlinkPhase && IsFrontIndicatorOk(pVehicle, pGameVehicle, true));
+                         bIndicatorLeftOn && bIndicatorBlinkPhase && IsFrontIndicatorOk(pVehicle, pGameVehicle, true));
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::INDICATOR_RIGHT))
     {
         bIndicatorRightOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_RIGHT);
         PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_RIGHT,
-                          bIndicatorRightOn && bIndicatorBlinkPhase && IsFrontIndicatorOk(pVehicle, pGameVehicle, false));
+                         bIndicatorRightOn && bIndicatorBlinkPhase && IsFrontIndicatorOk(pVehicle, pGameVehicle, false));
     }
 
     // STT (stop/tail/turn, ModelExtras' STTLightComponent) is a combined lamp: lit for brake or tail duty
