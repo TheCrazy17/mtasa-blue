@@ -434,6 +434,16 @@ struct SVehicleWheelHubPair
     bool     bIsLeftSide = false;
 };
 
+// One resolved wheel/extra-wheel dummy pair for ExtraWheel (e.g. a dually truck's outer rear wheel).
+// A wheel position can have more than one extra mesh (dually axles), each paired against a real wheel
+// dummy at the same list index, falling back to the first real wheel once the extras outnumber them.
+struct SVehicleExtraWheelPair
+{
+    RwFrame* pWheelFrame = nullptr;
+    RwFrame* pExtraFrame = nullptr;
+    bool     bIsLeftSide = false;
+};
+
 // One resolved spoiler dummy for AnimatedSpoiler. fRotationDegrees/fTransitionTime/fTriggerSpeed are
 // parsed once from the dummy name (see CVehicleSA::ParseSpoilerDummy); fCurrentAngle is the live,
 // exponentially-smoothed animation state CVehicleExtras::PulseSpoiler updates every pulse.
@@ -600,6 +610,8 @@ private:
     std::array<SVehicleExtraFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_ExtraFrameLists;
     std::vector<SVehicleWheelHubPair>                                              m_WheelHubPairs;
     bool                                                                           m_bWheelHubPairsResolved{false};
+    std::vector<SVehicleExtraWheelPair>                                            m_ExtraWheelPairs;
+    bool                                                                           m_bExtraWheelPairsResolved{false};
     std::vector<SVehicleSpoilerFrame>                                              m_SpoilerFrames;
     bool                                                                           m_bSpoilerFramesResolved{false};
     std::array<SVehicleGaugeFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_GaugeFrameLists;
@@ -887,6 +899,7 @@ public:
     std::size_t                       GetVehicleExtraFrameCount(VehicleExtraType::Enum eExtraType) override;
     bool                              SetVehicleExtraFrame(VehicleExtraType::Enum eExtraType, std::size_t frameIndex) override;
     void                              UpdateVehicleExtraWheelHubs() override;
+    void                              UpdateVehicleExtraWheels() override;
     std::size_t                       GetVehicleSpoilerCount() override;
     bool        GetVehicleSpoilerConfig(std::size_t spoilerIndex, float& fRotationDegrees, float& fTransitionTime, float& fTriggerSpeed) override;
     float       GetVehicleSpoilerAngle(std::size_t spoilerIndex) override;
@@ -936,6 +949,7 @@ private:
     void           DumpVehicleFrames();
 
     void                 ResolveWheelHubPairs();
+    void                 ResolveExtraWheelPairs();
     SVehicleSpoilerFrame ParseSpoilerDummy(RwFrame* pFrame);
     bool                 GetVehicleSpeedRealistic(float& fSpeedOut);
     bool                 ResolveClockDigits();

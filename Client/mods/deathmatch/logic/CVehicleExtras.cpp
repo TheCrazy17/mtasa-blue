@@ -132,6 +132,12 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
             PulseWheelHub(pVehicle);
     }
 
+    if (IsExtraSupported(pVehicle, VehicleExtraType::EXTRA_WHEEL))
+    {
+        if (GetState(pVehicle, VehicleExtraType::EXTRA_WHEEL).bEnabled)
+            PulseExtraWheel(pVehicle);
+    }
+
     if (IsExtraSupported(pVehicle, VehicleExtraType::SPOILER))
     {
         SVehicleExtraState& state = GetState(pVehicle, VehicleExtraType::SPOILER);
@@ -272,6 +278,17 @@ void CVehicleExtras::PulseWheelHub(CClientVehicle* pVehicle)
         return;
 
     pGameVehicle->UpdateVehicleExtraWheelHubs();
+}
+
+void CVehicleExtras::PulseExtraWheel(CClientVehicle* pVehicle)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    // The rotation copy is pure overhead if nobody can see it
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleExtraWheels();
 }
 
 void CVehicleExtras::PulseSpoiler(CClientVehicle* pVehicle, SVehicleExtraState& state)

@@ -2745,6 +2745,96 @@ void CVehicleSA::UpdateVehicleExtraWheelHubs()
     }
 }
 
+// Wheel dummy (native, GTA-animated) and the prefix for any matching extra wheel meshes, per position.
+// Mirrors CModelInfoSA's own copy of this table, same as the wheel hub one above.
+struct SExtraWheelResolveNames
+{
+    const char* wheelName;
+    const char* wheelNameAlt;
+    const char* extraPrefix;
+    bool        bIsLeftSide;
+};
+static const SExtraWheelResolveNames g_ExtraWheelResolveNames[6] = {
+    {"wheel_rf_dummy", nullptr, "x_wheel_rf", false},
+    {"wheel_rm_dummy", nullptr, "x_wheel_rm", false},
+    {"wheel_rr_dummy", "wheel_rb_dummy", "x_wheel_rr", false},
+    {"wheel_lf_dummy", nullptr, "x_wheel_lf", true},
+    {"wheel_lm_dummy", nullptr, "x_wheel_lm", true},
+    {"wheel_lr_dummy", "wheel_lb_dummy", "x_wheel_lr", true},
+};
+
+// A wheel position can have more than one real wheel dummy (dually axles use both the "_dummy" and
+// "_b" alternate names simultaneously) and more than one extra mesh; each extra pairs with the real
+// wheel at the same index, falling back to the first real wheel once extras outnumber them - mirrors
+// ExtraWheel::Init's own pairing loop in ModelExtras.
+void CVehicleSA::ResolveExtraWheelPairs()
+{
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    for (const SExtraWheelResolveNames& names : g_ExtraWheelResolveNames)
+    {
+        std::vector<RwFrame*> wheelFrames;
+        if (RwFrame* pWheel = RwFrameFindFrame(pClumpFrame, names.wheelName))
+            wheelFrames.push_back(pWheel);
+        if (names.wheelNameAlt)
+        {
+            if (RwFrame* pWheelAlt = RwFrameFindFrame(pClumpFrame, names.wheelNameAlt))
+                wheelFrames.push_back(pWheelAlt);
+        }
+
+        if (wheelFrames.empty())
+            continue;
+
+        std::vector<RwFrame*> extraFrames;
+        RwFrameFindAllFramesStartingWith(pClumpFrame, names.extraPrefix, extraFrames);
+
+        for (std::size_t i = 0; i < extraFrames.size(); i++)
+        {
+            RwFrame* pWheelFrame = (i < wheelFrames.size()) ? wheelFrames[i] : wheelFrames[0];
+            m_ExtraWheelPairs.push_back({pWheelFrame, extraFrames[i], names.bIsLeftSide});
+        }
+    }
+}
+
+// An extra wheel mesh only needs its spin (rotation) copied from the real wheel it shadows, never its
+// position - unlike the hub cap above, it has its own authored offset (e.g. a dually axle's outboard
+// wheel). Reuses the hub cap's own basis-reconstruction technique rather than ModelExtras' own
+// UpdateWheelRotation, which sets an "absolute" X rotation to (current angle - current angle) every
+// call; that reads as already broken in the original (RE-checked in the reference source, not guessed).
+void CVehicleSA::UpdateVehicleExtraWheels()
+{
+    if (!m_bExtraWheelPairsResolved)
+    {
+        m_bExtraWheelPairsResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::EXTRA_WHEEL))
+            ResolveExtraWheelPairs();
+    }
+
+    for (const SVehicleExtraWheelPair& pair : m_ExtraWheelPairs)
+    {
+        CVector vecRight = (CVector&)pair.pWheelFrame->modelling.right;
+        if (pair.bIsLeftSide)
+        {
+            vecRight.fX = -vecRight.fX;
+            vecRight.fY = -vecRight.fY;
+            vecRight.fZ = -vecRight.fZ;
+        }
+
+        CVector vecUp = vecRight;
+        vecUp.CrossProduct(&(CVector&)pair.pExtraFrame->modelling.at);
+        CVector vecForward = vecUp;
+        vecForward.CrossProduct(&vecRight);
+        vecUp.Normalize();
+        vecForward.Normalize();
+
+        pair.pExtraFrame->modelling.right = (RwV3d&)vecRight;
+        pair.pExtraFrame->modelling.up = (RwV3d&)vecUp;
+        pair.pExtraFrame->modelling.at = (RwV3d&)vecForward;
+    }
+}
+
 SVehicleSpoilerFrame CVehicleSA::ParseSpoilerDummy(RwFrame* pFrame)
 {
     SVehicleSpoilerFrame spoiler;

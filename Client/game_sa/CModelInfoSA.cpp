@@ -2177,6 +2177,20 @@ static const SWheelHubDummyNames g_WheelHubDummyNames[6] = {
     {"wheel_lf_dummy", nullptr, "hub_lf", nullptr}, {"wheel_lm_dummy", nullptr, "hub_lm", nullptr}, {"wheel_lr_dummy", "wheel_lb_dummy", "hub_lr", "hub_lb"},
 };
 
+// Real wheel dummy (native, GTA-animated) and the prefix for any decorative extra wheel meshes that
+// should spin in sync with it (e.g. a dually truck's outer rear wheels). Distinct from wheel hub caps
+// above: an extra wheel is a whole second wheel mesh, not a small cap riding the same real wheel.
+struct SExtraWheelDummyNames
+{
+    const char* wheelName;
+    const char* wheelNameAlt;
+    const char* extraPrefix;
+};
+static const SExtraWheelDummyNames g_ExtraWheelDummyNames[6] = {
+    {"wheel_rf_dummy", nullptr, "x_wheel_rf"}, {"wheel_rm_dummy", nullptr, "x_wheel_rm"}, {"wheel_rr_dummy", "wheel_rb_dummy", "x_wheel_rr"},
+    {"wheel_lf_dummy", nullptr, "x_wheel_lf"}, {"wheel_lm_dummy", nullptr, "x_wheel_lm"}, {"wheel_lr_dummy", "wheel_lb_dummy", "x_wheel_lr"},
+};
+
 void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
 {
     m_ModelSupportedExtras.Reset();
@@ -2201,6 +2215,21 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
         }
     }
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::WHEEL_HUB] = bHasWheelHubPair;
+
+    // Same reasoning as the wheel hub pair above: an extra wheel with no real wheel to copy rotation
+    // from has nothing to animate it, so only count it as supported once both halves exist somewhere.
+    bool bHasExtraWheelPair = false;
+    for (const SExtraWheelDummyNames& names : g_ExtraWheelDummyNames)
+    {
+        bool bHasWheel = RwFrameFindFrame(pFrame, names.wheelName) != NULL || (names.wheelNameAlt && RwFrameFindFrame(pFrame, names.wheelNameAlt) != NULL);
+        bool bHasExtra = RwFrameFindFrameStartingWith(pFrame, names.extraPrefix) != NULL;
+        if (bHasWheel && bHasExtra)
+        {
+            bHasExtraWheelPair = true;
+            break;
+        }
+    }
+    m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::EXTRA_WHEEL] = bHasExtraWheelPair;
 
     // Spoiler dummy names encode their own tuning (see CVehicleSA's spoiler dummy parsing), so
     // presence of any one of them is all that's needed here

@@ -17,6 +17,7 @@ namespace VehicleExtraType
     {
         CHAIN,
         WHEEL_HUB,
+        EXTRA_WHEEL,
         SPOILER,
         GEAR_INDICATOR,
         SPEED_GAUGE,

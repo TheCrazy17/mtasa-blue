@@ -341,6 +341,9 @@ public:
     // Copies each already GTA-animated wheel dummy's rotation onto its matching decorative hub dummy,
     // for every wheel/hub pair this instance's clump has resolved. A no-op if the model has none.
     virtual void UpdateVehicleExtraWheelHubs() = 0;
+    // Same idea, for a whole extra decorative wheel mesh instead of just a hub cap (e.g. a dually
+    // truck's outer rear wheels): copies the matching real wheel's spin onto each resolved extra.
+    virtual void UpdateVehicleExtraWheels() = 0;
 
     // Resolves (and caches) this instance's spoiler dummies. A vehicle can have more than one.
     virtual std::size_t GetVehicleSpoilerCount() = 0;
