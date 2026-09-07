@@ -352,6 +352,12 @@ public:
     // Shows or hides every resolved frame for this light/LED extra together.
     virtual void SetVehicleLightVisible(VehicleExtraType::Enum eExtraType, bool bVisible) = 0;
 
+    // Resolves (and caches) the spotlight_dummy real-time aim target (ModelExtras' SpotLights::OnHudRender),
+    // distinct from the spotlight_light glow dummy above, then - only for the local player's own vehicle,
+    // and only while the vehicle-mouse-look control is held - rotates it to face the live camera direction.
+    // A no-op if the model has no such dummy, or neither condition currently holds.
+    virtual void UpdateVehicleSpotlightAim() = 0;
+
     // Resolves (and caches) this instance's spoiler dummies. A vehicle can have more than one.
     virtual std::size_t GetVehicleSpoilerCount() = 0;
     // Dummy-name-encoded tuning for one resolved spoiler (see CModelInfoSA::InitialiseSupportedExtras).

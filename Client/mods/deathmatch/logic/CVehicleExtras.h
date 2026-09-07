@@ -81,6 +81,7 @@ private:
     static void PulseConvertibleRoof(CClientVehicle* pVehicle, SVehicleExtraState& state);
     static void PulseRollbackBed(CClientVehicle* pVehicle, SVehicleExtraState& state);
     static void PulseSimpleLight(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, bool bVisible);
+    static void PulseSpotlightAim(CClientVehicle* pVehicle);
 
     static std::unordered_map<CClientVehicle*, VehicleExtraStates> ms_VehicleStates;
 };

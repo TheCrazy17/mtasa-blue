@@ -295,7 +295,14 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::SPOTLIGHT))
+    {
         PulseSimpleLight(pVehicle, VehicleExtraType::SPOTLIGHT, IsEnabled(pVehicle, VehicleExtraType::SPOTLIGHT));
+
+        // Aiming runs independently of the on/off switch above, matching ModelExtras' own
+        // OnHudRender: the aim dummy tracks the camera whenever the control is held, whether or not
+        // the light is currently switched on
+        PulseSpotlightAim(pVehicle);
+    }
 
     // Indicators blink in step across every vehicle, the same wall-clock 500ms flip ModelExtras' own
     // global BlinkerState uses; computed from the clock itself instead of stored per-vehicle state, so
@@ -476,6 +483,16 @@ void CVehicleExtras::PulseSimpleLight(CClientVehicle* pVehicle, VehicleExtraType
         return;
 
     pGameVehicle->SetVehicleLightVisible(eExtraType, bVisible);
+}
+
+void CVehicleExtras::PulseSpotlightAim(CClientVehicle* pVehicle)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    pGameVehicle->UpdateVehicleSpotlightAim();
 }
 
 void CVehicleExtras::PulseSpoiler(CClientVehicle* pVehicle, SVehicleExtraState& state)

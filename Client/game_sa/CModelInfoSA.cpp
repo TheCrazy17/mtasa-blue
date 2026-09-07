@@ -2363,6 +2363,13 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
         m_ModelSupportedExtras.m_SupportedFlags[entry.eExtraType] = bHasDummy;
     }
 
+    // The real-time aim target (spotlight_dummy, ModelExtras' own SpotLights::OnHudRender) is a separate
+    // frame from the glow/toggle mesh above (spotlight_light, in the shared table) - either alone is
+    // enough to count the model as supporting this extra, so this is OR'd in after the loop rather than
+    // folded into g_LightDummyPrefixes, which CVehicleSA's own show/hide resolve also reads verbatim.
+    if (RwFrameFindFrameStartingWith(pFrame, "spotlight_dummy") != NULL)
+        m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::SPOTLIGHT] = true;
+
     m_ModelSupportedExtras.m_bInitialised = true;
 }
 

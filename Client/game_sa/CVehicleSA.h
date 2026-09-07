@@ -596,6 +596,17 @@ struct SVehicleLightFrameList
     bool                  bResolved{false};
 };
 
+// Resolved real-time aim target for SpotLights::OnHudRender's own aiming trick: a single dummy
+// (spotlight_dummy, distinct from the spotlight_light glow/toggle mesh above) whose local rotation gets
+// recomputed from the live camera direction every pulse. Unlike every rotation-driven struct above,
+// there is no eased/persisted angle to track here - the aim is recomputed from scratch each time, the
+// same direct (non-smoothed) way ModelExtras itself does it.
+struct SVehicleSpotlightAimFrame
+{
+    RwFrame* pFrame = nullptr;
+    bool     bResolved{false};
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -633,6 +644,7 @@ private:
     SVehicleRoofState                                                              m_RoofState;
     SVehicleRollbackBedState                                                       m_RollbackBedState;
     std::array<SVehicleLightFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_LightFrameLists;
+    SVehicleSpotlightAimFrame                                                      m_SpotlightAimFrame;
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -927,6 +939,7 @@ public:
     void        UpdateVehicleExtraRollbackBed(bool bTargetExpanded, float fSpeedMultiplier) override;
     std::size_t GetVehicleLightFrameCount(VehicleExtraType::Enum eExtraType) override;
     void        SetVehicleLightVisible(VehicleExtraType::Enum eExtraType, bool bVisible) override;
+    void        UpdateVehicleSpotlightAim() override;
     bool        SetPlateText(const SString& strText);
     bool        SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float       GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }

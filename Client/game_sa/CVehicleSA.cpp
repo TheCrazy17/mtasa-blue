@@ -34,6 +34,7 @@
 #include "CFireManagerSA.h"
 #include "enums/VehicleType.h"
 #include <game/CHandlingEntry.h>
+#include <game/CPad.h>
 
 extern CCoreInterface* g_pCore;
 extern CGameSA*        pGame;
@@ -2917,6 +2918,66 @@ void CVehicleSA::SetVehicleLightVisible(VehicleExtraType::Enum eExtraType, bool 
                 pAtomic->flags &= ~0x05;
         }
     }
+}
+
+// ModelExtras' own SpotLights::OnHudRender achieves this by copying the camera's world basis directly
+// onto the frame's local matrix and then correcting for the vehicle's own current heading with a further
+// RwFrameRotate; that only works out because it runs against the actual RW frame hierarchy the plugin-sdk
+// mod hooks into. This does the equivalent job within this codebase's own idioms instead: convert the
+// camera's world-space forward vector into the vehicle's own local space (removing the vehicle's current
+// rotation via a plain dot product against its own basis vectors, since a rotation matrix's transpose is
+// its inverse), then solve for the (pitch, heading) pair that makes this framework's own RwMatrixSetRotation
+// point the frame's forward axis (CMatrix's vFront - see CMatrix::SetRotation) along that local direction.
+// Roll around the beam axis is left at zero throughout, same as every other rotation this codebase applies
+// with RwMatrixSetRotation - a light cone reads the same regardless of roll.
+void CVehicleSA::UpdateVehicleSpotlightAim()
+{
+    if (!m_SpotlightAimFrame.bResolved)
+    {
+        m_SpotlightAimFrame.bResolved = true;
+
+        CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+        if (pModelInfo && pModelInfo->IsVehicleExtraSupported(VehicleExtraType::SPOTLIGHT))
+        {
+            RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+            m_SpotlightAimFrame.pFrame = RwFrameFindFrameStartingWith(pClumpFrame, "spotlight_dummy");
+        }
+    }
+
+    if (!m_SpotlightAimFrame.pFrame)
+        return;
+
+    // Only the local player has a camera and control state to aim with, and only their own vehicle is
+    // what that camera is actually looking at - matches ModelExtras' own FindPlayerVehicle(-1, false)
+    if (pGame->GetPools()->GetPedFromRef(1)->GetVehicle() != this)
+        return;
+
+    // This codebase's own control-state equivalent of ModelExtras' raw VK_RMB check: vehicle_mouse_look
+    // is the native GTA:SA control for holding the camera in free-look while driving, bound to the right
+    // mouse button by default, read the same abstracted way every other bound control is
+    CControllerState controllerState;
+    pGame->GetPad()->GetCurrentControllerState(&controllerState);
+    if (!controllerState.m_bVehicleMouseLook)
+        return;
+
+    CCam* pCam = pGame->GetCamera()->GetCam(pGame->GetCamera()->GetActiveCam());
+    if (!pCam)
+        return;
+
+    CVector vecCamFront = *pCam->GetFront();
+    if (vecCamFront.Length() < 0.0001f)
+        return;
+    vecCamFront.Normalize();
+
+    CMatrix matVehicle;
+    GetMatrix(&matVehicle);
+
+    CVector vecLocalAim(vecCamFront.DotProduct(&matVehicle.vRight), vecCamFront.DotProduct(&matVehicle.vFront), vecCamFront.DotProduct(&matVehicle.vUp));
+
+    float fPitchRad = asin(std::clamp(vecLocalAim.fZ, -1.0f, 1.0f));
+    float fHeadingRad = atan2(-vecLocalAim.fX, vecLocalAim.fY);
+
+    pGame->GetRenderWareSA()->RwMatrixSetRotation(m_SpotlightAimFrame.pFrame->modelling, CVector(fPitchRad, 0.0f, fHeadingRad));
 }
 
 SVehicleSpoilerFrame CVehicleSA::ParseSpoilerDummy(RwFrame* pFrame)
