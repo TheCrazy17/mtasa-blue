@@ -37,22 +37,43 @@ enum class eRadioTrackMode
 
 struct tRadioSettings
 {
-    std::int32_t djIndex[4];
+    std::int32_t trackQueue[5];        // Up to 5 queued track/DJ-banter/advert/ident ids, played in order
     std::int32_t currentTrackId;
     std::int32_t prevTrackId;
     std::int32_t trackPlayTime;
     std::int32_t trackLengthInMS;
-    std::uint8_t trackFlags[2];
+    std::uint8_t trackFlags;
     std::uint8_t currentRadioStation;
-    std::uint8_t field_27;
     std::uint8_t bassSet;
     float        bassGain;
-    std::uint8_t trackTypes[4];
+    std::uint8_t trackTypes[5];        // Per-entry type (intro/track/outro/advert/...) for trackQueue
     std::uint8_t currentTrackType;
     std::uint8_t prevTrackType;
-    std::int8_t  trackIndexes[10];
+    std::int8_t  trackIndexes[5];      // Per-entry index into the station's track list, for trackQueue
+    std::int8_t  currentTrackIndex;
+    std::int8_t  prevTrackIndex;
 };
 static_assert(sizeof(tRadioSettings) == 0x3C, "Invalid size of tRadioSettings struct!");
+// Sub-field offsets confirmed against real disassembly (Ghidra, gta_sa.exe 1.0 US) of
+// CAERadioTrackManager::Service/StartRadio/CheckForTrackConcatenation/SetBassSetting/
+// SetBassEnhanceOnOff - pinned here so the layout can't silently drift again like it did
+// before (trackQueue was 4 entries instead of 5, trackFlags/trackIndexes were sized wrong,
+// shifting every field's real offset without the overall struct size changing).
+static_assert(offsetof(tRadioSettings, trackQueue) == 0x00, "Invalid offset of tRadioSettings::trackQueue!");
+static_assert(offsetof(tRadioSettings, currentTrackId) == 0x14, "Invalid offset of tRadioSettings::currentTrackId!");
+static_assert(offsetof(tRadioSettings, prevTrackId) == 0x18, "Invalid offset of tRadioSettings::prevTrackId!");
+static_assert(offsetof(tRadioSettings, trackPlayTime) == 0x1C, "Invalid offset of tRadioSettings::trackPlayTime!");
+static_assert(offsetof(tRadioSettings, trackLengthInMS) == 0x20, "Invalid offset of tRadioSettings::trackLengthInMS!");
+static_assert(offsetof(tRadioSettings, trackFlags) == 0x24, "Invalid offset of tRadioSettings::trackFlags!");
+static_assert(offsetof(tRadioSettings, currentRadioStation) == 0x25, "Invalid offset of tRadioSettings::currentRadioStation!");
+static_assert(offsetof(tRadioSettings, bassSet) == 0x26, "Invalid offset of tRadioSettings::bassSet!");
+static_assert(offsetof(tRadioSettings, bassGain) == 0x28, "Invalid offset of tRadioSettings::bassGain!");
+static_assert(offsetof(tRadioSettings, trackTypes) == 0x2C, "Invalid offset of tRadioSettings::trackTypes!");
+static_assert(offsetof(tRadioSettings, currentTrackType) == 0x31, "Invalid offset of tRadioSettings::currentTrackType!");
+static_assert(offsetof(tRadioSettings, prevTrackType) == 0x32, "Invalid offset of tRadioSettings::prevTrackType!");
+static_assert(offsetof(tRadioSettings, trackIndexes) == 0x33, "Invalid offset of tRadioSettings::trackIndexes!");
+static_assert(offsetof(tRadioSettings, currentTrackIndex) == 0x38, "Invalid offset of tRadioSettings::currentTrackIndex!");
+static_assert(offsetof(tRadioSettings, prevTrackIndex) == 0x39, "Invalid offset of tRadioSettings::prevTrackIndex!");
 
 struct tRadioState
 {
@@ -98,14 +119,22 @@ public:
     float           volume2;
     tRadioSettings  requestedSettings;
     tRadioSettings  activeSettings;
-    tRadioState     radioState[13];
-    std::uint8_t    field_33C[12];
-    std::uint8_t    field_348[32];
+    tRadioState     radioState[14];    // One entry per eRadioID station (RADIO_COUNT), was wrongly [13]
     std::uint32_t   field_368;
     std::uint8_t    userTrackPlayMode;
     std::uint8_t    field_36D[3];
 };
 static_assert(sizeof(CAERadioTrackManagerSAInterface) == 0x370, "Invalid size of CAERadioTrackManagerSAInterface class!");
+// Pin the fields around the fixed radioState[13] -> [14] bug (was quietly compensated for by
+// two now-removed padding arrays, so the total size below already passed even when broken).
+static_assert(offsetof(CAERadioTrackManagerSAInterface, trackMode) == 0x68, "Invalid offset of CAERadioTrackManagerSAInterface::trackMode!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, stationsListed) == 0x6C, "Invalid offset of CAERadioTrackManagerSAInterface::stationsListed!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, stationsListDown) == 0x70, "Invalid offset of CAERadioTrackManagerSAInterface::stationsListDown!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, requestedSettings) == 0x88, "Invalid offset of CAERadioTrackManagerSAInterface::requestedSettings!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, activeSettings) == 0xC4, "Invalid offset of CAERadioTrackManagerSAInterface::activeSettings!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, radioState) == 0x100, "Invalid offset of CAERadioTrackManagerSAInterface::radioState!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, field_368) == 0x368, "Invalid offset of CAERadioTrackManagerSAInterface::field_368!");
+static_assert(offsetof(CAERadioTrackManagerSAInterface, userTrackPlayMode) == 0x36C, "Invalid offset of CAERadioTrackManagerSAInterface::userTrackPlayMode!");
 
 class CAERadioTrackManagerSA : public CAERadioTrackManager
 {
