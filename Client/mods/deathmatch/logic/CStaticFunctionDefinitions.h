@@ -15,6 +15,7 @@ class CStaticFunctionDefinitions;
 
 #include <gui/CGUI.h>
 #include <gui/CGUIElement.h>
+#include <game/CAERadioTrackManager.h>
 
 #include "enums/HandlingProperty.h"
 #include "enums/WeaponProperty.h"
@@ -112,6 +113,8 @@ public:
     // Radio funcs
     static bool SetRadioChannel(unsigned char& ucChannel);
     static bool GetRadioChannel(unsigned char& ucChannel);
+    static bool GetRadioPlaybackState(SRadioPlaybackState& state);
+    static bool SetRadioPlaybackState(const SRadioPlaybackState& state);
 
     // Player get funcs
     static CClientPlayer* GetLocalPlayer();

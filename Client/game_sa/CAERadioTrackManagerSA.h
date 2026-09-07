@@ -149,4 +149,7 @@ public:
     void  Reset();
     void  StartRadio(BYTE bStationID, BYTE bUnknown);
     bool  IsStationLoading() const;
+
+    bool GetPlaybackState(SRadioPlaybackState& outState) override;
+    bool SetPlaybackState(const SRadioPlaybackState& state) override;
 };

@@ -1728,6 +1728,16 @@ bool CStaticFunctionDefinitions::GetRadioChannel(unsigned char& ucChannel)
     return true;
 }
 
+bool CStaticFunctionDefinitions::GetRadioPlaybackState(SRadioPlaybackState& state)
+{
+    return g_pGame->GetAERadioTrackManager()->GetPlaybackState(state);
+}
+
+bool CStaticFunctionDefinitions::SetRadioPlaybackState(const SRadioPlaybackState& state)
+{
+    return g_pGame->GetAERadioTrackManager()->SetPlaybackState(state);
+}
+
 CClientPlayer* CStaticFunctionDefinitions::GetLocalPlayer()
 {
     return m_pPlayerManager->GetLocalPlayer();

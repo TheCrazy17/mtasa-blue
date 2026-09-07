@@ -71,6 +71,8 @@ public:
     LUA_DECLARE(SetRadioChannel);
     LUA_DECLARE(GetRadioChannel);
     LUA_DECLARE(GetRadioChannelName);
+    LUA_DECLARE(GetRadioPlaybackState);
+    LUA_DECLARE(SetRadioPlaybackState);
 
     static bool ShowSound(bool state);
     static bool IsShowSoundEnabled();

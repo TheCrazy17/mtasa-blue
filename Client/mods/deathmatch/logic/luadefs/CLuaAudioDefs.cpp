@@ -67,6 +67,8 @@ void CLuaAudioDefs::LoadFunctions()
                                                                              {"setRadioChannel", SetRadioChannel},
                                                                              {"getRadioChannel", GetRadioChannel},
                                                                              {"getRadioChannelName", GetRadioChannelName},
+                                                                             {"getRadioPlaybackState", GetRadioPlaybackState},
+                                                                             {"setRadioPlaybackState", SetRadioPlaybackState},
 
                                                                              // Dev funcs
                                                                              {"showSound", ArgumentParser<ShowSound>},
@@ -2599,6 +2601,140 @@ int CLuaAudioDefs::GetRadioChannelName(lua_State* luaVM)
         if (iChannel >= 0 && iChannel < NUMELMS(szRadioStations))
         {
             lua_pushstring(luaVM, szRadioStations[iChannel]);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+// table getRadioPlaybackState ()
+int CLuaAudioDefs::GetRadioPlaybackState(lua_State* luaVM)
+{
+    SRadioPlaybackState state;
+    if (CStaticFunctionDefinitions::GetRadioPlaybackState(state))
+    {
+        lua_newtable(luaVM);
+
+        lua_pushnumber(luaVM, state.station);
+        lua_setfield(luaVM, -2, "station");
+
+        lua_pushnumber(luaVM, state.mode);
+        lua_setfield(luaVM, -2, "mode");
+
+        lua_pushnumber(luaVM, state.currentTrackID);
+        lua_setfield(luaVM, -2, "currentTrackId");
+
+        lua_pushnumber(luaVM, state.currentTrackType);
+        lua_setfield(luaVM, -2, "currentTrackType");
+
+        lua_pushnumber(luaVM, state.currentTrackIndex);
+        lua_setfield(luaVM, -2, "currentTrackIndex");
+
+        lua_pushnumber(luaVM, state.playTime);
+        lua_setfield(luaVM, -2, "playTime");
+
+        lua_pushnumber(luaVM, state.trackLength);
+        lua_setfield(luaVM, -2, "trackLength");
+
+        lua_pushnumber(luaVM, state.flags);
+        lua_setfield(luaVM, -2, "flags");
+
+        lua_newtable(luaVM);
+        for (std::size_t i = 0; i < SRadioPlaybackState::QUEUE_SIZE; i++)
+        {
+            const SRadioPlaybackQueueEntry& entry = state.queue[i];
+
+            lua_pushnumber(luaVM, static_cast<lua_Number>(i + 1));
+            lua_newtable(luaVM);
+
+            lua_pushnumber(luaVM, entry.trackID);
+            lua_setfield(luaVM, -2, "trackId");
+
+            lua_pushnumber(luaVM, entry.trackType);
+            lua_setfield(luaVM, -2, "trackType");
+
+            lua_pushnumber(luaVM, entry.trackIndex);
+            lua_setfield(luaVM, -2, "trackIndex");
+
+            lua_settable(luaVM, -3);
+        }
+        lua_setfield(luaVM, -2, "queue");
+
+        return 1;
+    }
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+// bool setRadioPlaybackState ( table playbackState )
+// playbackState is the same shape getRadioPlaybackState returns. Missing fields default to "off"/
+// empty values rather than erroring, so a script can restore a partial or hand-built state.
+int CLuaAudioDefs::SetRadioPlaybackState(lua_State* luaVM)
+{
+    CScriptArgReader argStream(luaVM);
+
+    if (!argStream.NextIsTable())
+        argStream.SetTypeError("table");
+
+    if (!argStream.HasErrors())
+    {
+        const int iTableIndex = 1;
+
+        const auto ReadIntField = [&](const char* szField, int iDefault) {
+            lua_getfield(luaVM, iTableIndex, szField);
+            int iValue = lua_isnumber(luaVM, -1) ? static_cast<int>(lua_tointeger(luaVM, -1)) : iDefault;
+            lua_pop(luaVM, 1);
+            return iValue;
+        };
+
+        SRadioPlaybackState state;
+        state.station = static_cast<unsigned char>(ReadIntField("station", 0));
+        state.mode = static_cast<unsigned char>(ReadIntField("mode", 0));
+        state.currentTrackID = ReadIntField("currentTrackId", -1);
+        state.currentTrackType = ReadIntField("currentTrackType", 0);
+        state.currentTrackIndex = ReadIntField("currentTrackIndex", -1);
+        state.playTime = ReadIntField("playTime", 0);
+        state.trackLength = ReadIntField("trackLength", 0);
+        state.flags = static_cast<unsigned char>(ReadIntField("flags", 0));
+
+        lua_getfield(luaVM, iTableIndex, "queue");
+        if (lua_istable(luaVM, -1))
+        {
+            const int iQueueIndex = lua_gettop(luaVM);
+            for (std::size_t i = 0; i < SRadioPlaybackState::QUEUE_SIZE; i++)
+            {
+                SRadioPlaybackQueueEntry& entry = state.queue[i];
+
+                lua_rawgeti(luaVM, iQueueIndex, static_cast<int>(i + 1));
+                if (lua_istable(luaVM, -1))
+                {
+                    const int iEntryIndex = lua_gettop(luaVM);
+
+                    lua_getfield(luaVM, iEntryIndex, "trackId");
+                    entry.trackID = lua_isnumber(luaVM, -1) ? static_cast<int>(lua_tointeger(luaVM, -1)) : -1;
+                    lua_pop(luaVM, 1);
+
+                    lua_getfield(luaVM, iEntryIndex, "trackType");
+                    entry.trackType = lua_isnumber(luaVM, -1) ? static_cast<int>(lua_tointeger(luaVM, -1)) : 0;
+                    lua_pop(luaVM, 1);
+
+                    lua_getfield(luaVM, iEntryIndex, "trackIndex");
+                    entry.trackIndex = lua_isnumber(luaVM, -1) ? static_cast<int>(lua_tointeger(luaVM, -1)) : -1;
+                    lua_pop(luaVM, 1);
+                }
+                lua_pop(luaVM, 1);
+            }
+        }
+        lua_pop(luaVM, 1);
+
+        if (CStaticFunctionDefinitions::SetRadioPlaybackState(state))
+        {
+            lua_pushboolean(luaVM, true);
             return 1;
         }
     }
