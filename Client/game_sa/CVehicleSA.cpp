@@ -240,7 +240,8 @@ namespace
                 RwFrameDump(ret, pVehicleSA);
             }
             // don't re-add, check ret for validity, if it has an empty string at this point it isn't a variant or it's already added
-            if (pVehicleSA->IsComponentPresent(ret->szName) == false && ret->szName != "")
+            // ( szName is a fixed char array, so comparing it against "" would compare pointers, not content )
+            if (pVehicleSA->IsComponentPresent(ret->szName) == false && ret->szName[0] != '\0')
             {
                 pVehicleSA->AddComponent(ret, true);
             }
@@ -2420,10 +2421,11 @@ void CVehicleSA::AddComponent(RwFrame* pFrame, bool bReadOnly)
         return;
 
     // if the frame already exists ignore it
-    if (IsComponentPresent(pFrame->szName) || pFrame->szName == "")
+    if (IsComponentPresent(pFrame->szName))
         return;
 
     SString strName = pFrame->szName;
+    bool    bIsVariant = false;
     // variants have no name field.
     if (strName == "")
     {
@@ -2439,11 +2441,19 @@ void CVehicleSA::AddComponent(RwFrame* pFrame, bool bReadOnly)
 
         // increment the variant count ( we assume that the first variant created is variant1 and the second is variant2 )
         m_ucVariantCount++;
+        bIsVariant = true;
     }
 
     // insert our new frame
     SVehicleFrame frame = SVehicleFrame(pFrame, bReadOnly);
     m_ExtraFrames.insert(std::pair<SString, SVehicleFrame>(strName, frame));
+
+    // The chosen extra atomic is a clone of the model's source extra atomic and keeps whatever
+    // render flag that source had in the DFF. Some custom vehicles author their extras as
+    // non-rendering by default, which otherwise leaves the selected variant invisible until a
+    // later setVehicleVariant call happens to force it on via the visibility restore path.
+    if (bIsVariant)
+        SetComponentVisible(strName, true);
 }
 
 void CVehicleSA::FinalizeFramesList()
