@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <game/CClock.h>
+#include <game/CDamageManager.h>
 #include <game/CDoor.h>
 #include "CVehicleExtras.h"
 #include "CClientVehicle.h"
@@ -57,6 +58,62 @@ namespace
     {
         return eExtraType == VehicleExtraType::FOG_LIGHT || eExtraType == VehicleExtraType::SPOTLIGHT ||
                eExtraType == VehicleExtraType::INDICATOR_LEFT || eExtraType == VehicleExtraType::INDICATOR_RIGHT;
+    }
+
+    // ModelExtras' own lights/damage.h: a damaged light or its surrounding body panel should stop that
+    // light from lighting up. CVehicle::GetDamageManager() already wraps GTA's own native per-light/
+    // per-panel damage tracking - sdk/game/CDamageManager.h's eLights/ePanels are the same four real
+    // lights (GTA never tracked brake or indicator bulbs separately either) and seven real panels
+    // ModelExtras' own eLights/ePanels enumerate, just spelled differently - so this is a straight
+    // translation, not new infrastructure. ModelExtras itself also only trusts this state for
+    // CAutomobile: CarUtil::IsLightDamaged/IsPanelDamaged both report "not damaged" for every other
+    // subclass, since only a car's damage manager bytes are meaningfully panel/light state there;
+    // mirrored here as CLIENTVEHICLE_CAR.
+    bool IsHeadlightOk(CClientVehicle* pVehicle, CVehicle* pGameVehicle, bool bLeft)
+    {
+        if (pVehicle->GetVehicleType() != CLIENTVEHICLE_CAR)
+            return true;
+
+        CDamageManager* pDamage = pGameVehicle->GetDamageManager();
+        return !pDamage->GetLightStatus(bLeft ? LEFT_HEADLIGHT : RIGHT_HEADLIGHT) &&
+               !pDamage->GetPanelStatus(bLeft ? FRONT_LEFT_PANEL : FRONT_RIGHT_PANEL);
+    }
+
+    bool IsTaillightOk(CClientVehicle* pVehicle, CVehicle* pGameVehicle, bool bLeft)
+    {
+        if (pVehicle->GetVehicleType() != CLIENTVEHICLE_CAR)
+            return true;
+
+        CDamageManager* pDamage = pGameVehicle->GetDamageManager();
+        return !pDamage->GetLightStatus(bLeft ? LEFT_TAIL_LIGHT : RIGHT_TAIL_LIGHT) &&
+               !pDamage->GetPanelStatus(bLeft ? REAR_LEFT_PANEL : REAR_RIGHT_PANEL);
+    }
+
+    // SIDE_LIGHT keys off the front wing panel only (matching ModelExtras' own isMiddleLeftOk/
+    // isMiddleRightOk), not the rear one, despite upstream's own "middle" naming for this check
+    bool IsFrontWingOk(CClientVehicle* pVehicle, CVehicle* pGameVehicle, bool bLeft)
+    {
+        if (pVehicle->GetVehicleType() != CLIENTVEHICLE_CAR)
+            return true;
+
+        return !pGameVehicle->GetDamageManager()->GetPanelStatus(bLeft ? FRONT_LEFT_PANEL : FRONT_RIGHT_PANEL);
+    }
+
+    bool IsFrontBumperOk(CClientVehicle* pVehicle, CVehicle* pGameVehicle)
+    {
+        if (pVehicle->GetVehicleType() != CLIENTVEHICLE_CAR)
+            return true;
+
+        return !pGameVehicle->GetDamageManager()->GetPanelStatus(FRONT_BUMPER);
+    }
+
+    // isFrontLeftOk/isFrontRightOk in ModelExtras' own damage.h: a siren/alarm-equipped vehicle's front
+    // indicator doesn't share the headlight's damage state. Used here as this branch's own single
+    // representative check for INDICATOR_LEFT/RIGHT, which - unlike upstream's own front/middle/rear
+    // split - aren't broken out by position, so they can't carry three different per-position checks
+    bool IsFrontIndicatorOk(CClientVehicle* pVehicle, CVehicle* pGameVehicle, bool bLeft)
+    {
+        return IsHeadlightOk(pVehicle, pGameVehicle, bLeft) || pVehicle->IsSirenOrAlarmActive();
     }
 }  // namespace
 
@@ -253,19 +310,31 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     if (IsExtraSupported(pVehicle, VehicleExtraType::HEADLIGHT))
     {
         if (GetState(pVehicle, VehicleExtraType::HEADLIGHT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::HEADLIGHT, pGameVehicle->GetLightsOn());
+        {
+            // The dummy shows/hides as one combined group with no left/right split (see
+            // g_LightDummyPrefixes), so a single side being damaged can't hide just that side - showing
+            // as long as either headlight is intact avoids hiding a working lamp over its damaged partner
+            bool bOk = IsHeadlightOk(pVehicle, pGameVehicle, true) || IsHeadlightOk(pVehicle, pGameVehicle, false);
+            PulseSimpleLight(pVehicle, VehicleExtraType::HEADLIGHT, pGameVehicle->GetLightsOn() && bOk);
+        }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::TAIL_LIGHT))
     {
         if (GetState(pVehicle, VehicleExtraType::TAIL_LIGHT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::TAIL_LIGHT, pGameVehicle->GetLightsOn());
+        {
+            bool bOk = IsTaillightOk(pVehicle, pGameVehicle, true) || IsTaillightOk(pVehicle, pGameVehicle, false);
+            PulseSimpleLight(pVehicle, VehicleExtraType::TAIL_LIGHT, pGameVehicle->GetLightsOn() && bOk);
+        }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::BRAKE_LIGHT))
     {
         if (GetState(pVehicle, VehicleExtraType::BRAKE_LIGHT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::BRAKE_LIGHT, pGameVehicle->GetBrakePedal() > kLightOnThreshold);
+        {
+            bool bOk = IsTaillightOk(pVehicle, pGameVehicle, true) || IsTaillightOk(pVehicle, pGameVehicle, false);
+            PulseSimpleLight(pVehicle, VehicleExtraType::BRAKE_LIGHT, pGameVehicle->GetBrakePedal() > kLightOnThreshold && bOk);
+        }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::REVERSE_LIGHT))
@@ -275,18 +344,22 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
             // Confirmed against gta-reversed (AEVehicleAudioEntity.cpp's own "are we reversing?" check):
             // GTA:SA uses gear 0 for reverse, and treats a negative gas pedal the same way
             bool bReversing = pGameVehicle->IsEngineOn() && (pGameVehicle->GetCurrentGear() == 0 || pGameVehicle->GetGasPedal() < 0.0f);
-            PulseSimpleLight(pVehicle, VehicleExtraType::REVERSE_LIGHT, bReversing);
+            bool bOk = IsTaillightOk(pVehicle, pGameVehicle, true) || IsTaillightOk(pVehicle, pGameVehicle, false);
+            PulseSimpleLight(pVehicle, VehicleExtraType::REVERSE_LIGHT, bReversing && bOk);
         }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::SIDE_LIGHT))
     {
         if (GetState(pVehicle, VehicleExtraType::SIDE_LIGHT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::SIDE_LIGHT, pGameVehicle->GetLightsOn());
+        {
+            bool bOk = IsFrontWingOk(pVehicle, pGameVehicle, true) || IsFrontWingOk(pVehicle, pGameVehicle, false);
+            PulseSimpleLight(pVehicle, VehicleExtraType::SIDE_LIGHT, pGameVehicle->GetLightsOn() && bOk);
+        }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::FOG_LIGHT))
-        PulseSimpleLight(pVehicle, VehicleExtraType::FOG_LIGHT, IsEnabled(pVehicle, VehicleExtraType::FOG_LIGHT));
+        PulseSimpleLight(pVehicle, VehicleExtraType::FOG_LIGHT, IsEnabled(pVehicle, VehicleExtraType::FOG_LIGHT) && IsFrontBumperOk(pVehicle, pGameVehicle));
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::DRL))
     {
@@ -330,13 +403,15 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     if (IsExtraSupported(pVehicle, VehicleExtraType::INDICATOR_LEFT))
     {
         bIndicatorLeftOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_LEFT);
-        PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_LEFT, bIndicatorLeftOn && bIndicatorBlinkPhase);
+        PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_LEFT,
+                          bIndicatorLeftOn && bIndicatorBlinkPhase && IsFrontIndicatorOk(pVehicle, pGameVehicle, true));
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::INDICATOR_RIGHT))
     {
         bIndicatorRightOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_RIGHT);
-        PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_RIGHT, bIndicatorRightOn && bIndicatorBlinkPhase);
+        PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_RIGHT,
+                          bIndicatorRightOn && bIndicatorBlinkPhase && IsFrontIndicatorOk(pVehicle, pGameVehicle, false));
     }
 
     // STT (stop/tail/turn, ModelExtras' STTLightComponent) is a combined lamp: lit for brake or tail duty
@@ -351,13 +426,19 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     if (IsExtraSupported(pVehicle, VehicleExtraType::STT_LIGHT_LEFT))
     {
         if (GetState(pVehicle, VehicleExtraType::STT_LIGHT_LEFT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::STT_LIGHT_LEFT, bBrakeOn || bTailOn || (bIndicatorLeftOn && bIndicatorBlinkPhase));
+        {
+            bool bOn = bBrakeOn || bTailOn || (bIndicatorLeftOn && bIndicatorBlinkPhase);
+            PulseSimpleLight(pVehicle, VehicleExtraType::STT_LIGHT_LEFT, bOn && IsTaillightOk(pVehicle, pGameVehicle, true));
+        }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT))
     {
         if (GetState(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT, bBrakeOn || bTailOn || (bIndicatorRightOn && bIndicatorBlinkPhase));
+        {
+            bool bOn = bBrakeOn || bTailOn || (bIndicatorRightOn && bIndicatorBlinkPhase);
+            PulseSimpleLight(pVehicle, VehicleExtraType::STT_LIGHT_RIGHT, bOn && IsTaillightOk(pVehicle, pGameVehicle, false));
+        }
     }
 
     // NABRAKE (non-actuated brake accent, ModelExtras' NABrakeLightComponent): a brake-only accent lamp
@@ -370,13 +451,19 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
     if (IsExtraSupported(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT))
     {
         if (GetState(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT, bBrakeOn && !bIndicatorLeftOn);
+        {
+            bool bOn = bBrakeOn && !bIndicatorLeftOn;
+            PulseSimpleLight(pVehicle, VehicleExtraType::NABRAKE_LIGHT_LEFT, bOn && IsTaillightOk(pVehicle, pGameVehicle, true));
+        }
     }
 
     if (IsExtraSupported(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT))
     {
         if (GetState(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT).bEnabled)
-            PulseSimpleLight(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT, bBrakeOn && !bIndicatorRightOn);
+        {
+            bool bOn = bBrakeOn && !bIndicatorRightOn;
+            PulseSimpleLight(pVehicle, VehicleExtraType::NABRAKE_LIGHT_RIGHT, bOn && IsTaillightOk(pVehicle, pGameVehicle, false));
+        }
     }
 
     // Dashboard LEDs: same shape as the lights above (a dummy mesh shown or hidden as one group), but
