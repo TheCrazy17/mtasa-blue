@@ -296,6 +296,19 @@ const DWORD RETURN_Idle_CWorld_ProcessPedsAfterPreRender = 0x53EA08;
 #define HOOKPOS_CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_StartRadio 0x4D7198
 #define HOOKPOS_CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_StopRadio  0x4D71E7
 
+// Fix setRadioChannel/reconnect going silent outside a vehicle (issues #423, #4700).
+// Mid-function patch inside CAERadioTrackManager::Service (0x4EB9A0) - see the hook
+// implementation near HOOK_CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_StopRadio
+// for the full explanation. Addresses verified with Ghidra against the real Service()
+// disassembly: HOOKPOS is the "MOV ECX, CAudioEngine / CALL IsAmbienceTrackActive / TEST /
+// JNZ" block, HOOKSIZE covers exactly those 4 instructions (14 bytes), RETURN is the
+// original "ambience not active" fallthrough and RETURN_..._SKIP is the original "ambience
+// active" branch target.
+#define HOOKPOS_CAERadioTrackManager__Service_AmbienceGate  0x4EBA45
+#define HOOKSIZE_CAERadioTrackManager__Service_AmbienceGate 0xE
+const DWORD RETURN_CAERadioTrackManager__Service_AmbienceGate      = 0x4EBA53;
+const DWORD RETURN_CAERadioTrackManager__Service_AmbienceGate_SKIP = 0x4EBA80;
+
 #define HOOKPOS_CAutomobile__dmgDrawCarCollidingParticles 0x6A6FF0
 
 #define HOOKPOS_CWeapon__TakePhotograph 0x73C26E
@@ -566,6 +579,8 @@ void HOOK_Idle_CWorld_ProcessPedsAfterPreRender();
 void HOOK_CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_StartRadio();
 void HOOK_CAEAmbienceTrackManager__UpdateAmbienceTrackAndVolume_StopRadio();
 
+void HOOK_CAERadioTrackManager__Service_AmbienceGate();
+
 void HOOK_CAutomobile__dmgDrawCarCollidingParticles();
 
 void HOOK_CWeapon__TakePhotograph();
@@ -793,6 +808,10 @@ void CMultiplayerSA::InitHooks()
     MemPut<BYTE>(0x4EB3C0, 0xC2);
     MemPut<BYTE>(0x4EB3C1, 0x10);
     MemPut<BYTE>(0x4EB3C2, 0x00);
+
+    // Fix setRadioChannel/reconnect going silent outside a vehicle (issues #423, #4700)
+    HookInstall(HOOKPOS_CAERadioTrackManager__Service_AmbienceGate, (DWORD)HOOK_CAERadioTrackManager__Service_AmbienceGate,
+                HOOKSIZE_CAERadioTrackManager__Service_AmbienceGate);
 
     // Disable automatic switching cinematic camera for trains
     MemPut<WORD>(0x52A50B, 0x29EB);
@@ -8068,6 +8087,62 @@ static void __declspec(naked) HOOK_CAEAmbienceTrackManager__UpdateAmbienceTrackA
         pop     ebx
         add     esp, 36
         retn
+    }
+    // clang-format on
+}
+
+// CAudioEngine singleton and the 3 native helpers CAERadioTrackManager::StartRadio (0x4EB3C0)
+// itself already uses to resolve this exact ambience/radio conflict. Addresses verified with
+// Ghidra against gta-reversed's AudioEngine.cpp (CAudioEngine::IsAmbienceTrackActive/
+// DoesAmbienceTrackOverrideRadio/StopAmbienceTrack all confirmed reversed, non-stub).
+#define CLASS_CAudioEngine_RadioService                          0xB6BC90
+#define FUNC_CAudioEngine_IsAmbienceTrackActive_RadioService      0x507210
+#define FUNC_CAudioEngine_DoesAmbienceTrackOverrideRadio_RadioService 0x507270
+#define FUNC_CAudioEngine_StopAmbienceTrack_RadioService          0x507220
+
+// CTimer::m_UserPause / CTimer::m_CodePause, matches CTimer::GetIsPaused() == m_UserPause || m_CodePause
+#define VAR_CTimer_UserPause_RadioService 0xB7CB49
+#define VAR_CTimer_CodePause_RadioService 0xB7CB48
+
+// Called from HOOK_CAERadioTrackManager__Service_AmbienceGate below, replacing Service()'s
+// "else if (AudioEngine.IsAmbienceTrackActive()) skipReset = true;" branch (issues #423, #4700).
+// Ambient sound (weather, underwater, generic zone ambience) is active a large fraction of
+// on-foot playtime, and the original branch blocked the radio's STOPPED -> STARTING reset
+// whenever ANY ambience track was active, so a station change or reconnect went silent almost
+// every time outside a vehicle. CAERadioTrackManager::StartRadio (0x4EB3C0) already resolves
+// the same conflict correctly: ambience only keeps blocking the radio when it is explicitly
+// flagged to override it (AEAmbienceTrackManager::m_OverrideRadio) and the game isn't paused;
+// otherwise the ambience track gets stopped so the radio can proceed. Mirror that rule here.
+bool CAERadioTrackManager__Service_ShouldSkipAmbienceReset()
+{
+    const bool bAmbienceActive = ((BYTE(__thiscall*)(DWORD))FUNC_CAudioEngine_IsAmbienceTrackActive_RadioService)(CLASS_CAudioEngine_RadioService) != 0;
+    if (!bAmbienceActive)
+        return false;
+
+    const bool bPaused = *(BYTE*)VAR_CTimer_UserPause_RadioService != 0 || *(BYTE*)VAR_CTimer_CodePause_RadioService != 0;
+    const bool bOverridesRadio =
+        ((BYTE(__thiscall*)(DWORD))FUNC_CAudioEngine_DoesAmbienceTrackOverrideRadio_RadioService)(CLASS_CAudioEngine_RadioService) != 0;
+    if (!bPaused && bOverridesRadio)
+        return true;
+
+    ((void(__thiscall*)(DWORD, bool))FUNC_CAudioEngine_StopAmbienceTrack_RadioService)(CLASS_CAudioEngine_RadioService, false);
+    return false;
+}
+
+// Fix setRadioChannel/reconnect going silent outside a vehicle (issues #423, #4700)
+static void __declspec(naked) HOOK_CAERadioTrackManager__Service_AmbienceGate()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        call    CAERadioTrackManager__Service_ShouldSkipAmbienceReset
+        test    al, al
+        jnz     skip
+        jmp     RETURN_CAERadioTrackManager__Service_AmbienceGate
+    skip:
+        jmp     RETURN_CAERadioTrackManager__Service_AmbienceGate_SKIP
     }
     // clang-format on
 }
