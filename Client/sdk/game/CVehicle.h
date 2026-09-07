@@ -157,6 +157,7 @@ public:
 
     virtual unsigned char GetCurrentGear() = 0;
     virtual float         GetGasPedal() = 0;
+    virtual float         GetBrakePedal() = 0;
     virtual bool          GetTowBarPos(CVector* pVector, CVehicle* pTrailer) = 0;
     virtual bool          GetTowHitchPos(CVector* pVector) = 0;
     virtual bool          IsUpsideDown() = 0;
@@ -344,6 +345,12 @@ public:
     // Same idea, for a whole extra decorative wheel mesh instead of just a hub cap (e.g. a dually
     // truck's outer rear wheels): copies the matching real wheel's spin onto each resolved extra.
     virtual void UpdateVehicleExtraWheels() = 0;
+
+    // Resolves (and caches) this instance's dummy meshes for one simple show-or-hide light/LED extra
+    // (headlight, brake light, a dashboard LED, etc.) on first call. Returns 0 if the model has none.
+    virtual std::size_t GetVehicleLightFrameCount(VehicleExtraType::Enum eExtraType) = 0;
+    // Shows or hides every resolved frame for this light/LED extra together.
+    virtual void SetVehicleLightVisible(VehicleExtraType::Enum eExtraType, bool bVisible) = 0;
 
     // Resolves (and caches) this instance's spoiler dummies. A vehicle can have more than one.
     virtual std::size_t GetVehicleSpoilerCount() = 0;

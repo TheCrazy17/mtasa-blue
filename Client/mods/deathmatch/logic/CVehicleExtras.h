@@ -28,8 +28,13 @@ struct SVehicleExtraState
     std::int16_t sCurrentFrame = 0;
     CTickCount   lastUpdateTime;
 
-    // Desired state for the two open/close state-machine extras (convertible roof, rollback bed); every
-    // other extra type leaves this unused. Set via CVehicleExtras::SetOpen.
+    // Desired state for the two open/close state-machine extras (convertible roof, rollback bed); set
+    // via CVehicleExtras::SetOpen. Also reused as the on/off switch itself for the handful of light
+    // extras that have no automatic native trigger (fog light, spotlight, both indicators) - unlike
+    // every other extra's bEnabled, which defaults true because its automatic behaviour should just run
+    // out of the box, these ARE the switch and need to start off (see CVehicleExtras::IsEnabled), and
+    // this field already defaults false and is otherwise unused outside the extras above. Every other
+    // extra type leaves this unused.
     bool bTargetOpen = false;
 };
 
@@ -75,6 +80,7 @@ private:
     static void PulseSlideDoor(CClientVehicle* pVehicle);
     static void PulseConvertibleRoof(CClientVehicle* pVehicle, SVehicleExtraState& state);
     static void PulseRollbackBed(CClientVehicle* pVehicle, SVehicleExtraState& state);
+    static void PulseSimpleLight(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, bool bVisible);
 
     static std::unordered_map<CClientVehicle*, VehicleExtraStates> ms_VehicleStates;
 };

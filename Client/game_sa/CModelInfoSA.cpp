@@ -2191,6 +2191,37 @@ static const SExtraWheelDummyNames g_ExtraWheelDummyNames[6] = {
     {"wheel_lf_dummy", nullptr, "x_wheel_lf"}, {"wheel_lm_dummy", nullptr, "x_wheel_lm"}, {"wheel_lr_dummy", "wheel_lb_dummy", "x_wheel_lr"},
 };
 
+// Dummy name prefix(es) for one simple show-or-hide light/LED extra. Mirrors CVehicleSA's own copy of
+// this table, same as every other resolve-side table in this file.
+struct SLightDummyPrefixes
+{
+    VehicleExtraType::Enum             eExtraType;
+    std::initializer_list<const char*> prefixes;
+};
+static const SLightDummyPrefixes g_LightDummyPrefixes[] = {
+    {VehicleExtraType::HEADLIGHT, {"headlights"}},
+    {VehicleExtraType::TAIL_LIGHT, {"taillights"}},
+    {VehicleExtraType::BRAKE_LIGHT, {"breakl", "brakel"}},
+    {VehicleExtraType::REVERSE_LIGHT, {"revl", "rev_", "reverselight"}},
+    {VehicleExtraType::SIDE_LIGHT, {"sidelight_"}},
+    {VehicleExtraType::FOG_LIGHT, {"fogl", "fog_"}},
+    {VehicleExtraType::DRL, {"light_a", "light_d", "light_n"}},
+    {VehicleExtraType::SPOTLIGHT, {"spotlight_light"}},
+    {VehicleExtraType::INDICATOR_LEFT, {"turnl_l", "indicator_l"}},
+    {VehicleExtraType::INDICATOR_RIGHT, {"turnl_r", "indicator_r"}},
+    {VehicleExtraType::LED_ENGINE_ON, {"x_led_engine_on"}},
+    {VehicleExtraType::LED_ENGINE_BROKEN, {"x_led_engine_broken"}},
+    {VehicleExtraType::LED_FOG_LIGHT, {"x_led_fog"}},
+    {VehicleExtraType::LED_HEADLIGHT, {"x_led_headlight"}},
+    {VehicleExtraType::LED_INDICATOR_LEFT, {"x_led_indicator_l"}},
+    {VehicleExtraType::LED_INDICATOR_RIGHT, {"x_led_indicator_r"}},
+    {VehicleExtraType::LED_SIREN, {"x_led_siren"}},
+    {VehicleExtraType::LED_DOOR_OPEN, {"x_led_door"}},
+    {VehicleExtraType::LED_BONNET_OPEN, {"x_led_bonnet"}},
+    {VehicleExtraType::LED_BOOT_OPEN, {"x_led_boot"}},
+    {VehicleExtraType::LED_ROOF_OPEN, {"x_led_roof"}},
+};
+
 void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
 {
     m_ModelSupportedExtras.Reset();
@@ -2310,6 +2341,27 @@ void CModelInfoSA::InitialiseSupportedExtras(RpClump* pClump)
     bool bHasRollbackBed = RwFrameFindFrame(pFrame, "x_rb_bed") != NULL || RwFrameFindFrame(pFrame, "x_rb_hydraulics") != NULL ||
                            RwFrameFindFrameStartingWith(pFrame, "x_rb_hydraulic_") != NULL;
     m_ModelSupportedExtras.m_SupportedFlags[VehicleExtraType::ROLLBACK_BED] = bHasRollbackBed;
+
+    // Every light/LED extra below is a pure show-or-hide dummy mesh (see CVehicleSA::GetVehicleLightFrameCount),
+    // so support only needs presence of any one matching dummy - no pairing with anything else required.
+    // Headlight/tail light/brake light/reverse light/fog light/indicator dummy names match ModelExtras'
+    // own dummy-based fallback naming, so DFFs already authored for it work here unchanged; ModelExtras
+    // itself otherwise detects all of these (and every LED) purely by material colour instead, which has
+    // no equivalent in this framework (see this feature's own report for why) - the x_led_ prefixed
+    // dashboard LEDs below are this project's own new convention, not a port of an existing one.
+    for (const SLightDummyPrefixes& entry : g_LightDummyPrefixes)
+    {
+        bool bHasDummy = false;
+        for (const char* szPrefix : entry.prefixes)
+        {
+            if (RwFrameFindFrameStartingWith(pFrame, szPrefix) != NULL)
+            {
+                bHasDummy = true;
+                break;
+            }
+        }
+        m_ModelSupportedExtras.m_SupportedFlags[entry.eExtraType] = bHasDummy;
+    }
 
     m_ModelSupportedExtras.m_bInitialised = true;
 }

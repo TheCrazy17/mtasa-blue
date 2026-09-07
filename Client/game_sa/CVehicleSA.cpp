@@ -971,6 +971,11 @@ float CVehicleSA::GetGasPedal()
     return GetVehicleInterface()->m_fGasPedal;
 }
 
+float CVehicleSA::GetBrakePedal()
+{
+    return GetVehicleInterface()->m_fBrakePedal;
+}
+
 bool CVehicleSA::GetTowBarPos(CVector* pVector, CVehicle* pTrailer)
 {
     return GetVehicleInterface()->GetTowbarPos(pVector, true, pTrailer ? pTrailer->GetVehicleInterface() : nullptr);
@@ -2832,6 +2837,85 @@ void CVehicleSA::UpdateVehicleExtraWheels()
         pair.pExtraFrame->modelling.right = (RwV3d&)vecRight;
         pair.pExtraFrame->modelling.up = (RwV3d&)vecUp;
         pair.pExtraFrame->modelling.at = (RwV3d&)vecForward;
+    }
+}
+
+// Dummy name prefix(es) for one simple show-or-hide light/LED extra. Mirrors CModelInfoSA's own copy
+// of this table, same as every other resolve-side table in this file.
+struct SLightDummyPrefixes
+{
+    VehicleExtraType::Enum             eExtraType;
+    std::initializer_list<const char*> prefixes;
+};
+static const SLightDummyPrefixes g_LightDummyPrefixes[] = {
+    {VehicleExtraType::HEADLIGHT, {"headlights"}},
+    {VehicleExtraType::TAIL_LIGHT, {"taillights"}},
+    {VehicleExtraType::BRAKE_LIGHT, {"breakl", "brakel"}},
+    {VehicleExtraType::REVERSE_LIGHT, {"revl", "rev_", "reverselight"}},
+    {VehicleExtraType::SIDE_LIGHT, {"sidelight_"}},
+    {VehicleExtraType::FOG_LIGHT, {"fogl", "fog_"}},
+    {VehicleExtraType::DRL, {"light_a", "light_d", "light_n"}},
+    {VehicleExtraType::SPOTLIGHT, {"spotlight_light"}},
+    {VehicleExtraType::INDICATOR_LEFT, {"turnl_l", "indicator_l"}},
+    {VehicleExtraType::INDICATOR_RIGHT, {"turnl_r", "indicator_r"}},
+    {VehicleExtraType::LED_ENGINE_ON, {"x_led_engine_on"}},
+    {VehicleExtraType::LED_ENGINE_BROKEN, {"x_led_engine_broken"}},
+    {VehicleExtraType::LED_FOG_LIGHT, {"x_led_fog"}},
+    {VehicleExtraType::LED_HEADLIGHT, {"x_led_headlight"}},
+    {VehicleExtraType::LED_INDICATOR_LEFT, {"x_led_indicator_l"}},
+    {VehicleExtraType::LED_INDICATOR_RIGHT, {"x_led_indicator_r"}},
+    {VehicleExtraType::LED_SIREN, {"x_led_siren"}},
+    {VehicleExtraType::LED_DOOR_OPEN, {"x_led_door"}},
+    {VehicleExtraType::LED_BONNET_OPEN, {"x_led_bonnet"}},
+    {VehicleExtraType::LED_BOOT_OPEN, {"x_led_boot"}},
+    {VehicleExtraType::LED_ROOF_OPEN, {"x_led_roof"}},
+};
+
+// Resolves (and caches) every dummy mesh matching eExtraType's own prefix(es) on this instance's clump.
+// Every light/LED extra shares this one resolve+apply pair rather than each getting its own dedicated
+// pair like every earlier extra in this file, since none of them need anything beyond "find some dummies,
+// show or hide all of them together" - there is no per-dummy tuning or per-position pairing to track.
+std::size_t CVehicleSA::GetVehicleLightFrameCount(VehicleExtraType::Enum eExtraType)
+{
+    SVehicleLightFrameList& light = m_LightFrameLists[eExtraType];
+    if (light.bResolved)
+        return light.frameList.size();
+
+    light.bResolved = true;
+
+    CModelInfo* pModelInfo = pGame->GetModelInfo(GetModelIndex());
+    if (!pModelInfo || !pModelInfo->IsVehicleExtraSupported(eExtraType))
+        return 0;
+
+    RwFrame* pClumpFrame = RpGetFrame(GetInterface()->m_pRwObject);
+
+    for (const SLightDummyPrefixes& entry : g_LightDummyPrefixes)
+    {
+        if (entry.eExtraType != eExtraType)
+            continue;
+
+        for (const char* szPrefix : entry.prefixes)
+            RwFrameFindAllFramesStartingWith(pClumpFrame, szPrefix, light.frameList);
+        break;
+    }
+
+    return light.frameList.size();
+}
+
+void CVehicleSA::SetVehicleLightVisible(VehicleExtraType::Enum eExtraType, bool bVisible)
+{
+    for (RwFrame* pFrame : m_LightFrameLists[eExtraType].frameList)
+    {
+        std::vector<RwObject*> atomicList;
+        GetAllAtomicObjects(pFrame, atomicList);
+
+        for (RwObject* pAtomic : atomicList)
+        {
+            if (bVisible)
+                pAtomic->flags |= 0x04;
+            else
+                pAtomic->flags &= ~0x05;
+        }
     }
 }
 

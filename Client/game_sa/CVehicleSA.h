@@ -587,6 +587,15 @@ struct SVehicleRollbackBedState
     bool                                   bSupported{false};
 };
 
+// A flat list of resolved dummy frames for a light/LED extra that's a pure show-or-hide toggle - shown
+// or hidden together as one group each pulse based on real (or script-set) state, unlike the swing-
+// position frame lists above which cycle through exactly one visible child frame at a time.
+struct SVehicleLightFrameList
+{
+    std::vector<RwFrame*> frameList;
+    bool                  bResolved{false};
+};
+
 class CVehicleSA : public virtual CVehicle, public virtual CPhysicalSA
 {
     friend class CPoolsSA;
@@ -623,6 +632,7 @@ private:
     bool                                                                           m_bSlideDoorFramesResolved{false};
     SVehicleRoofState                                                              m_RoofState;
     SVehicleRollbackBedState                                                       m_RollbackBedState;
+    std::array<SVehicleLightFrameList, VehicleExtraType::VEHICLE_EXTRA_TYPE_COUNT> m_LightFrameLists;
     unsigned char                                                                  m_ucVariant;
     unsigned char                                                                  m_ucVariant2;
     unsigned char                                                                  m_ucVariantCount{0};
@@ -693,6 +703,7 @@ public:
 
     unsigned char GetCurrentGear();
     float         GetGasPedal();
+    float         GetBrakePedal() override;
 
     bool GetTowBarPos(CVector* pVector, CVehicle* pTrailer = NULL);
     bool GetTowHitchPos(CVector* pVector);
@@ -914,6 +925,8 @@ public:
     void        UpdateVehicleExtraSlideDoors() override;
     void        UpdateVehicleExtraConvertibleRoof(bool bTargetExpanded, float fSpeedMultiplier) override;
     void        UpdateVehicleExtraRollbackBed(bool bTargetExpanded, float fSpeedMultiplier) override;
+    std::size_t GetVehicleLightFrameCount(VehicleExtraType::Enum eExtraType) override;
+    void        SetVehicleLightVisible(VehicleExtraType::Enum eExtraType, bool bVisible) override;
     bool        SetPlateText(const SString& strText);
     bool        SetWindowOpenFlagState(unsigned char ucWindow, bool bState);
     float       GetWheelScale() override { return GetVehicleInterface()->m_fWheelScale; }

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <game/CClock.h>
+#include <game/CDoor.h>
 #include "CVehicleExtras.h"
 #include "CClientVehicle.h"
 #include "lua/CLuaFunctionParseHelpers.h"
@@ -40,6 +41,23 @@ namespace
     constexpr float kRpmGaugeSmoothingRate = 0.25f;
     constexpr float kSpeedGaugeSmoothingRate = 0.5f;
     constexpr float kTurboGaugeSmoothingRate = 0.25f;
+
+    // A light on/off threshold for pedal-driven extras (brake, a door counting as "open"); small enough
+    // that a barely-touched pedal or a just-cracked door still counts, matching how a real one behaves.
+    constexpr float kLightOnThreshold = 0.05f;
+
+    // FOG_LIGHT, SPOTLIGHT, INDICATOR_LEFT and INDICATOR_RIGHT have no automatic native trigger (see
+    // CVehicleExtras::Pulse) and ARE the on/off switch themselves rather than a gate on automatic
+    // behaviour, so - unlike every other extra's bEnabled, which defaults true because its automatic
+    // behaviour should just run out of the box - they need to start off (no vehicle should spawn with
+    // its indicators already blinking). SVehicleExtraState::bTargetOpen already defaults false and is
+    // otherwise unused outside convertible roof/rollback bed, so it is reused here as this group's
+    // storage instead of adding a new field just to get a different default.
+    bool UsesTargetOpenAsSwitch(VehicleExtraType::Enum eExtraType)
+    {
+        return eExtraType == VehicleExtraType::FOG_LIGHT || eExtraType == VehicleExtraType::SPOTLIGHT ||
+               eExtraType == VehicleExtraType::INDICATOR_LEFT || eExtraType == VehicleExtraType::INDICATOR_RIGHT;
+    }
 }  // namespace
 
 std::unordered_map<CClientVehicle*, CVehicleExtras::VehicleExtraStates> CVehicleExtras::ms_VehicleStates;
@@ -68,6 +86,9 @@ bool CVehicleExtras::IsEnabled(CClientVehicle* pVehicle, VehicleExtraType::Enum 
     if (!IsExtraSupported(pVehicle, eExtraType))
         return false;
 
+    if (UsesTargetOpenAsSwitch(eExtraType))
+        return GetState(pVehicle, eExtraType).bTargetOpen;
+
     return GetState(pVehicle, eExtraType).bEnabled;
 }
 
@@ -76,7 +97,10 @@ bool CVehicleExtras::SetEnabled(CClientVehicle* pVehicle, VehicleExtraType::Enum
     if (!IsExtraSupported(pVehicle, eExtraType))
         return false;
 
-    GetState(pVehicle, eExtraType).bEnabled = bEnabled;
+    if (UsesTargetOpenAsSwitch(eExtraType))
+        GetState(pVehicle, eExtraType).bTargetOpen = bEnabled;
+    else
+        GetState(pVehicle, eExtraType).bEnabled = bEnabled;
     return true;
 }
 
@@ -217,6 +241,156 @@ void CVehicleExtras::Pulse(CClientVehicle* pVehicle)
         if (state.bEnabled)
             PulseRollbackBed(pVehicle, state);
     }
+
+    // Lights: each reacts to the same real vehicle state a real one would, the same automatic-by-default
+    // philosophy as every extra above - see CVehicleSA::GetVehicleLightFrameCount for the dummy names.
+    // Only fog light, spotlight and the two indicators have no real state to read (GTA tracks neither a
+    // fog light nor a turn signal at all - confirmed against gta-reversed, not assumed), so those four
+    // are manual, driven by setVehicleExtraEnabled/isVehicleExtraEnabled same as every other extra's
+    // generic API; nothing new was added to it.
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::HEADLIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::HEADLIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::HEADLIGHT, pGameVehicle->GetLightsOn());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::TAIL_LIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::TAIL_LIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::TAIL_LIGHT, pGameVehicle->GetLightsOn());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::BRAKE_LIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::BRAKE_LIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::BRAKE_LIGHT, pGameVehicle->GetBrakePedal() > kLightOnThreshold);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::REVERSE_LIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::REVERSE_LIGHT).bEnabled)
+        {
+            // Confirmed against gta-reversed (AEVehicleAudioEntity.cpp's own "are we reversing?" check):
+            // GTA:SA uses gear 0 for reverse, and treats a negative gas pedal the same way
+            bool bReversing = pGameVehicle->IsEngineOn() && (pGameVehicle->GetCurrentGear() == 0 || pGameVehicle->GetGasPedal() < 0.0f);
+            PulseSimpleLight(pVehicle, VehicleExtraType::REVERSE_LIGHT, bReversing);
+        }
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::SIDE_LIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::SIDE_LIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::SIDE_LIGHT, pGameVehicle->GetLightsOn());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::FOG_LIGHT))
+        PulseSimpleLight(pVehicle, VehicleExtraType::FOG_LIGHT, IsEnabled(pVehicle, VehicleExtraType::FOG_LIGHT));
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::DRL))
+    {
+        if (GetState(pVehicle, VehicleExtraType::DRL).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::DRL, pGameVehicle->IsEngineOn());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::SPOTLIGHT))
+        PulseSimpleLight(pVehicle, VehicleExtraType::SPOTLIGHT, IsEnabled(pVehicle, VehicleExtraType::SPOTLIGHT));
+
+    // Indicators blink in step across every vehicle, the same wall-clock 500ms flip ModelExtras' own
+    // global BlinkerState uses; computed from the clock itself instead of stored per-vehicle state, so
+    // there is nothing to keep in sync or reset
+    bool bIndicatorBlinkPhase = (CTickCount::Now().ToLongLong() / 500) % 2 == 0;
+    bool bIndicatorLeftOn = false;
+    bool bIndicatorRightOn = false;
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::INDICATOR_LEFT))
+    {
+        bIndicatorLeftOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_LEFT);
+        PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_LEFT, bIndicatorLeftOn && bIndicatorBlinkPhase);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::INDICATOR_RIGHT))
+    {
+        bIndicatorRightOn = IsEnabled(pVehicle, VehicleExtraType::INDICATOR_RIGHT);
+        PulseSimpleLight(pVehicle, VehicleExtraType::INDICATOR_RIGHT, bIndicatorRightOn && bIndicatorBlinkPhase);
+    }
+
+    // Dashboard LEDs: same shape as the lights above (a dummy mesh shown or hidden as one group), but
+    // for an interior indicator bulb reacting to the same state rather than the light itself. This is a
+    // new x_led_ dummy convention this port introduces, not ModelExtras' own LEDs feature, which detects
+    // these purely by material colour instead - see this feature's own report for why.
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_ENGINE_ON))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_ENGINE_ON).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_ENGINE_ON, pGameVehicle->IsEngineOn());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_ENGINE_BROKEN))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_ENGINE_BROKEN).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_ENGINE_BROKEN, pGameVehicle->IsEngineBroken());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_FOG_LIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_FOG_LIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_FOG_LIGHT, IsEnabled(pVehicle, VehicleExtraType::FOG_LIGHT));
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_HEADLIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_HEADLIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_HEADLIGHT, pGameVehicle->GetLightsOn());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_INDICATOR_LEFT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_INDICATOR_LEFT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_INDICATOR_LEFT, bIndicatorLeftOn && bIndicatorBlinkPhase);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_INDICATOR_RIGHT))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_INDICATOR_RIGHT).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_INDICATOR_RIGHT, bIndicatorRightOn && bIndicatorBlinkPhase);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_SIREN))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_SIREN).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_SIREN, pVehicle->IsSirenOrAlarmActive());
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_DOOR_OPEN))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_DOOR_OPEN).bEnabled)
+        {
+            bool bAnyDoorOpen = pGameVehicle->GetDoor(FRONT_LEFT_DOOR)->GetAngleOpenRatio() > kLightOnThreshold ||
+                                pGameVehicle->GetDoor(FRONT_RIGHT_DOOR)->GetAngleOpenRatio() > kLightOnThreshold ||
+                                pGameVehicle->GetDoor(REAR_LEFT_DOOR)->GetAngleOpenRatio() > kLightOnThreshold ||
+                                pGameVehicle->GetDoor(REAR_RIGHT_DOOR)->GetAngleOpenRatio() > kLightOnThreshold;
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_DOOR_OPEN, bAnyDoorOpen);
+        }
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_BONNET_OPEN))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_BONNET_OPEN).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_BONNET_OPEN, pGameVehicle->GetDoor(BONNET)->GetAngleOpenRatio() > kLightOnThreshold);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_BOOT_OPEN))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_BOOT_OPEN).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_BOOT_OPEN, pGameVehicle->GetDoor(BOOT)->GetAngleOpenRatio() > kLightOnThreshold);
+    }
+
+    if (IsExtraSupported(pVehicle, VehicleExtraType::LED_ROOF_OPEN))
+    {
+        if (GetState(pVehicle, VehicleExtraType::LED_ROOF_OPEN).bEnabled)
+            PulseSimpleLight(pVehicle, VehicleExtraType::LED_ROOF_OPEN, IsOpen(pVehicle, VehicleExtraType::CONVERTIBLE_ROOF));
+    }
 }
 
 void CVehicleExtras::PulseChain(CClientVehicle* pVehicle, SVehicleExtraState& state)
@@ -289,6 +463,19 @@ void CVehicleExtras::PulseExtraWheel(CClientVehicle* pVehicle)
         return;
 
     pGameVehicle->UpdateVehicleExtraWheels();
+}
+
+void CVehicleExtras::PulseSimpleLight(CClientVehicle* pVehicle, VehicleExtraType::Enum eExtraType, bool bVisible)
+{
+    CVehicle* pGameVehicle = pVehicle->GetGameVehicle();
+
+    if (!pGameVehicle->IsOnScreen())
+        return;
+
+    if (pGameVehicle->GetVehicleLightFrameCount(eExtraType) == 0)
+        return;
+
+    pGameVehicle->SetVehicleLightVisible(eExtraType, bVisible);
 }
 
 void CVehicleExtras::PulseSpoiler(CClientVehicle* pVehicle, SVehicleExtraState& state)
