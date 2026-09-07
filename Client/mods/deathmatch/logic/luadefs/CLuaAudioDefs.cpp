@@ -2685,7 +2685,8 @@ int CLuaAudioDefs::SetRadioPlaybackState(lua_State* luaVM)
     {
         const int iTableIndex = 1;
 
-        const auto ReadIntField = [&](const char* szField, int iDefault) {
+        const auto ReadIntField = [&](const char* szField, int iDefault)
+        {
             lua_getfield(luaVM, iTableIndex, szField);
             int iValue = lua_isnumber(luaVM, -1) ? static_cast<int>(lua_tointeger(luaVM, -1)) : iDefault;
             lua_pop(luaVM, 1);

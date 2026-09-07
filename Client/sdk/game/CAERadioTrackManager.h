@@ -28,13 +28,13 @@ struct SRadioPlaybackState
 {
     static constexpr size_t QUEUE_SIZE = 5;
 
-    unsigned char station = 0;                  // eRadioID station, RADIO_OFF(13)..RADIO_USER_TRACKS(12)
-    unsigned char mode = 0;                      // eRadioTrackMode the state was captured in (informational)
+    unsigned char station = 0;              // eRadioID station, RADIO_OFF(13)..RADIO_USER_TRACKS(12)
+    unsigned char mode = 0;                 // eRadioTrackMode captured in (informational, not replayed by SetPlaybackState)
     int           currentTrackID = -1;
     int           currentTrackType = 0;
     int           currentTrackIndex = -1;
-    int           playTime = 0;                  // Milliseconds into the current track
-    int           trackLength = 0;                // Current track's length in milliseconds
+    int           playTime = 0;             // Milliseconds into the current track
+    int           trackLength = 0;          // Current track's length in milliseconds
     unsigned char flags = 0;
 
     SRadioPlaybackQueueEntry queue[QUEUE_SIZE];
