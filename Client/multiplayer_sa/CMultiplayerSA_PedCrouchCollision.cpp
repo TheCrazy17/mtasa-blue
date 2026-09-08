@@ -211,6 +211,176 @@ static void __declspec(naked) HOOK_CPed_ProcessEntityCollision_OwnColModel()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
+// Stand-up obstruction test
+//
+// CPhysical::TestCollision (0x54DEC0) already does exactly what's needed here: it runs the
+// engine's real collision-response pipeline (CheckCollision, the same one every physical
+// object's movement goes through every tick) against the entity's current position without
+// actually moving it, then restores everything it touched. Reused as-is rather than
+// hand-rolling a second collision query, so this asks the same question the engine itself
+// would ask - just with the duck shrink temporarily lifted, so it answers for the ped's real,
+// standing-size shape instead of its current ducked one.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+static bool IsPedStandUpBlocked(CPedSAInterface* pPed)
+{
+    // Never block a dying ped - the duck task's own health check needs to always go through;
+    // death/ragdoll handling downstream doesn't expect the duck task to refuse to end.
+    if (pPed->fHealth < 1.0f)
+        return false;
+
+    // Never had a shrunk override in the first place (this tick's clear is redundant, or the
+    // ped was never actually ducking) - nothing to re-test against.
+    if (ms_PedDuckColModels.find(pPed) == ms_PedDuckColModels.end())
+        return false;
+
+    const bool bWasDucking = pPed->pedFlags.bIsDucking;
+    pPed->pedFlags.bIsDucking = false;  // GetPedDuckColModelOverride now returns null for this ped
+
+    const bool bBlocked = reinterpret_cast<bool(__thiscall*)(CPedSAInterface*, bool)>(0x54DEC0)(pPed, false);
+
+    pPed->pedFlags.bIsDucking = bWasDucking;
+
+    return bBlocked;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// CTaskSimpleDuck::MakeAbortable
+//
+// Gates the one point where an ABORT_PRIORITY_URGENT abort (the duck timing out, or the
+// player releasing the duck control) commits to ending the task, versus deferring it -
+// deferring is already how this function refuses to end while a crouch-roll animation is
+// mid-play, this adds the same refusal for "something is still overhead". Left untouched:
+// ABORT_PRIORITY_IMMEDIATE (0x69210C, a few lines above this) always commits unconditionally
+// in the retail exe - nothing here ever gets the chance to refuse it, and this doesn't add
+// that ability, since a forced interrupt (entering a vehicle, a scripted task change, etc.)
+// isn't safe to block on a collision test.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+//     0x69231B | ...
+// >>> 0x692321 | 83 FD 01 | cmp ebp, 1     ; ebp = priority; 1 == ABORT_PRIORITY_URGENT
+// >>> 0x692326 | 75 09    | jnz +9         ; not urgent (e.g. LEISURE) -> defer (0x69232F)
+//     0x692326 |          | (commit: mark finished, clear bIsDucking, return true)
+//     0x69232F |          | (defer: mark aborting, return false)
+#define HOOKPOS_CTaskSimpleDuck_MakeAbortable_StandCheck  0x692321
+#define HOOKSIZE_CTaskSimpleDuck_MakeAbortable_StandCheck 5
+static const DWORD RETURN_CTaskSimpleDuck_MakeAbortable_Commit = 0x692326;
+static const DWORD RETURN_CTaskSimpleDuck_MakeAbortable_Defer = 0x69232F;
+
+static void __declspec(naked) HOOK_CTaskSimpleDuck_MakeAbortable_StandCheck()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm
+    {
+        cmp     ebp, 1
+        jnz     Defer
+
+        // Past the 3 prologue pushes (ebp/esi/edi) with the stack otherwise balanced here,
+        // the ped argument sits at [esp+10h] - true on every path that reaches this point.
+        mov     eax, [esp+10h]
+        push    eax
+        call    IsPedStandUpBlocked
+        add     esp, 4
+        test    al, al
+        jnz     Defer
+
+    Commit:
+        jmp     RETURN_CTaskSimpleDuck_MakeAbortable_Commit
+    Defer:
+        jmp     RETURN_CTaskSimpleDuck_MakeAbortable_Defer
+    }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// CTaskSimpleDuck::ProcessPed and CTaskSimpleDuck::MakeAbortable (shot-whizzing case)
+//
+// Two more places clear bIsDucking directly rather than going through the URGENT-commit
+// branch above, so the hook there doesn't see them:
+//
+//  - ProcessPed's own finishing block (health <= 0, or m_bIsFinished already set - e.g. once
+//    a LEISURE-priority toggle-off's blend-out animation finishes) calls MakeAbortable but
+//    never looks at its return value, then clears the flag unconditionally right after.
+//  - MakeAbortable's shot-whizzing special case (dodging gunfire while ducking) returns early
+//    with its own copy of the same clear, before ever reaching the branch hooked above.
+//
+// Both boil down to the same instruction: `ped->flags &= ~0x04000000` (bIsDucking, bit 26).
+// Gated the same way in both places: skip the clear (stay ducking) if standing is blocked.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+
+static CPedSAInterface* g_pDuckClearCheckPed;
+
+static bool ShouldSkipDuckClear()
+{
+    return IsPedStandUpBlocked(g_pDuckClearCheckPed);
+}
+
+//     0x694618 | ...
+// >>> 0x69461F | 81 A7 6C 04 00 00 FF FF FF FB | and dword ptr [edi+46Ch], 0FBFFFFFFh   ; ped->bIsDucking = false
+//     0x694629 | 5F                            | pop edi
+#define HOOKPOS_CTaskSimpleDuck_ProcessPed_ClearDucking  0x69461F
+#define HOOKSIZE_CTaskSimpleDuck_ProcessPed_ClearDucking 10
+static const DWORD RETURN_CTaskSimpleDuck_ProcessPed_ClearDucking = 0x694629;
+
+static void __declspec(naked) HOOK_CTaskSimpleDuck_ProcessPed_ClearDucking()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm { mov g_pDuckClearCheckPed, edi }
+    // clang-format on
+
+    if (!ShouldSkipDuckClear())
+    {
+        // clang-format off
+        __asm { and dword ptr [edi+46Ch], 0FBFFFFFFh }
+        // clang-format on
+    }
+
+    // clang-format off
+    __asm { jmp RETURN_CTaskSimpleDuck_ProcessPed_ClearDucking }
+    // clang-format on
+}
+
+//     0x6921C7 | ...
+//     0x6921CB | 8B 44 24 10                   | mov eax, [esp+10h]                     ; eax = ped
+// >>> 0x6921CF | 81 A0 6C 04 00 00 FF FF FF FB | and dword ptr [eax+46Ch], 0FBFFFFFFh    ; ped->bIsDucking = false
+//     0x6921D9 | 5F                            | pop edi
+#define HOOKPOS_CTaskSimpleDuck_MakeAbortable_ShotWhizzClearDucking  0x6921CF
+#define HOOKSIZE_CTaskSimpleDuck_MakeAbortable_ShotWhizzClearDucking 10
+static const DWORD RETURN_CTaskSimpleDuck_MakeAbortable_ShotWhizzClearDucking = 0x6921D9;
+
+static void __declspec(naked) HOOK_CTaskSimpleDuck_MakeAbortable_ShotWhizzClearDucking()
+{
+    MTA_VERIFY_HOOK_LOCAL_SIZE;
+
+    // clang-format off
+    __asm { mov g_pDuckClearCheckPed, eax }
+    // clang-format on
+
+    if (!ShouldSkipDuckClear())
+    {
+        // clang-format off
+        __asm
+        {
+            mov     eax, g_pDuckClearCheckPed   // eax was clobbered by the call above, reload it
+            and     dword ptr [eax+46Ch], 0FBFFFFFFh
+        }
+        // clang-format on
+    }
+
+    // clang-format off
+    __asm { jmp RETURN_CTaskSimpleDuck_MakeAbortable_ShotWhizzClearDucking }
+    // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
 // CPed::~CPed
 //
 // Releases a ped's override, if it has one, before its interface memory can be freed and
@@ -256,5 +426,8 @@ void CMultiplayerSA::InitHooks_PedCrouchCollision()
 {
     EZHookInstall(CEntity_GetColModel);
     EZHookInstall(CPed_ProcessEntityCollision_OwnColModel);
+    EZHookInstall(CTaskSimpleDuck_MakeAbortable_StandCheck);
+    EZHookInstall(CTaskSimpleDuck_ProcessPed_ClearDucking);
+    EZHookInstall(CTaskSimpleDuck_MakeAbortable_ShotWhizzClearDucking);
     EZHookInstall(CPed_Destructor_ReleaseDuckColModel);
 }
