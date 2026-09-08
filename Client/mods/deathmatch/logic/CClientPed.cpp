@@ -1849,6 +1849,19 @@ bool CClientPed::GetCollisionHeight(float& fScale) const noexcept
     return g_pMultiplayer->GetPedCollisionHeight(m_pPlayerPed, fScale);
 }
 
+// Unlike SetCollisionHeight above, a negative fScale (clear) is only forwarded to the native
+// side when there's a live entity to clear it on - m_fScale itself is always reset to 1.0f
+// regardless, since "no explicit scale" is exactly what a fresh, uncreated ped already is.
+bool CClientPed::SetScale(float fScale) noexcept
+{
+    m_fScale = (fScale < 0.0f) ? 1.0f : fScale;
+
+    if (!m_pPlayerPed)
+        return true;
+
+    return g_pMultiplayer->SetPedScale(m_pPlayerPed, fScale);
+}
+
 void CClientPed::LockHealth(float fHealth)
 {
     m_bHealthLocked = true;
@@ -3756,6 +3769,8 @@ void CClientPed::_CreateModel()
         m_pPlayerPed->SetHealth(m_fHealth);
         m_pPlayerPed->SetArmor(m_armor);
         m_pPlayerPed->SetLighting(m_fLighting);
+        if (m_fScale != 1.0f)
+            SetScale(m_fScale);
         WorldIgnore(m_bWorldIgnored);
 
         // Set remote players to not fall off bikes locally, let them decide

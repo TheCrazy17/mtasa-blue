@@ -466,6 +466,17 @@ public:
     virtual bool SetPedCollisionHeight(CPlayerPed* pPed, float fScale) = 0;
     virtual bool GetPedCollisionHeight(CPlayerPed* pPed, float& fScale) = 0;
 
+    // Full ped scale: visual mesh/skeleton (root RwFrame matrix, same mechanism
+    // SetObjectScale/CEntitySA::SetScaleInternal already use for objects) plus collision
+    // (reusing setPedCollisionHeight's per-instance CColModel override plumbing, scaled
+    // uniformly across X/Y/Z instead of height-only), driven together by one call. fScale is a
+    // multiplier of the ped's own normal size, clamped to [MIN_PED_SCALE, MAX_PED_SCALE] - see
+    // CMultiplayerSA_PedScale.cpp. SetPedScale: fScale < 0 clears both halves back to normal.
+    // GetPedScale: returns false and leaves fScale untouched if no explicit scale is set;
+    // otherwise the clamped scale actually in effect.
+    virtual bool SetPedScale(CPlayerPed* pPed, float fScale) = 0;
+    virtual bool GetPedScale(CPlayerPed* pPed, float& fScale) = 0;
+
     virtual void GetRwResourceStats(SRwResourceStats& outStats) = 0;
     virtual void GetClothesCacheStats(SClothesCacheStats& outStats) = 0;
     virtual void SetIsMinimizedAndNotConnected(bool bIsMinimizedAndNotConnected) = 0;

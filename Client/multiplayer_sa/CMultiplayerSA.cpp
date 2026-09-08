@@ -7979,6 +7979,10 @@ void PostCWorld_ProcessPedsAfterPreRender()
     if (m_postWorldProcessPedsAfterPreRenderHandler)
         m_postWorldProcessPedsAfterPreRenderHandler();
 
+    // Scale any peds with an explicit setPedScale in effect. Same per-frame reapplication
+    // reasoning as the object loop just below - see CMultiplayerSA_PedScale.cpp.
+    pMultiplayer->ApplyExplicitPedScales();
+
     // Scale the object entities
     CPools* pools = pGameInterface->GetPools();
     for (std::uint32_t i = 0; i < MAX_OBJECTS; i++)

@@ -60,6 +60,7 @@ void CLuaPedDefs::LoadFunctions()
         {"setPedOxygenLevel", SetPedOxygenLevel},
         {"setPedArmor", ArgumentParser<SetPedArmor>},
         {"setPedCollisionHeight", ArgumentParser<SetPedCollisionHeight>},
+        {"setPedScale", ArgumentParser<SetPedScale>},
         {"setPedEnterVehicle", ArgumentParser<SetPedEnterVehicle>},
         {"setPedExitVehicle", ArgumentParser<SetPedExitVehicle>},
         {"setPedBleeding", ArgumentParser<SetPedBleeding>},
@@ -92,6 +93,7 @@ void CLuaPedDefs::LoadFunctions()
         {"getPedOxygenLevel", GetPedOxygenLevel},
         {"getPedArmor", ArgumentParserWarn<false, GetPedArmor>},
         {"getPedCollisionHeight", ArgumentParserWarn<false, GetPedCollisionHeight>},
+        {"getPedScale", ArgumentParserWarn<false, GetPedScale>},
         {"isPedBleeding", ArgumentParser<IsPedBleeding>},
 
         {"getPedContactElement", GetPedContactElement},
@@ -149,6 +151,7 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getAnimation", "getPedAnimation");
     lua_classfunction(luaVM, "getArmor", "getPedArmor");
     lua_classfunction(luaVM, "getCollisionHeight", "getPedCollisionHeight");
+    lua_classfunction(luaVM, "getScale", "getPedScale");
     lua_classfunction(luaVM, "getFightingStyle", "getPedFightingStyle");
     lua_classfunction(luaVM, "getClothes", "getPedClothes");
     lua_classfunction(luaVM, "addClothes", "addPedClothes");
@@ -200,6 +203,7 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setOxygenLevel", "setPedOxygenLevel");
     lua_classfunction(luaVM, "setArmor", "setPedArmor");
     lua_classfunction(luaVM, "setCollisionHeight", "setPedCollisionHeight");
+    lua_classfunction(luaVM, "setScale", "setPedScale");
     lua_classfunction(luaVM, "setWeaponSlot", "setPedWeaponSlot");
     lua_classfunction(luaVM, "setDoingGangDriveby", "setPedDoingGangDriveby");
     lua_classfunction(luaVM, "setFightingStyle", "setPedFightingStyle");
@@ -226,6 +230,7 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classvariable(luaVM, "jetpack", NULL, "isPedWearingJetpack");  // introduced in 1.5.5-9.13846
     lua_classvariable(luaVM, "armor", "setPedArmor", "getPedArmor");
     lua_classvariable(luaVM, "collisionHeight", "setPedCollisionHeight", "getPedCollisionHeight");
+    lua_classvariable(luaVM, "scale", "setPedScale", "getPedScale");
     lua_classvariable(luaVM, "fightingStyle", "setPedFightingStyle", "getPedFightingStyle");
     lua_classvariable(luaVM, "cameraRotation", "setPedCameraRotation", "getPedCameraRotation");
     lua_classvariable(luaVM, "contactElement", NULL, "getPedContactElement");
@@ -809,6 +814,15 @@ int CLuaPedDefs::OOP_GetPedTargetCollision(lua_State* luaVM)
 float CLuaPedDefs::GetPedArmor(CClientPed* const ped) noexcept
 {
     return ped->GetArmor();
+}
+
+// Full ped scale (visual mesh/skeleton + collision, uniform) - always well-defined, unlike
+// getPedCollisionHeight below: a ped that never had setPedScale called on it is behaviourally
+// identical to one explicitly set to 1.0, so there's no separate "not set" state worth a
+// false return here.
+float CLuaPedDefs::GetPedScale(CClientPed* const ped) noexcept
+{
+    return ped->GetScale();
 }
 
 // Returns the ped's explicit collision scale (a multiplier of its own normal standing height,
@@ -2512,6 +2526,17 @@ bool CLuaPedDefs::SetPedArmor(CClientPed* const ped, const float armor)
 bool CLuaPedDefs::SetPedCollisionHeight(CClientPed* const ped, const float scale)
 {
     return ped->SetCollisionHeight(scale);
+}
+
+// scale is a multiplier of the ped's own normal size (1.0 = normal, 0.5 = half, 2.0 = double)
+// - visual mesh/skeleton and collision together, uniformly, unlike setPedCollisionHeight's
+// height-only, collision-only scale. A negative scale clears back to normal; 0 and any
+// positive value is clamped to a sane engine-safe range - see MIN/MAX_PED_SCALE and the
+// feasibility notes in CMultiplayerSA_PedScale.cpp. Client-side only - not synced to other
+// players (see that file's notes on why, and what a future pass syncing it would need).
+bool CLuaPedDefs::SetPedScale(CClientPed* const ped, const float scale)
+{
+    return ped->SetScale(scale);
 }
 
 int CLuaPedDefs::SetPedOxygenLevel(lua_State* luaVM)

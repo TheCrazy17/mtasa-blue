@@ -284,6 +284,14 @@ public:
     bool SetCollisionHeight(float fScale) noexcept;
     bool GetCollisionHeight(float& fScale) const noexcept;
 
+    // Full ped scale (visual mesh/skeleton + collision, uniform). Unlike collision height
+    // above, m_fScale IS cached and reapplied on (re)creation - see _CreateModel - because a
+    // visual scale is meaningless while there's no native entity to carry it, but should come
+    // back exactly as it was set once one exists again (a model change, respawn, etc.), the
+    // same way position/health/armor already do.
+    bool  SetScale(float fScale) noexcept;
+    float GetScale() const noexcept { return m_fScale; }
+
     void LockHealth(float fHealth);
     void LockArmor(float armor) noexcept;
     void UnlockHealth() noexcept { m_bHealthLocked = false; };
@@ -706,6 +714,7 @@ public:
     bool                                     m_bUsesCollision;
     float                                    m_fHealth;
     float                                    m_armor;
+    float                                    m_fScale = 1.0f;
     bool                                     m_bDead;
     AssocGroupId                             m_deathAnimGroup;
     AnimationId                              m_deathAnimID;

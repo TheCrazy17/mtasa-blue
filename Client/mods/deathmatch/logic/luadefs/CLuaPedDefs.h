@@ -41,6 +41,7 @@ public:
     LUA_DECLARE(GetPedOccupiedVehicleSeat);
     static float                                            GetPedArmor(CClientPed* const ped) noexcept;
     static std::variant<bool, CLuaMultiReturn<float, bool>> GetPedCollisionHeight(CClientPed* const ped) noexcept;
+    static float                                            GetPedScale(CClientPed* const ped) noexcept;
     LUA_DECLARE(IsPedChoking);
     LUA_DECLARE(IsPedDucked);
     LUA_DECLARE(IsPedInVehicle);
@@ -95,6 +96,7 @@ public:
     LUA_DECLARE(SetPedMoveAnim);
     static bool SetPedArmor(CClientPed* const ped, const float armor);
     static bool SetPedCollisionHeight(CClientPed* const ped, const float scale);
+    static bool SetPedScale(CClientPed* const ped, const float scale);
     LUA_DECLARE(SetPedWeaponSlot);
     LUA_DECLARE(GivePedWeapon);
     static bool IsPedReloadingWeapon(CClientPed* const ped) noexcept;

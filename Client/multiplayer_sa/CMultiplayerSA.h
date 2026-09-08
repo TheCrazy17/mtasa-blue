@@ -52,24 +52,30 @@ public:
 
     CMultiplayerSA();
     ~CMultiplayerSA();
-    void                InitHooks();
-    void                InitHooks_CrashFixHacks();
-    void                Init_13();
-    void                InitHooks_13();
-    void                InitMemoryCopies_13();
-    void                InitHooks_CustomAnimations();
-    void                InitHooks_ClothesSpeedUp();
-    void                InitHooks_FixBadAnimId();
-    void                InitHooks_HookDestructors();
-    void                CleanupHooks_HookDestructors();
-    void                InitHooks_RwResources();
-    void                InitHooks_ClothesCache();
-    void                InitHooks_Files();
-    void                InitHooks_Weapons();
-    void                InitHooks_Peds();
-    void                InitHooks_PedCrouchCollision();
-    bool                SetPedCollisionHeight(CPlayerPed* pPed, float fScale) override;
-    bool                GetPedCollisionHeight(CPlayerPed* pPed, float& fScale) override;
+    void InitHooks();
+    void InitHooks_CrashFixHacks();
+    void Init_13();
+    void InitHooks_13();
+    void InitMemoryCopies_13();
+    void InitHooks_CustomAnimations();
+    void InitHooks_ClothesSpeedUp();
+    void InitHooks_FixBadAnimId();
+    void InitHooks_HookDestructors();
+    void CleanupHooks_HookDestructors();
+    void InitHooks_RwResources();
+    void InitHooks_ClothesCache();
+    void InitHooks_Files();
+    void InitHooks_Weapons();
+    void InitHooks_Peds();
+    void InitHooks_PedCrouchCollision();
+    bool SetPedCollisionHeight(CPlayerPed* pPed, float fScale) override;
+    bool GetPedCollisionHeight(CPlayerPed* pPed, float& fScale) override;
+    // Internal helper, not part of the CMultiplayer SDK interface - only called from
+    // SetPedScale (CMultiplayerSA_PedScale.cpp), a sibling method of this same class.
+    bool                SetPedCollisionBodyScale(CPlayerPed* pPed, float fScale);
+    bool                SetPedScale(CPlayerPed* pPed, float fScale) override;
+    bool                GetPedScale(CPlayerPed* pPed, float& fScale) override;
+    void                ApplyExplicitPedScales();
     void                InitHooks_ObjectCollision();
     void                InitHooks_VehicleCollision();
     void                InitHooks_VehicleDummies();
