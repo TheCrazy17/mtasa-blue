@@ -59,6 +59,7 @@ void CLuaPedDefs::LoadFunctions()
         {"setPedStat", SetPedStat},
         {"setPedOxygenLevel", SetPedOxygenLevel},
         {"setPedArmor", ArgumentParser<SetPedArmor>},
+        {"setPedCollisionHeight", ArgumentParser<SetPedCollisionHeight>},
         {"setPedEnterVehicle", ArgumentParser<SetPedEnterVehicle>},
         {"setPedExitVehicle", ArgumentParser<SetPedExitVehicle>},
         {"setPedBleeding", ArgumentParser<SetPedBleeding>},
@@ -90,6 +91,7 @@ void CLuaPedDefs::LoadFunctions()
         {"getPedStat", GetPedStat},
         {"getPedOxygenLevel", GetPedOxygenLevel},
         {"getPedArmor", ArgumentParserWarn<false, GetPedArmor>},
+        {"getPedCollisionHeight", ArgumentParserWarn<false, GetPedCollisionHeight>},
         {"isPedBleeding", ArgumentParser<IsPedBleeding>},
 
         {"getPedContactElement", GetPedContactElement},
@@ -146,6 +148,7 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getAnalogControlState", "getPedAnalogControlState");
     lua_classfunction(luaVM, "getAnimation", "getPedAnimation");
     lua_classfunction(luaVM, "getArmor", "getPedArmor");
+    lua_classfunction(luaVM, "getCollisionHeight", "getPedCollisionHeight");
     lua_classfunction(luaVM, "getFightingStyle", "getPedFightingStyle");
     lua_classfunction(luaVM, "getClothes", "getPedClothes");
     lua_classfunction(luaVM, "addClothes", "addPedClothes");
@@ -196,6 +199,7 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "warpIntoVehicle", "warpPedIntoVehicle");
     lua_classfunction(luaVM, "setOxygenLevel", "setPedOxygenLevel");
     lua_classfunction(luaVM, "setArmor", "setPedArmor");
+    lua_classfunction(luaVM, "setCollisionHeight", "setPedCollisionHeight");
     lua_classfunction(luaVM, "setWeaponSlot", "setPedWeaponSlot");
     lua_classfunction(luaVM, "setDoingGangDriveby", "setPedDoingGangDriveby");
     lua_classfunction(luaVM, "setFightingStyle", "setPedFightingStyle");
@@ -221,6 +225,7 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classvariable(luaVM, "hasJetPack", NULL, "doesPedHaveJetPack");
     lua_classvariable(luaVM, "jetpack", NULL, "isPedWearingJetpack");  // introduced in 1.5.5-9.13846
     lua_classvariable(luaVM, "armor", "setPedArmor", "getPedArmor");
+    lua_classvariable(luaVM, "collisionHeight", "setPedCollisionHeight", "getPedCollisionHeight");
     lua_classvariable(luaVM, "fightingStyle", "setPedFightingStyle", "getPedFightingStyle");
     lua_classvariable(luaVM, "cameraRotation", "setPedCameraRotation", "getPedCameraRotation");
     lua_classvariable(luaVM, "contactElement", NULL, "getPedContactElement");
@@ -804,6 +809,15 @@ int CLuaPedDefs::OOP_GetPedTargetCollision(lua_State* luaVM)
 float CLuaPedDefs::GetPedArmor(CClientPed* const ped) noexcept
 {
     return ped->GetArmor();
+}
+
+std::variant<bool, CLuaMultiReturn<float, bool>> CLuaPedDefs::GetPedCollisionHeight(CClientPed* const ped) noexcept
+{
+    float fHeight = 0.0f;
+    if (!ped->GetCollisionHeight(fHeight))
+        return false;
+
+    return CLuaMultiReturn<float, bool>(fHeight, true);
 }
 
 int CLuaPedDefs::GetPedStat(lua_State* luaVM)
@@ -2484,6 +2498,14 @@ bool CLuaPedDefs::SetPedArmor(CClientPed* const ped, const float armor)
 
     ped->SetArmor(armor);
     return true;
+}
+
+// height <= 0 clears the override, going back to the native duck shrink (if the ped happens
+// to be ducking) or the model's normal shared collision - see the precedence comment on
+// ms_PedExplicitCollisionHeights in CMultiplayerSA_PedCrouchCollision.cpp.
+bool CLuaPedDefs::SetPedCollisionHeight(CClientPed* const ped, const float height)
+{
+    return ped->SetCollisionHeight(height);
 }
 
 int CLuaPedDefs::SetPedOxygenLevel(lua_State* luaVM)

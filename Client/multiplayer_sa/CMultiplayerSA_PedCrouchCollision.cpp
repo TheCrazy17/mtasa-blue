@@ -31,6 +31,16 @@
 
 static std::unordered_map<CPedSAInterface*, CColModelSAInterface*> ms_PedDuckColModels;
 
+// A script's own explicit height (setPedCollisionHeight/getPedCollisionHeight, Lua-facing),
+// keyed the same way as the cache above. A script swapping the duck animation for a custom
+// pose (prone, crawl, ...) needs to set the matching collision height itself - the engine
+// can't infer one from an arbitrary animation the way the native 0.5x duck shrink infers
+// its own. Checked ahead of bIsDucking everywhere below, so an explicit height always wins
+// and the native duck shrink never fights a script that has taken over: once a script sets
+// one, the ped's collision stays at that height regardless of the native duck flag, until
+// the script clears it (height <= 0) again.
+static std::unordered_map<CPedSAInterface*, float> ms_PedExplicitCollisionHeights;
+
 // CModelInfo::ms_modelInfoPtrs. CBaseModelInfoSAInterface::pColModel sits at +0x14 in every
 // model info type; read as a raw offset here (rather than pulling in CModelInfoSA.h) to match
 // how the rest of multiplayer_sa already looks model info up (see CMultiplayerSA_Vehicles.cpp).
@@ -43,27 +53,32 @@ static const std::uint32_t CModelInfo__ms_modelInfoPtrs = 0xA9B0C8;
 // the reference point behind this feature request; tune after in-game testing.
 constexpr float DUCK_HEIGHT_SCALE = 0.5f;
 
-// Builds a private copy of a model's shared CColModel, shrunk to duck height.
+// Builds a private copy of a model's shared CColModel with its top shrunk (or raised) to
+// fHeight above the model's own floor, keeping the ped's feet planted. Shared by the native
+// duck shrink and a script's explicit setPedCollisionHeight - both just pick a different
+// fHeight and land in the same override.
 //
 // m_data is copied as a raw pointer, not deep-copied: it keeps pointing at the shared
 // collision mesh. Peds don't carry meaningful per-triangle collision (their push-back test
 // runs off the bound box/sphere only - see CPed::ProcessEntityCollision, 0x5E2530), and
 // multiple ped instances of one model already share and scratch-mutate that same data each
 // frame in retail gameplay, so sharing it here doesn't add any new risk. Only the box and
-// sphere below get new (shrunk) values.
-static CColModelSAInterface* CreatePedDuckColModel(CColModelSAInterface* pSharedColModel)
+// sphere below get new values.
+static CColModelSAInterface* CreatePedColModelWithHeight(CColModelSAInterface* pSharedColModel, float fHeight)
 {
     auto* pOverride = new CColModelSAInterface(*pSharedColModel);
 
     const float fMinZ = pOverride->m_bounds.m_vecMin.fZ;
-    const float fDuckHeight = (pOverride->m_bounds.m_vecMax.fZ - fMinZ) * DUCK_HEIGHT_SCALE;
+    const float fStandHeight = pOverride->m_bounds.m_vecMax.fZ - fMinZ;
 
-    pOverride->m_bounds.m_vecMax.fZ = fMinZ + fDuckHeight;
+    pOverride->m_bounds.m_vecMax.fZ = fMinZ + fHeight;
 
-    // Re-centre and shrink the bounding sphere to match, rather than scaling it in place -
-    // the original sphere isn't guaranteed to be centred on the box's Z midpoint.
-    pOverride->m_sphere.m_center.fZ = fMinZ + fDuckHeight * 0.5f;
-    pOverride->m_sphere.m_radius *= DUCK_HEIGHT_SCALE;
+    // Re-centre and scale the bounding sphere to match, rather than adjusting it in place -
+    // the original sphere isn't guaranteed to be centred on the box's Z midpoint. Guard the
+    // divide: a model with a degenerate (zero-height) bounding box just keeps its original
+    // radius rather than producing a NaN.
+    pOverride->m_sphere.m_center.fZ = fMinZ + fHeight * 0.5f;
+    pOverride->m_sphere.m_radius *= (fStandHeight > 0.0f) ? (fHeight / fStandHeight) : 1.0f;
 
     return pOverride;
 }
@@ -78,13 +93,29 @@ static void ReleasePedDuckColModel(CPedSAInterface* pPed)
     ms_PedDuckColModels.erase(iter);
 }
 
-// The single place that owns the override's lifetime, tied directly to the native bIsDucking
-// flag: called from both the GetColModel hook (this ped as the *other* party in someone
-// else's collision test) and the ProcessEntityCollision hook (this ped's *own* shape when
-// it's the one being tested against the world) - both need the same answer.
+// Full cleanup for a ped that's going away: both the cached override and any explicit height
+// a script left set. Distinct from ReleasePedDuckColModel above, which callers that are only
+// reacting to a state change (native duck ending, a new explicit height replacing the cached
+// shape) need to keep separate from the explicit height itself - ReleasePedDuckColModel runs
+// while an explicit height is still very much in effect, just about to be rebuilt against it.
+static void ReleaseAllPedCollisionState(CPedSAInterface* pPed)
+{
+    ReleasePedDuckColModel(pPed);
+    ms_PedExplicitCollisionHeights.erase(pPed);
+}
+
+// The single place that owns the override's lifetime, tied to the native bIsDucking flag and
+// the explicit height map above: called from both the GetColModel hook (this ped as the
+// *other* party in someone else's collision test) and the ProcessEntityCollision hook (this
+// ped's *own* shape when it's the one being tested against the world) - both need the same
+// answer. An explicit height takes priority over bIsDucking when both are set - see the
+// comment on ms_PedExplicitCollisionHeights above.
 static CColModelSAInterface* GetPedDuckColModelOverride(CPedSAInterface* pPed)
 {
-    if (!pPed->pedFlags.bIsDucking)
+    auto       explicitIter = ms_PedExplicitCollisionHeights.find(pPed);
+    const bool bHasExplicitHeight = explicitIter != ms_PedExplicitCollisionHeights.end();
+
+    if (!bHasExplicitHeight && !pPed->pedFlags.bIsDucking)
     {
         ReleasePedDuckColModel(pPed);
         return nullptr;
@@ -102,7 +133,10 @@ static CColModelSAInterface* GetPedDuckColModelOverride(CPedSAInterface* pPed)
     if (!pSharedColModel)
         return nullptr;
 
-    auto* pOverride = CreatePedDuckColModel(pSharedColModel);
+    const float fHeight =
+        bHasExplicitHeight ? explicitIter->second : (pSharedColModel->m_bounds.m_vecMax.fZ - pSharedColModel->m_bounds.m_vecMin.fZ) * DUCK_HEIGHT_SCALE;
+
+    auto* pOverride = CreatePedColModelWithHeight(pSharedColModel, fHeight);
     ms_PedDuckColModels[pPed] = pOverride;
     return pOverride;
 }
@@ -227,6 +261,12 @@ static bool IsPedStandUpBlocked(CPedSAInterface* pPed)
     // Never block a dying ped - the duck task's own health check needs to always go through;
     // death/ragdoll handling downstream doesn't expect the duck task to refuse to end.
     if (pPed->fHealth < 1.0f)
+        return false;
+
+    // An explicit script height wins over bIsDucking (see ms_PedExplicitCollisionHeights), so
+    // clearing bIsDucking here wouldn't actually change this ped's collision shape - the
+    // native duck task ending has nothing to do with it any more, and nothing to block for.
+    if (ms_PedExplicitCollisionHeights.find(pPed) != ms_PedExplicitCollisionHeights.end())
         return false;
 
     // Never had a shrunk override in the first place (this tick's clear is redundant, or the
@@ -383,9 +423,10 @@ static void __declspec(naked) HOOK_CTaskSimpleDuck_MakeAbortable_ShotWhizzClearD
 //
 // CPed::~CPed
 //
-// Releases a ped's override, if it has one, before its interface memory can be freed and
-// reused by a future, unrelated ped at the same address - without this, that future ped
-// could inherit a stale override sized and shaped for a completely different ped.
+// Releases a ped's override and any explicit height, if it has either, before its interface
+// memory can be freed and reused by a future, unrelated ped at the same address - without
+// this, that future ped could inherit a stale override (or a script's height meant for a
+// completely different ped).
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 //     0x5E8620 | 6A FF          | push -1
@@ -404,7 +445,7 @@ static void __declspec(naked) HOOK_CPed_Destructor_ReleaseDuckColModel()
     {
         push    ecx                     // saved, restored below - callee is free to clobber ecx
         push    ecx                     // arg: CPedSAInterface* (this)
-        call    ReleasePedDuckColModel
+        call    ReleaseAllPedCollisionState
         add     esp, 4
         pop     ecx
 
@@ -413,6 +454,55 @@ static void __declspec(naked) HOOK_CPed_Destructor_ReleaseDuckColModel()
         jmp     SEH_PROLOG_TRAMPOLINE_CPed_Destructor
     }
     // clang-format on
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// CMultiplayerSA::SetPedCollisionHeight / GetPedCollisionHeight
+//
+// Lua-facing entry points (setPedCollisionHeight/getPedCollisionHeight) for the explicit
+// height map above. Everything else - the GetColModel/ProcessEntityCollision redirection,
+// the per-ped CColModel cache, the destructor cleanup - is the same plumbing the native duck
+// shrink already uses; this only ever touches ms_PedExplicitCollisionHeights plus the one
+// cache entry that needs invalidating when it changes.
+//
+//////////////////////////////////////////////////////////////////////////////////////////
+bool CMultiplayerSA::SetPedCollisionHeight(CPlayerPed* pPed, float fHeight)
+{
+    if (!pPed)
+        return false;
+
+    auto* pPedInterface = pPed->GetPedInterface();
+    if (!pPedInterface)
+        return false;
+
+    if (fHeight <= 0.0f)
+        ms_PedExplicitCollisionHeights.erase(pPedInterface);
+    else
+        ms_PedExplicitCollisionHeights[pPedInterface] = fHeight;
+
+    // Drop any cached override built for the old state (old explicit height, or the native
+    // duck shrink an explicit height might now be overriding) - the next collision query
+    // rebuilds it, at the new height, from the precedence in GetPedDuckColModelOverride.
+    ReleasePedDuckColModel(pPedInterface);
+    return true;
+}
+
+bool CMultiplayerSA::GetPedCollisionHeight(CPlayerPed* pPed, float& fHeight)
+{
+    if (!pPed)
+        return false;
+
+    auto* pPedInterface = pPed->GetPedInterface();
+    if (!pPedInterface)
+        return false;
+
+    auto iter = ms_PedExplicitCollisionHeights.find(pPedInterface);
+    if (iter == ms_PedExplicitCollisionHeights.end())
+        return false;
+
+    fHeight = iter->second;
+    return true;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

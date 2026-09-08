@@ -281,6 +281,9 @@ public:
     float GetOxygenLevel();
     void  SetOxygenLevel(float fOxygen);
 
+    bool SetCollisionHeight(float fHeight) noexcept;
+    bool GetCollisionHeight(float& fHeight) const noexcept;
+
     void LockHealth(float fHealth);
     void LockArmor(float armor) noexcept;
     void UnlockHealth() noexcept { m_bHealthLocked = false; };

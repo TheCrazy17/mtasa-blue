@@ -455,6 +455,13 @@ public:
     virtual void SetPedTargetingMarkerEnabled(bool bEnabled) = 0;
     virtual bool IsPedTargetingMarkerEnabled() = 0;
 
+    // Explicit per-ped collision height override (setPedCollisionHeight/getPedCollisionHeight).
+    // SetPedCollisionHeight: fHeight <= 0 clears the override. Returns false if the ped has no
+    // live native interface to apply it to. GetPedCollisionHeight: returns false and leaves
+    // fHeight untouched if no explicit height is set for this ped.
+    virtual bool SetPedCollisionHeight(CPlayerPed* pPed, float fHeight) = 0;
+    virtual bool GetPedCollisionHeight(CPlayerPed* pPed, float& fHeight) = 0;
+
     virtual void GetRwResourceStats(SRwResourceStats& outStats) = 0;
     virtual void GetClothesCacheStats(SClothesCacheStats& outStats) = 0;
     virtual void SetIsMinimizedAndNotConnected(bool bIsMinimizedAndNotConnected) = 0;
