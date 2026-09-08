@@ -110,6 +110,7 @@ void CMultiplayerSA::InitHooks_13()
     InitHooks_Files();
     InitHooks_Weapons();
     InitHooks_Peds();
+    InitHooks_PedCrouchCollision();
     InitHooks_ObjectCollision();
     InitHooks_VehicleCollision();
     InitHooks_VehicleDummies();
