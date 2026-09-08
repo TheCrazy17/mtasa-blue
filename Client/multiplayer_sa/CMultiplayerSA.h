@@ -68,8 +68,8 @@ public:
     void                InitHooks_Weapons();
     void                InitHooks_Peds();
     void                InitHooks_PedCrouchCollision();
-    bool                SetPedCollisionHeight(CPlayerPed* pPed, float fHeight) override;
-    bool                GetPedCollisionHeight(CPlayerPed* pPed, float& fHeight) override;
+    bool                SetPedCollisionHeight(CPlayerPed* pPed, float fScale) override;
+    bool                GetPedCollisionHeight(CPlayerPed* pPed, float& fScale) override;
     void                InitHooks_ObjectCollision();
     void                InitHooks_VehicleCollision();
     void                InitHooks_VehicleDummies();

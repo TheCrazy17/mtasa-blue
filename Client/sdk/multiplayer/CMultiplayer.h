@@ -455,12 +455,16 @@ public:
     virtual void SetPedTargetingMarkerEnabled(bool bEnabled) = 0;
     virtual bool IsPedTargetingMarkerEnabled() = 0;
 
-    // Explicit per-ped collision height override (setPedCollisionHeight/getPedCollisionHeight).
-    // SetPedCollisionHeight: fHeight <= 0 clears the override. Returns false if the ped has no
-    // live native interface to apply it to. GetPedCollisionHeight: returns false and leaves
-    // fHeight untouched if no explicit height is set for this ped.
-    virtual bool SetPedCollisionHeight(CPlayerPed* pPed, float fHeight) = 0;
-    virtual bool GetPedCollisionHeight(CPlayerPed* pPed, float& fHeight) = 0;
+    // Explicit per-ped collision scale override (setPedCollisionHeight/getPedCollisionHeight).
+    // fScale is a multiplier of the ped's own normal standing height (1.0 = normal, 0.5 =
+    // half, 2.0 = double), clamped to a sane engine-safe range - see MIN/MAX_COLLISION_SCALE
+    // in CMultiplayerSA_PedCrouchCollision.cpp. SetPedCollisionHeight: fScale < 0 clears the
+    // override. Returns false if the ped has no live native interface to apply it to.
+    // GetPedCollisionHeight: returns false and leaves fScale untouched if no explicit scale is
+    // set for this ped; otherwise returns the clamped scale actually in effect, which may
+    // differ from what was originally passed in if that was out of range.
+    virtual bool SetPedCollisionHeight(CPlayerPed* pPed, float fScale) = 0;
+    virtual bool GetPedCollisionHeight(CPlayerPed* pPed, float& fScale) = 0;
 
     virtual void GetRwResourceStats(SRwResourceStats& outStats) = 0;
     virtual void GetClothesCacheStats(SClothesCacheStats& outStats) = 0;

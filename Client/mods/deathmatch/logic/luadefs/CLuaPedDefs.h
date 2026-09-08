@@ -94,7 +94,7 @@ public:
     LUA_DECLARE(SetPedAnimationSpeed);
     LUA_DECLARE(SetPedMoveAnim);
     static bool SetPedArmor(CClientPed* const ped, const float armor);
-    static bool SetPedCollisionHeight(CClientPed* const ped, const float height);
+    static bool SetPedCollisionHeight(CClientPed* const ped, const float scale);
     LUA_DECLARE(SetPedWeaponSlot);
     LUA_DECLARE(GivePedWeapon);
     static bool IsPedReloadingWeapon(CClientPed* const ped) noexcept;

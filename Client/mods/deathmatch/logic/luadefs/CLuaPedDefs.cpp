@@ -811,13 +811,16 @@ float CLuaPedDefs::GetPedArmor(CClientPed* const ped) noexcept
     return ped->GetArmor();
 }
 
+// Returns the ped's explicit collision scale (a multiplier of its own normal standing height,
+// e.g. 1.0 = normal, 0.5 = half), not an absolute height - see setPedCollisionHeight. false if
+// no explicit scale is set for this ped (native duck shrink, if any, isn't queryable here).
 std::variant<bool, CLuaMultiReturn<float, bool>> CLuaPedDefs::GetPedCollisionHeight(CClientPed* const ped) noexcept
 {
-    float fHeight = 0.0f;
-    if (!ped->GetCollisionHeight(fHeight))
+    float fScale = 0.0f;
+    if (!ped->GetCollisionHeight(fScale))
         return false;
 
-    return CLuaMultiReturn<float, bool>(fHeight, true);
+    return CLuaMultiReturn<float, bool>(fScale, true);
 }
 
 int CLuaPedDefs::GetPedStat(lua_State* luaVM)
@@ -2500,12 +2503,15 @@ bool CLuaPedDefs::SetPedArmor(CClientPed* const ped, const float armor)
     return true;
 }
 
-// height <= 0 clears the override, going back to the native duck shrink (if the ped happens
-// to be ducking) or the model's normal shared collision - see the precedence comment on
-// ms_PedExplicitCollisionHeights in CMultiplayerSA_PedCrouchCollision.cpp.
-bool CLuaPedDefs::SetPedCollisionHeight(CClientPed* const ped, const float height)
+// scale is a multiplier of the ped's own normal standing height (1.0 = normal, 0.5 = half,
+// 2.0 = double) - not an absolute height in engine units. A negative scale clears the
+// override, going back to the native duck shrink (if the ped happens to be ducking) or the
+// model's normal shared collision; 0 and any positive value is a legal scale request, clamped
+// to a sane engine-safe range - see MIN/MAX_COLLISION_SCALE and the precedence comment on
+// ms_PedExplicitCollisionScales in CMultiplayerSA_PedCrouchCollision.cpp.
+bool CLuaPedDefs::SetPedCollisionHeight(CClientPed* const ped, const float scale)
 {
-    return ped->SetCollisionHeight(height);
+    return ped->SetCollisionHeight(scale);
 }
 
 int CLuaPedDefs::SetPedOxygenLevel(lua_State* luaVM)

@@ -1830,23 +1830,23 @@ void CClientPed::SetArmor(float armor) noexcept
     m_armor = armor;
 }
 
-// Unlike armor/health, collision height has no meaningful value while this ped has no live
+// Unlike armor/health, collision scale has no meaningful value while this ped has no live
 // game entity - there's nothing cached to apply once it streams in, so both of these simply
 // fail when m_pPlayerPed is unset, rather than silently succeeding like SetArmor does above.
-bool CClientPed::SetCollisionHeight(float fHeight) noexcept
+bool CClientPed::SetCollisionHeight(float fScale) noexcept
 {
     if (!m_pPlayerPed)
         return false;
 
-    return g_pMultiplayer->SetPedCollisionHeight(m_pPlayerPed, fHeight);
+    return g_pMultiplayer->SetPedCollisionHeight(m_pPlayerPed, fScale);
 }
 
-bool CClientPed::GetCollisionHeight(float& fHeight) const noexcept
+bool CClientPed::GetCollisionHeight(float& fScale) const noexcept
 {
     if (!m_pPlayerPed)
         return false;
 
-    return g_pMultiplayer->GetPedCollisionHeight(m_pPlayerPed, fHeight);
+    return g_pMultiplayer->GetPedCollisionHeight(m_pPlayerPed, fScale);
 }
 
 void CClientPed::LockHealth(float fHealth)
