@@ -105,15 +105,15 @@ namespace SharedUtil
         static SString CalculateHexString(const void* pBuffer, size_t sizeLength);
 
         void                 Init();
-        void                 Update(unsigned char* input, unsigned int input_length);
+        void                 Update(const unsigned char* input, unsigned int input_length);
         void                 Finalize();
         const unsigned char* GetResult() const;
 
     private:
-        void Transform(unsigned char* pBuffer);
+        void Transform(const unsigned char* pBuffer);
 
         static void Encode(unsigned char* dest, unsigned int* src, unsigned long length);
-        static void Decode(unsigned int* dest, unsigned char* src, unsigned long length);
+        static void Decode(unsigned int* dest, const unsigned char* src, unsigned long length);
 
         static inline unsigned int RotateLeft(unsigned int x, unsigned int n);
         static inline unsigned int F(unsigned int x, unsigned int y, unsigned int z);

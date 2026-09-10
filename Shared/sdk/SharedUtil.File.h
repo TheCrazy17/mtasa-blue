@@ -16,6 +16,9 @@
 #include "WString.h"
 
 #if defined(_WIN32) && defined(MTA_CLIENT)
+    #include <cstdint>
+    #include <functional>
+
 // Workaround to prevent pulling in the fat windows.h header
 // Callers that need WIN32_FILE_ATTRIBUTE_DATA as a value type must include <windows.h> after all.
 struct _WIN32_FILE_ATTRIBUTE_DATA;
@@ -39,7 +42,19 @@ namespace SharedUtil
 
 #if defined(_WIN32) && defined(MTA_CLIENT)
     bool GetFileAttributesExWithTimeout(const wchar_t* path, WIN32_FILE_ATTRIBUTE_DATA& attr, unsigned long timeoutMs) noexcept;
-    bool FileLoadWithTimeout(const SString& filePath, SString& outBuffer, unsigned long timeoutMs) noexcept;
+
+    // Size and last write time as seen through the handle a file was read from
+    struct SFileIdentity
+    {
+        std::uint64_t size = 0;
+        std::uint64_t mtime = 0;
+    };
+
+    using FileChunkHandler = std::function<void(const char* pData, std::size_t size)>;
+
+    // Reads filePath a chunk at a time through onChunk within timeoutMs, failing if the file changes
+    // underneath. onChunk runs on a worker thread that can outlive this call, so it must own what it touches
+    bool FileReadChunkedWithTimeout(const SString& filePath, unsigned long timeoutMs, FileChunkHandler onChunk, SFileIdentity& outIdentity) noexcept;
 #endif
 
     //

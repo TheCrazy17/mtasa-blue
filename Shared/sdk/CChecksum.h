@@ -15,6 +15,8 @@
 #include <variant>
 #include <thread>
 #include <chrono>
+#include <algorithm>
+#include <memory>
 #include "SharedUtil.Hash.h"
 #include "SharedUtil.File.h"
 #include "SString.h"
@@ -36,6 +38,32 @@ public:
 
     bool operator!=(const CChecksum& other) const { return !operator==(other); }
 
+    // Incremental CRC32 and MD5 over data fed one chunk at a time
+    class CHasher
+    {
+    public:
+        CHasher() { m_md5Hasher.Init(); }
+
+        void Update(const void* pData, std::size_t size)
+        {
+            m_ulCRC = CRCGenerator::GetCRCFromBuffer(static_cast<const char*>(pData), size, m_ulCRC);
+            m_md5Hasher.Update(static_cast<const unsigned char*>(pData), static_cast<unsigned int>(size));
+        }
+
+        CChecksum Finalize()
+        {
+            m_md5Hasher.Finalize();
+            CChecksum result;
+            result.ulCRC = m_ulCRC;
+            memcpy(result.md5.data, m_md5Hasher.GetResult(), sizeof(result.md5.data));
+            return result;
+        }
+
+    private:
+        CMD5Hasher    m_md5Hasher;
+        unsigned long m_ulCRC = 0;
+    };
+
 #if defined(_WIN32) && defined(MTA_CLIENT)
 private:
     struct CacheEntry
@@ -53,6 +81,13 @@ private:
     {
         static std::mutex m;
         return m;
+    }
+
+    // Read budget scaled to the file size at a conservative 20MB/s, so a huge .img is not held to a script's deadline
+    static DWORD ScaledReadTimeoutMs(std::uint64_t sizeBytes)
+    {
+        constexpr std::uint64_t bytesPerMs = 20 * 1024;
+        return static_cast<DWORD>(std::clamp<std::uint64_t>(sizeBytes / bytesPerMs, 2000, 60000));
     }
 
 public:
@@ -99,24 +134,25 @@ public:
             }
         }
 
-        SString buf;
-        if (!SharedUtil::FileLoadWithTimeout(strFilename, buf, 2000))
+        // Hash chunk by chunk so the file is never one whole allocation; the hasher is shared with the
+        // reader's worker thread, which can outlive this call after a timeout
+        auto                      hasher = std::make_shared<CHasher>();
+        const auto                onChunk = [hasher](const char* pData, std::size_t size) { hasher->Update(pData, size); };
+        SharedUtil::SFileIdentity identity;
+
+        if (!SharedUtil::FileReadChunkedWithTimeout(strFilename, ScaledReadTimeoutMs(sz), onChunk, identity))
         {
             if (!hasMeta)
                 return SString("File not found or inaccessible: %s", strFilename.c_str());
             return SString("Could not read: %s", strFilename.c_str());
         }
 
-        CChecksum r;
-        r.ulCRC = CRCGenerator::GetCRCFromBuffer(buf.data(), buf.size());
-        CMD5Hasher().Calculate(buf.data(), buf.size(), r.md5);
+        CChecksum r = hasher->Finalize();
 
-        if (hasMeta && SharedUtil::GetFileAttributesExWithTimeout(wide.c_str(), attr, 500) &&
-            sz == ((std::uint64_t(attr.nFileSizeHigh) << 32) | attr.nFileSizeLow) &&
-            mt == ((std::uint64_t(attr.ftLastWriteTime.dwHighDateTime) << 32) | attr.ftLastWriteTime.dwLowDateTime))
+        // identity came from the handle that was hashed, so it and the checksum describe the same moment
         {
             std::lock_guard<std::mutex> l(CacheMtx());
-            Cache()[key] = {sz, mt, r.ulCRC, r.md5};
+            Cache()[key] = {identity.size, identity.mtime, r.ulCRC, r.md5};
         }
         return r;
     }

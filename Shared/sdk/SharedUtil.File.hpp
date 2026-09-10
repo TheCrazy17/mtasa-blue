@@ -20,10 +20,11 @@
 #include "SharedUtil.IntTypes.h"
 #include "SharedUtil.Misc.h"
 #include "SharedUtil.Buffer.h"
+#include "SharedUtil.Time.h"
 #include <algorithm>
-#include <atomic>
 #include <cctype>
 #include <cstring>
+#include <memory>
 
 #if __cplusplus >= 201703L  // C++17
     #include <filesystem>
@@ -167,18 +168,8 @@ bool SharedUtil::FileLoad(std::nothrow_t, const SString& filePath, SString& outB
         return false;
     }
 
-    WIN32_FILE_ATTRIBUTE_DATA fileAttributeData;
-
-    if (!GetFileAttributesExW(wideFilePath, GetFileExInfoStandard, &fileAttributeData))
+    if (wideFilePath.empty())
         return false;
-
-    if (fileAttributeData.nFileSizeHigh > 0 || fileAttributeData.nFileSizeLow > GIBIBYTE)
-        return false;
-
-    DWORD fileSize = fileAttributeData.nFileSizeLow;
-
-    if (fileSize == 0 || fileSize <= static_cast<DWORD>(offset))
-        return true;
 
     constexpr int MAX_RETRY_ATTEMPTS = 20;
     constexpr int RETRY_DELAY_MS = 10;
@@ -200,6 +191,23 @@ bool SharedUtil::FileLoad(std::nothrow_t, const SString& filePath, SString& outB
 
     if (handle == INVALID_HANDLE_VALUE)
         return false;
+
+    // Size from the open handle; the directory entry lags behind a writer that still has the file open
+    LARGE_INTEGER fileSizeResult{};
+
+    if (!GetFileSizeEx(handle, &fileSizeResult) || fileSizeResult.HighPart != 0 || fileSizeResult.LowPart > GIBIBYTE)
+    {
+        CloseHandle(handle);
+        return false;
+    }
+
+    DWORD fileSize = fileSizeResult.LowPart;
+
+    if (fileSize <= static_cast<DWORD>(offset))
+    {
+        CloseHandle(handle);
+        return true;
+    }
 
     if (offset > 0)
     {
@@ -246,35 +254,44 @@ bool SharedUtil::FileLoad(std::nothrow_t, const SString& filePath, SString& outB
     CloseHandle(handle);
     return true;
 #else
+    FILE* handle = fopen(filePath, "rb");
+
+    if (!handle)
+        return false;
+
+    // Size from the open descriptor, for the same reason as the handle based size above
     #ifdef __APPLE__
     struct stat info;
 
-    if (stat(filePath, &info) != 0)
-        return false;
+    if (fstat(fileno(handle), &info) != 0)
     #else
     struct stat64 info;
 
-    if (stat64(filePath, &info) != 0)
-        return false;
+    if (fstat64(fileno(handle), &info) != 0)
     #endif
+    {
+        fclose(handle);
+        return false;
+    }
 
     size_t fileSize = static_cast<size_t>(info.st_size);
 
     if (fileSize > GIBIBYTE)
+    {
+        fclose(handle);
         return false;
+    }
 
-    if (fileSize == 0 || static_cast<size_t>(fileSize) <= offset)
+    if (fileSize <= offset)
+    {
+        fclose(handle);
         return true;
+    }
 
     size_t numBytesToRead = fileSize - offset;
 
     if (numBytesToRead > maxSize)
         numBytesToRead = maxSize;
-
-    FILE* handle = fopen(filePath, "rb");
-
-    if (!handle)
-        return false;
 
     try
     {
@@ -1768,145 +1785,241 @@ std::vector<std::string> SharedUtil::ListDir(const char* szPath) noexcept
 #if defined(_WIN32) && defined(MTA_CLIENT)
 namespace
 {
-    // Helper to call GetFileAttributesExW with timeout to prevent indefinite hangs due to env issues
-    struct GetAttributesParams
+    // Runs op->Run() on a worker thread and gives up waiting after timeoutMs. GetFileAttributesExW and
+    // CreateFileW can hang on a broken filesystem or an interfering AV product and cannot be cancelled,
+    // so an abandoned worker just keeps running; the shared op stays alive until both sides are done
+    template <class TOp>
+    DWORD WINAPI FileOpThread(LPVOID param)
     {
-        wchar_t*                  pathCopy;
-        WIN32_FILE_ATTRIBUTE_DATA attrLocal;
-        BOOL                      result;
-        std::atomic<bool>         abandoned;
-    };
-
-    DWORD WINAPI GetAttributesThread(LPVOID param)
-    {
-        auto* p = static_cast<GetAttributesParams*>(param);
-        p->result = GetFileAttributesExW(p->pathCopy, GetFileExInfoStandard, &p->attrLocal);
-        if (p->abandoned.load(std::memory_order_acquire))
-        {
-            delete[] p->pathCopy;
-            delete p;
-        }
+        auto* pOwner = static_cast<std::shared_ptr<TOp>*>(param);
+        (*pOwner)->Run();
+        delete pOwner;
         return 0;
     }
+
+    template <class TOp>
+    bool RunFileOpWithTimeout(const std::shared_ptr<TOp>& op, DWORD timeoutMs)
+    {
+        auto* pOwner = new (std::nothrow) std::shared_ptr<TOp>(op);
+        if (!pOwner)
+            return false;
+
+        DWORD  threadId;
+        HANDLE thread = CreateThread(nullptr, 0, FileOpThread<TOp>, pOwner, 0, &threadId);
+        if (!thread)
+        {
+            delete pOwner;
+            return false;
+        }
+
+        bool finished = WaitForSingleObject(thread, timeoutMs) == WAIT_OBJECT_0;
+        CloseHandle(thread);
+        return finished;
+    }
+
+    struct SGetAttributesOp
+    {
+        std::wstring              path;
+        WIN32_FILE_ATTRIBUTE_DATA attr{};
+        BOOL                      result = FALSE;
+
+        void Run() { result = GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &attr); }
+    };
 }
 
 bool SharedUtil::GetFileAttributesExWithTimeout(const wchar_t* path, WIN32_FILE_ATTRIBUTE_DATA& attr, DWORD timeoutMs) noexcept
 {
-    size_t   pathLen = wcslen(path) + 1;
-    wchar_t* pathCopy = new (std::nothrow) wchar_t[pathLen];
-    if (!pathCopy)
-        return false;
-
-    #ifdef _MSC_VER
-    wcscpy_s(pathCopy, pathLen, path);
-    #else
-    wcscpy(pathCopy, path);
-    #endif
-
-    auto* params = new (std::nothrow) GetAttributesParams{pathCopy, {}, FALSE, {false}};
-    if (!params)
+    std::shared_ptr<SGetAttributesOp> op;
+    try
     {
-        delete[] pathCopy;
+        op = std::make_shared<SGetAttributesOp>();
+        op->path = path;
+    }
+    catch (...)
+    {
         return false;
     }
 
-    DWORD  threadId;
-    HANDLE thread = CreateThread(nullptr, 0, GetAttributesThread, params, 0, &threadId);
-    if (!thread)
-    {
-        delete[] params->pathCopy;
-        delete params;
+    if (!RunFileOpWithTimeout(op, timeoutMs) || !op->result)
         return false;
-    }
 
-    DWORD waitResult = WaitForSingleObject(thread, timeoutMs);
-
-    if (waitResult == WAIT_OBJECT_0)
-    {
-        CloseHandle(thread);
-        attr = params->attrLocal;
-        bool success = params->result != FALSE;
-        delete[] params->pathCopy;
-        delete params;
-        return success;
-    }
-
-    // Timeout - let the worker thread clean up when it finishes
-    params->abandoned.store(true, std::memory_order_release);
-    CloseHandle(thread);
-    return false;
+    attr = op->attr;
+    return true;
 }
 
-bool SharedUtil::FileLoadWithTimeout(const SString& filePath, SString& outBuffer, DWORD timeoutMs) noexcept
+namespace
 {
-    outBuffer.clear();
+    // Opens path (retrying briefly on a sharing violation, like FileLoad) and streams it through onChunk
+    // a chunk at a time, so a large file is never one allocation and hashing overlaps the read. Overlapped
+    // I/O lets a hung chunk (broken filesystem, AV product) be cancelled once its share of timeoutMs is up
+    bool ReadFileChunkedNow(const wchar_t* path, DWORD timeoutMs, const SharedUtil::FileChunkHandler& onChunk, SharedUtil::SFileIdentity& identity)
+    {
+        constexpr int MAX_RETRY_ATTEMPTS = 20;
+        constexpr int RETRY_DELAY_MS = 10;
+
+        HANDLE handle = INVALID_HANDLE_VALUE;
+        for (int attempt = 0; attempt < MAX_RETRY_ATTEMPTS; ++attempt)
+        {
+            handle = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+            if (handle != INVALID_HANDLE_VALUE)
+                break;
+
+            DWORD errorCode = GetLastError();
+            if (errorCode != ERROR_SHARING_VIOLATION && errorCode != ERROR_LOCK_VIOLATION)
+                break;
+
+            if (attempt + 1 < MAX_RETRY_ATTEMPTS)
+                Sleep(RETRY_DELAY_MS);
+        }
+
+        if (handle == INVALID_HANDLE_VALUE)
+            return false;
+
+        // Size and write time come from this handle and are sampled again after the read, so a file
+        // rewritten partway through is caught even when every chunk read succeeds on its own
+        LARGE_INTEGER fileSizeBefore{};
+        if (!GetFileSizeEx(handle, &fileSizeBefore) || fileSizeBefore.HighPart != 0)
+        {
+            CloseHandle(handle);
+            return false;
+        }
+
+        FILETIME writeTimeBefore{};
+        bool     hasWriteTime = GetFileTime(handle, nullptr, nullptr, &writeTimeBefore) != FALSE;
+
+        HANDLE readEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!readEvent)
+        {
+            CloseHandle(handle);
+            return false;
+        }
+
+        constexpr DWORD bufferSize = 65536;
+        char            buffer[bufferSize];
+        DWORD           remaining = fileSizeBefore.LowPart;
+        ULONGLONG       offset = 0;
+        long long       deadlineTick = SharedUtil::GetTickCount64_() + timeoutMs;
+        bool            readOk = true;
+
+        while (remaining > 0)
+        {
+            DWORD toRead = remaining < bufferSize ? remaining : bufferSize;
+
+            OVERLAPPED ov{};
+            ov.hEvent = readEvent;
+            ov.Offset = static_cast<DWORD>(offset & 0xFFFFFFFFu);
+            ov.OffsetHigh = static_cast<DWORD>(offset >> 32);
+
+            DWORD numRead = 0;
+
+            if (!ReadFile(handle, buffer, toRead, &numRead, &ov))
+            {
+                if (GetLastError() != ERROR_IO_PENDING)
+                {
+                    readOk = false;
+                    break;
+                }
+
+                long long nowTick = SharedUtil::GetTickCount64_();
+                DWORD     waitMs = (nowTick < deadlineTick) ? static_cast<DWORD>(deadlineTick - nowTick) : 0;
+
+                if (WaitForSingleObject(readEvent, waitMs) != WAIT_OBJECT_0)
+                {
+                    CancelIoEx(handle, &ov);
+                    GetOverlappedResult(handle, &ov, &numRead, TRUE);
+                    readOk = false;
+                    break;
+                }
+
+                if (!GetOverlappedResult(handle, &ov, &numRead, FALSE))
+                {
+                    readOk = false;
+                    break;
+                }
+            }
+
+            if (numRead != toRead)
+            {
+                readOk = false;
+                break;
+            }
+
+            onChunk(buffer, numRead);
+
+            offset += numRead;
+            remaining -= numRead;
+        }
+
+        bool stillMatches = false;
+        if (readOk)
+        {
+            LARGE_INTEGER fileSizeAfter{};
+            stillMatches = GetFileSizeEx(handle, &fileSizeAfter) && fileSizeAfter.QuadPart == fileSizeBefore.QuadPart;
+
+            if (stillMatches && hasWriteTime)
+            {
+                FILETIME writeTimeAfter{};
+                stillMatches = GetFileTime(handle, nullptr, nullptr, &writeTimeAfter) && writeTimeAfter.dwLowDateTime == writeTimeBefore.dwLowDateTime &&
+                               writeTimeAfter.dwHighDateTime == writeTimeBefore.dwHighDateTime;
+            }
+        }
+
+        CloseHandle(readEvent);
+        CloseHandle(handle);
+
+        if (!readOk || !stillMatches)
+            return false;
+
+        identity.size = static_cast<std::uint64_t>(fileSizeBefore.QuadPart);
+        if (hasWriteTime)
+            identity.mtime = (static_cast<std::uint64_t>(writeTimeBefore.dwHighDateTime) << 32) | writeTimeBefore.dwLowDateTime;
+        return true;
+    }
+
+    struct SReadFileChunkedOp
+    {
+        WString                      path;
+        DWORD                        timeoutMs = 0;
+        SharedUtil::FileChunkHandler onChunk;
+        SharedUtil::SFileIdentity    identity;
+        bool                         success = false;
+
+        void Run() { success = ReadFileChunkedNow(path.c_str(), timeoutMs, onChunk, identity); }
+    };
+}
+
+bool SharedUtil::FileReadChunkedWithTimeout(const SString& filePath, DWORD timeoutMs, FileChunkHandler onChunk, SFileIdentity& outIdentity) noexcept
+{
+    outIdentity = SFileIdentity();
 
     if (!File::IsPathSafe(filePath.c_str()))
         return false;
 
-    WString wideFilePath;
+    std::shared_ptr<SReadFileChunkedOp> op;
     try
     {
-        wideFilePath = FromUTF8(filePath);
+        op = std::make_shared<SReadFileChunkedOp>();
+        op->path = FromUTF8(filePath);
     }
     catch (...)
     {
         return false;
     }
 
-    if (wideFilePath.empty())
+    if (op->path.empty())
         return false;
 
-    WIN32_FILE_ATTRIBUTE_DATA attr;
-    if (!GetFileAttributesExWithTimeout(wideFilePath.c_str(), attr, timeoutMs) || attr.nFileSizeHigh > 0)
+    op->timeoutMs = timeoutMs;
+    op->onChunk = std::move(onChunk);
+
+    // The worker bounds its own read loop by timeoutMs; the headroom covers opening the file, sharing
+    // violation retries and a cancellation finishing, so a worker about to complete is not abandoned
+    constexpr DWORD OUTER_WAIT_HEADROOM_MS = 5000;
+    if (!RunFileOpWithTimeout(op, timeoutMs + OUTER_WAIT_HEADROOM_MS) || !op->success)
         return false;
 
-    DWORD fileSize = attr.nFileSizeLow;
-    if (fileSize == 0)
-        return true;
-
-    HANDLE fh = CreateFileW(wideFilePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
-    if (fh == INVALID_HANDLE_VALUE)
-        return false;
-
-    HANDLE ev = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    if (!ev)
-    {
-        CloseHandle(fh);
-        return false;
-    }
-
-    bool ok = false;
-    try
-    {
-        outBuffer.resize(fileSize);
-    }
-    catch (...)
-    {
-        goto done;
-    }
-
-    {
-        OVERLAPPED ov{};
-        ov.hEvent = ev;
-        DWORD n = 0;
-        if (!ReadFile(fh, &outBuffer[0], fileSize, &n, &ov) && GetLastError() == ERROR_IO_PENDING)
-        {
-            if (WaitForSingleObject(ev, timeoutMs) != WAIT_OBJECT_0)
-            {
-                CancelIo(fh);
-                GetOverlappedResult(fh, &ov, &n, TRUE);
-                goto done;
-            }
-        }
-        ok = GetOverlappedResult(fh, &ov, &n, FALSE) && n == fileSize;
-    }
-done:
-    CloseHandle(ev);
-    CloseHandle(fh);
-    if (!ok)
-        outBuffer.clear();
-    return ok;
+    outIdentity = op->identity;
+    return true;
 }
 #endif
