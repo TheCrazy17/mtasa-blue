@@ -29,6 +29,7 @@ CSingularFileDownload::CSingularFileDownload(CResource* pResource, const char* s
 
     m_bBeingDeleted = false;
 
+    CChecksum::InvalidateChecksumCacheEntry(m_strName);
     GenerateClientChecksum();
 
     if (!DoesClientAndServerChecksumMatch())
@@ -97,6 +98,9 @@ bool CSingularFileDownload::DoesClientAndServerChecksumMatch()
 
 CChecksum CSingularFileDownload::GenerateClientChecksum()
 {
-    m_LastClientChecksum = CChecksum::GenerateChecksumFromFileUnsafe(m_strName);
+    // Retry a read that failed or landed mid rewrite instead of silently taking a zero checksum; with
+    // no expected size, a genuinely empty file is still accepted
+    auto checksumOrError = CChecksum::GenerateChecksumFromFileWithRetry(m_strName);
+    m_LastClientChecksum = std::holds_alternative<CChecksum>(checksumOrError) ? std::get<CChecksum>(checksumOrError) : CChecksum();
     return m_LastClientChecksum;
 }

@@ -275,9 +275,20 @@ void CResourceManager::ValidateResourceFile(const SString& strInFilename, const 
         {
             CChecksum checksum;
             if (buffer)
+            {
                 checksum = CChecksum::GenerateChecksumFromBuffer(buffer, bufferSize);
+            }
             else
-                checksum = CChecksum::GenerateChecksumFromFileUnsafe(strInFilename);
+            {
+                // A read failure is no evidence the file is wrong, so report nothing rather than a zero
+                // checksum as a mismatch; a read landing mid rewrite is retried like the download path
+                auto checksumOrError = CChecksum::GenerateChecksumFromFileWithRetry(strInFilename, pResourceFile->GetDownloadSize());
+                if (std::holds_alternative<std::string>(checksumOrError))
+                    return;
+
+                checksum = std::get<CChecksum>(checksumOrError);
+            }
+
             if (checksum != pResourceFile->GetServerChecksum())
             {
                 char szMd5[33];

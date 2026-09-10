@@ -83,6 +83,19 @@ private:
         return m;
     }
 
+    static std::string MakeCacheKey(const SString& strFilename)
+    {
+        std::string key = strFilename;
+        for (char& c : key)
+        {
+            if (c >= 'A' && c <= 'Z')
+                c += 32;
+            if (c == '\\')
+                c = '/';
+        }
+        return key;
+    }
+
     // Read budget scaled to the file size at a conservative 20MB/s, so a huge .img is not held to a script's deadline
     static DWORD ScaledReadTimeoutMs(std::uint64_t sizeBytes)
     {
@@ -97,16 +110,16 @@ public:
         Cache().clear();
     }
 
+    // Call after a file is replaced so a stale cache entry can never answer for its new contents
+    static void InvalidateChecksumCacheEntry(const SString& strFilename)
+    {
+        std::lock_guard<std::mutex> l(CacheMtx());
+        Cache().erase(MakeCacheKey(strFilename));
+    }
+
     static std::variant<CChecksum, std::string> GenerateChecksumFromFile(const SString& strFilename)
     {
-        std::string key = strFilename;
-        for (char& c : key)
-        {
-            if (c >= 'A' && c <= 'Z')
-                c += 32;
-            if (c == '\\')
-                c = '/';
-        }
+        const std::string key = MakeCacheKey(strFilename);
 
         WIN32_FILE_ATTRIBUTE_DATA attr;
         WString                   wide;
@@ -158,6 +171,8 @@ public:
     }
 #else
     static void ClearChecksumCache() {}
+
+    static void InvalidateChecksumCacheEntry(const SString&) {}
 
     // Server and non-Windows builds use the original implementation
     static std::variant<CChecksum, std::string> GenerateChecksumFromFile(const SString& strFilename)
@@ -227,6 +242,47 @@ public:
         CChecksum result;
         result.ulCRC = CRCGenerator::GetCRCFromBuffer(cpBuffer, ulLength);
         CMD5Hasher().Calculate(cpBuffer, ulLength, result.md5);
+        return result;
+    }
+
+    // An empty file hashes to a valid checksum, so this only means anything next to an expected size
+    static bool IsEmptyFileChecksum(const CChecksum& checksum)
+    {
+        static const CChecksum emptyFileChecksum = GenerateChecksumFromBuffer("", 0);
+        return checksum == emptyFileChecksum;
+    }
+
+    // A file still being written (a download landing, a rewrite) can be read while truncated or partway
+    // through its new bytes. GenerateChecksumFromFile refuses to describe a file that changed under it, so
+    // retry a few times; with an expected size, a checksum matching an empty file is just as unreliable
+    static std::variant<CChecksum, std::string> GenerateChecksumFromFileWithRetry(const SString& strFilename, unsigned int uiExpectedSize = 0)
+    {
+        constexpr int maxAttempts = 5;
+        constexpr int retryDelayMs = 20;
+
+        std::variant<CChecksum, std::string> result;
+
+        for (int attempt = 0; attempt < maxAttempts; ++attempt)
+        {
+            if (attempt > 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs));
+                InvalidateChecksumCacheEntry(strFilename);
+            }
+
+            result = GenerateChecksumFromFile(strFilename);
+
+            if (std::holds_alternative<CChecksum>(result))
+            {
+                if (uiExpectedSize == 0 || !IsEmptyFileChecksum(std::get<CChecksum>(result)))
+                    break;
+            }
+            else if (!SharedUtil::FileExists(strFilename))
+            {
+                break;
+            }
+        }
+
         return result;
     }
 

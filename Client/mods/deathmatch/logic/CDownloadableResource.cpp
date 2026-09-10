@@ -72,8 +72,20 @@ CChecksum CDownloadableResource::GenerateClientChecksum()
     }
 
     long long startMs = GetTickCount64_();
-    m_LastClientChecksum = CChecksum::GenerateChecksumFromFileUnsafe(m_strName);
-    m_bClientChecksumVerified = true;
+
+    // A failed read must not become a "verified" zero checksum that reads as a mismatch, and a read
+    // that landed mid rewrite of this file is retried rather than trusted
+    auto checksumOrError = CChecksum::GenerateChecksumFromFileWithRetry(m_strName, m_uiDownloadSize);
+    if (std::holds_alternative<CChecksum>(checksumOrError))
+    {
+        m_LastClientChecksum = std::get<CChecksum>(checksumOrError);
+        m_bClientChecksumVerified = true;
+    }
+    else
+    {
+        m_LastClientChecksum = CChecksum();
+        m_bClientChecksumVerified = false;
+    }
 
     if (s_bChecksumBatchActive)
         s_checksumBatchAccumMs += GetTickCount64_() - startMs;
