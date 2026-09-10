@@ -81,6 +81,98 @@ static unzFile unzOpenUtf8(const char* path)
 #endif
 }
 
+namespace
+{
+    // bOk is only true when every source byte reached strTempPath and checksum describes exactly those bytes
+    struct SHttpCacheCopyResult
+    {
+        CChecksum checksum;
+        SString   strTempPath;
+        bool      bOk = false;
+    };
+
+    // Copies strSrc into a fresh temp file beside strDestPath, hashing each chunk as it is written, so
+    // the returned checksum always describes the temp file's real contents whatever strSrc is doing
+    SHttpCacheCopyResult CopyToHttpCacheAndHash(const SString& strSrc, const SString& strDestPath)
+    {
+        SHttpCacheCopyResult result;
+        SString              strTempPath = MakeUniquePath(SString("%s.tmp", *strDestPath));
+
+        MakeSureDirExists(strTempPath);
+
+        FILE* pSource = File::FopenExclusive(strSrc, "rb");
+        if (!pSource)
+            return result;
+
+        FILE* pTemp = File::Fopen(strTempPath, "wb");
+        if (!pTemp)
+        {
+            fclose(pSource);
+            return result;
+        }
+
+        CChecksum::CHasher hasher;
+        char               buffer[65536];
+        bool               bReadOk = true;
+
+        while (true)
+        {
+            size_t sizeRead = fread(buffer, 1, sizeof(buffer), pSource);
+            if (sizeRead == 0)
+            {
+                if (ferror(pSource))
+                    bReadOk = false;
+                break;
+            }
+
+            if (fwrite(buffer, 1, sizeRead, pTemp) != sizeRead)
+            {
+                bReadOk = false;
+                break;
+            }
+
+            hasher.Update(buffer, sizeRead);
+        }
+
+        bool bCloseOk = fclose(pTemp) == 0;
+        fclose(pSource);
+
+        if (!bReadOk || !bCloseOk)
+        {
+            FileDelete(strTempPath);
+            return result;
+        }
+
+        result.checksum = hasher.Finalize();
+        result.strTempPath = strTempPath;
+        result.bOk = true;
+        return result;
+    }
+
+    // Publishes the verified temp file over the live cache path with one rename, so a request already
+    // reading the old file keeps it until it closes and a new one never sees a half written file
+    bool PublishHttpCacheFile(const SString& strTempPath, const SString& strDestPath, int* pOutErrorCode)
+    {
+#ifdef WIN32
+        SetFileAttributesW(FromUTF8(strDestPath), FILE_ATTRIBUTE_NORMAL);
+
+        if (MoveFileExW(FromUTF8(strTempPath), FromUTF8(strDestPath), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0)
+            return true;
+
+        if (pOutErrorCode)
+            *pOutErrorCode = static_cast<int>(GetLastError());
+        return false;
+#else
+        if (rename(strTempPath, strDestPath) == 0)
+            return true;
+
+        if (pOutErrorCode)
+            *pOutErrorCode = errno;
+        return false;
+#endif
+    }
+}  // namespace
+
 CResource::CResource(CResourceManager* pResourceManager, bool bIsZipped, const char* szAbsPath, const char* szResourceName)
     : m_pResourceManager(pResourceManager), m_bResourceIsZip(bIsZipped), m_strResourceName(SStringX(szResourceName)), m_strAbsPath(SStringX(szAbsPath))
 {
@@ -588,22 +680,31 @@ std::future<SString> CResource::GenerateChecksumForFile(CResourceFile* pResource
                         return SString("ERROR: Resource '%s' client filename '%s' not allowed\n", GetName().c_str(), *ExtractFilename(strCachedFilePath));
                     }
 
-                    CChecksum cachedChecksum = CChecksum::GenerateChecksumFromFileUnsafe(strCachedFilePath);
+                    // A cached copy of a different size cannot match, so skip hashing it
+                    bool bCachedMatches = FileSize(strCachedFilePath) == pResourceFile->GetSizeHint() &&
+                                          CChecksum::GenerateChecksumFromFileUnsafe(strCachedFilePath) == pResourceFile->GetLastChecksum();
 
-                    if (pResourceFile->GetLastChecksum() != cachedChecksum)
+                    if (!bCachedMatches)
                     {
-                        // Verify the source file has not changed since it was checksummed.
-                        // Using the unsafe variant here because a failed read returns a zero
-                        // checksum, which will fail the comparison and safely prevent the copy.
-                        CChecksum recheckChecksum = CChecksum::GenerateChecksumFromFileUnsafe(strPath);
-                        if (pResourceFile->GetLastChecksum() != recheckChecksum)
+                        // Copy and hash strPath in one pass and only publish the copy once its hash matches the advertised
+                        // checksum; the source can still change while the copy runs, and that window grows with its size
+                        SHttpCacheCopyResult copyResult = CopyToHttpCacheAndHash(strPath, strCachedFilePath);
+                        if (!copyResult.bOk)
                         {
+                            return SString("Could not copy '%s' to '%s'\n", *strPath, *strCachedFilePath);
+                        }
+
+                        if (copyResult.checksum != pResourceFile->GetLastChecksum())
+                        {
+                            FileDelete(copyResult.strTempPath);
                             return SString("file '%s' was modified during checksum processing", pResourceFile->GetName());
                         }
 
-                        if (!FileCopy(strPath, strCachedFilePath))
+                        int iPublishErrorCode = 0;
+                        if (!PublishHttpCacheFile(copyResult.strTempPath, strCachedFilePath, &iPublishErrorCode))
                         {
-                            return SString("Could not copy '%s' to '%s'\n", *strPath, *strCachedFilePath);
+                            FileDelete(copyResult.strTempPath);
+                            return SString("Could not publish '%s' (error %d)\n", *strCachedFilePath, iPublishErrorCode);
                         }
 
                         // If script is 'no client cache', make sure there is no trace of it in the output dir

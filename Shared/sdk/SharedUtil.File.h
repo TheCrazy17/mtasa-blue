@@ -135,7 +135,9 @@ namespace SharedUtil
     {
         FILE* Fopen(const char* szFilename, const char* szMode);
         FILE* FopenExclusive(const char* szFilename, const char* szMode);
-#if defined(_WIN32) && defined(MTA_CLIENT)
+#if defined(_WIN32)
+        // Also usable from the server for a read that must tolerate a concurrent rename or delete: these
+        // open with FILE_SHARE_DELETE, which the CRT's _wfsopen behind the non-client Fopen never grants
         FILE* TryFopen(const char* szFilename, const char* szMode);
         FILE* TryFopenExclusive(const char* szFilename, const char* szMode);
 #endif

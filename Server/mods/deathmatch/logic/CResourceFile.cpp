@@ -61,7 +61,13 @@ HttpStatusCode CResourceFile::Request(HttpRequest* ipoHttpRequest, HttpResponse*
     // HACK - Use http-client-files if possible as the resources directory may have been changed since the resource was loaded.
     SString strDstFilePath = GetCachedPathFilename();
 
+    // On Windows the cache file is republished with a MoveFileExW rename, which fails while a handle
+    // opened without FILE_SHARE_DELETE is reading it; TryFopen grants that flag, the CRT's Fopen does not
+#ifdef _WIN32
+    FILE* file = File::TryFopen(strDstFilePath.c_str(), "rb");
+#else
     FILE* file = File::Fopen(strDstFilePath.c_str(), "rb");
+#endif
     if (!file)
         file = File::Fopen(m_strResourceFileName.c_str(), "rb");
 

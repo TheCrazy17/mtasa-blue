@@ -1347,7 +1347,7 @@ namespace SharedUtil
     }
 }
 
-#if defined(_WIN32) && defined(MTA_CLIENT)
+#if defined(_WIN32)
 FILE* SharedUtil::File::TryFopen(const char* filename, const char* mode)
 {
     if (!filename || !mode || !*filename || !*mode)
@@ -1606,7 +1606,9 @@ FILE* SharedUtil::File::TryFopenExclusive(const char* filename, const char* mode
     }
     return fileStream;
 }
+#endif  // #if defined(_WIN32)
 
+#if defined(_WIN32) && defined(MTA_CLIENT)
 FILE* SharedUtil::File::Fopen(const char* szFilename, const char* szMode)
 {
     return TryFopen(szFilename, szMode);

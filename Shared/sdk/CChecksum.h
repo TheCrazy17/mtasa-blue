@@ -174,7 +174,7 @@ public:
 
     static void InvalidateChecksumCacheEntry(const SString&) {}
 
-    // Server and non-Windows builds use the original implementation
+    // Server and non-Windows builds hash straight from the file in a single pass
     static std::variant<CChecksum, std::string> GenerateChecksumFromFile(const SString& strFilename)
     {
         constexpr int maxRetries = 3;
@@ -191,29 +191,36 @@ public:
 
             errno = 0;
 
-            CChecksum result;
-            result.ulCRC = CRCGenerator::GetCRCFromFile(strFilename);
-
-            if (errno)
-            {
-                lastErrno = errno;
-                if (errno == ENOENT)
-                    break;
-                continue;
-            }
-
-            errno = 0;
-            bool success = CMD5Hasher().Calculate(strFilename, result.md5);
-
-            if (!success)
+            FILE* pFile = SharedUtil::File::FopenExclusive(strFilename, "rb");
+            if (!pFile)
             {
                 lastErrno = errno ? errno : EIO;
-                if (errno == ENOENT)
+                if (lastErrno == ENOENT)
                     break;
                 continue;
             }
 
-            return result;
+            CHasher hasher;
+            char    buffer[65536];
+            bool    bReadOk = true;
+
+            while (true)
+            {
+                size_t sizeRead = fread(buffer, 1, sizeof(buffer), pFile);
+                if (sizeRead == 0)
+                {
+                    bReadOk = !ferror(pFile);
+                    break;
+                }
+                hasher.Update(buffer, sizeRead);
+            }
+
+            fclose(pFile);
+
+            if (bReadOk)
+                return hasher.Finalize();
+
+            lastErrno = EIO;
         }
 
         if (lastErrno == ENOENT)
